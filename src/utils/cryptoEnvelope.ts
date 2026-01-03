@@ -47,6 +47,14 @@ export async function decryptText(passphrase: string, blob: string): Promise<str
   return bytesToUtf8(plaintext);
 }
 
+function normalizeEnvelopeBlob(blob: string): string {
+  // Accept envelopes copied from terminals / wrapped lines.
+  // - Trim leading/trailing whitespace
+  // - Remove all internal whitespace characters
+  // The envelope format is base64url, so whitespace is never significant.
+  return (blob ?? "").trim().replace(/\s+/g, "");
+}
+
 export async function encryptBytes(
   passphrase: string,
   bytes: Uint8Array,
@@ -84,10 +92,11 @@ export async function encryptBytes(
 }
 
 export async function decryptBlob(passphrase: string, blob: string): Promise<{ plaintext: Uint8Array; header: EnvelopeHeader }> {
-  if (!blob.startsWith(`${ENVELOPE_PREFIX}.`)) {
+  const normalized = normalizeEnvelopeBlob(blob);
+  if (!normalized.startsWith(`${ENVELOPE_PREFIX}.`)) {
     throw new Error("Unsupported envelope prefix");
   }
-  const encoded = blob.slice(`${ENVELOPE_PREFIX}.`.length);
+  const encoded = normalized.slice(`${ENVELOPE_PREFIX}.`.length);
   const envelopeBytes = fromBase64Url(encoded);
   const envelope: Envelope = JSON.parse(bytesToUtf8(envelopeBytes));
   if (envelope.header.version !== ENVELOPE_VERSION || envelope.header.algo !== "AES-GCM") {
