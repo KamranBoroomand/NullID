@@ -1,4 +1,4 @@
-import { getVaultDb, getAllValues, getValue, putValue, clearStore } from "./storage.js";
+import { getVaultBackend, getAllValues, getValue, putValue, clearStore } from "./storage.js";
 import { fromBase64Url, toBase64Url, utf8ToBytes, bytesToUtf8, randomBytes } from "./encoding.js";
 import { decryptText, encryptText } from "./cryptoEnvelope.js";
 
@@ -17,20 +17,20 @@ export type VaultNote = {
 };
 
 export async function ensureVaultMeta(): Promise<VaultMeta> {
-  const db = await getVaultDb();
-  const existing = await getValue<VaultMeta & { lockedAt: number }>(db, "meta", "meta");
+  const backend = await getVaultBackend();
+  const existing = await getValue<VaultMeta & { lockedAt: number }>(backend, "meta", "meta");
   if (existing) return { salt: existing.salt, iterations: existing.iterations };
   const salt = toBase64Url(randomBytes(16));
   const meta: VaultMeta = { salt, iterations: 200_000 };
-  await putValue(db, "meta", "meta", { ...meta, lockedAt: Date.now() });
+  await putValue(backend, "meta", "meta", { ...meta, lockedAt: Date.now() });
   return meta;
 }
 
 export async function unlockVault(passphrase: string): Promise<CryptoKey> {
   const meta = await ensureVaultMeta();
   const key = await deriveVaultKey(passphrase, meta);
-  const db = await getVaultDb();
-  const canary = await getValue<{ ciphertext: string; iv: string }>(db, "canary", "canary");
+  const backend = await getVaultBackend();
+  const canary = await getValue<{ ciphertext: string; iv: string }>(backend, "canary", "canary");
   if (canary) {
     await verifyCanary(key, canary.ciphertext, canary.iv);
   } else {
@@ -60,8 +60,8 @@ async function storeCanary(key: CryptoKey) {
       utf8ToBytes("vault-canary").buffer as ArrayBuffer,
     ),
   );
-  const db = await getVaultDb();
-  await putValue(db, "canary", "canary", { ciphertext: toBase64Url(ciphertext), iv: toBase64Url(iv) });
+  const backend = await getVaultBackend();
+  await putValue(backend, "canary", "canary", { ciphertext: toBase64Url(ciphertext), iv: toBase64Url(iv) });
 }
 
 async function verifyCanary(key: CryptoKey, payload: string, ivText: string) {
@@ -75,8 +75,8 @@ async function verifyCanary(key: CryptoKey, payload: string, ivText: string) {
 }
 
 export async function loadNotes(): Promise<VaultNote[]> {
-  const db = await getVaultDb();
-  const all = await getAllValues<VaultNote>(db, "notes");
+  const backend = await getVaultBackend();
+  const all = await getAllValues<VaultNote>(backend, "notes");
   return all.sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
@@ -87,7 +87,7 @@ export async function saveNote(
   body: string,
   metadata: { createdAt: number; tags: string[] },
 ) {
-  const db = await getVaultDb();
+  const backend = await getVaultBackend();
   const iv = randomBytes(12);
   const now = Date.now();
   const ciphertext = new Uint8Array(
@@ -103,17 +103,21 @@ export async function saveNote(
     iv: toBase64Url(iv),
     updatedAt: now,
   };
-  await putValue(db, "notes", id, note);
+  await putValue(backend, "notes", id, note);
 }
 
 export async function deleteNote(id: string) {
-  const db = await getVaultDb();
-  return new Promise<void>((resolve, reject) => {
-    const tx = db.transaction("notes", "readwrite");
-    tx.objectStore("notes").delete(id);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
+  const backend = await getVaultBackend();
+  if (backend.kind === "idb") {
+    const db = backend.db;
+    return new Promise<void>((resolve, reject) => {
+      const tx = db.transaction("notes", "readwrite");
+      tx.objectStore("notes").delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+  localStorage.removeItem(`nullid:vault:notes:${id}`);
 }
 
 export async function decryptNote(
@@ -139,10 +143,10 @@ export async function exportVault(): Promise<Blob> {
 }
 
 async function readVaultSnapshot(): Promise<string> {
-  const db = await getVaultDb();
-  const notes = await getAllValues<VaultNote>(db, "notes");
-  const meta = await getValue(db, "meta", "meta");
-  const canary = await getValue(db, "canary", "canary");
+  const backend = await getVaultBackend();
+  const notes = await getAllValues<VaultNote>(backend, "notes");
+  const meta = await getValue(backend, "meta", "meta");
+  const canary = await getValue(backend, "canary", "canary");
   const snapshot = { meta, notes, canary };
   return JSON.stringify(snapshot, null, 2);
 }
@@ -167,17 +171,17 @@ export async function importVaultEncrypted(file: File, passphrase: string) {
 }
 
 async function applySnapshot(snapshot: { meta: VaultMeta; notes: VaultNote[]; canary: { ciphertext: string; iv: string } }) {
-  const db = await getVaultDb();
-  await clearStore(db, "meta");
-  await clearStore(db, "notes");
-  await clearStore(db, "canary");
+  const backend = await getVaultBackend();
+  await clearStore(backend, "meta");
+  await clearStore(backend, "notes");
+  await clearStore(backend, "canary");
   if (snapshot.meta) {
-    await putValue(db, "meta", "meta", { ...snapshot.meta, lockedAt: Date.now() });
+    await putValue(backend, "meta", "meta", { ...snapshot.meta, lockedAt: Date.now() });
   }
   if (snapshot.canary) {
-    await putValue(db, "canary", "canary", snapshot.canary);
+    await putValue(backend, "canary", "canary", snapshot.canary);
   }
   if (snapshot.notes?.length) {
-    await Promise.all(snapshot.notes.map((note) => putValue(db, "notes", note.id, note)));
+    await Promise.all(snapshot.notes.map((note) => putValue(backend, "notes", note.id, note)));
   }
 }
