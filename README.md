@@ -4,7 +4,7 @@ An offline-first, terminal-style security toolbox built as a Vite + React + Type
 
 ## Preview 👀
 
-![NullID preview](images/nullid-preview.png)
+![NullID preview](nullid-preview.png)
 
 ## What’s inside 📂
 
