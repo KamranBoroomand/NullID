@@ -59,6 +59,13 @@
 }
 
 .frame-content.is-stacked .frame-pane {
+  /* Keep navigation usable without consuming the whole viewport. */
+  max-height: 40svh;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.frame-content.is-stacked .frame-pane {
   border-right: none;
   border-bottom: 1px solid var(--border-subtle);
 }
