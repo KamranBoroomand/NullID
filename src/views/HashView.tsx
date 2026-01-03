@@ -40,8 +40,12 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
   const [fileComparison, setFileComparison] = useState<"idle" | "match" | "mismatch" | "pending">("idle");
   const [fileCompareName, setFileCompareName] = useState<string>("none");
   const abortRef = useRef<AbortController | null>(null);
+  const textDebounceRef = useRef<number | null>(null);
+  const textTokenRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileCompareRef = useRef<HTMLInputElement>(null);
+
+  const MAX_FILE_BYTES = 50 * 1024 * 1024; // 50MB (prevents browser OOM)
 
   const digestDisplay = useMemo(() => {
     if (!result) return "";
@@ -84,28 +88,46 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
     [algorithm, onStatus],
   );
 
-  const handleFile = useCallback(
-    async (file?: File | null) => {
-      if (!file) return;
-      await computeHash({ kind: "file", file });
-    },
-    [computeHash],
-  );
-
-  const handleTextChange = useCallback(
-    (value: string) => {
-      setTextValue(value);
-      void computeHash({ kind: "text", value });
-    },
-    [computeHash],
-  );
-
   const report = useCallback(
     (message: string, tone: "neutral" | "accent" | "danger" = "neutral") => {
       onStatus?.(message, tone);
       push(message, tone === "danger" ? "danger" : tone === "accent" ? "accent" : "neutral");
     },
     [onStatus, push],
+  );
+
+  const handleFile = useCallback(
+    async (file?: File | null) => {
+      if (!file) return;
+      if (file.size > MAX_FILE_BYTES) {
+        report(`file too large (${Math.ceil(file.size / (1024 * 1024))}MB). max 50MB.`, "danger");
+        return;
+      }
+      await computeHash({ kind: "file", file });
+    },
+    [MAX_FILE_BYTES, computeHash, report],
+  );
+
+  const handleTextChange = useCallback(
+    (value: string) => {
+      setTextValue(value);
+      // Debounce hashing so the UI remains responsive while typing.
+      if (textDebounceRef.current) window.clearTimeout(textDebounceRef.current);
+      const token = (textTokenRef.current += 1);
+      textDebounceRef.current = window.setTimeout(() => {
+        void (async () => {
+          try {
+            await computeHash({ kind: "text", value });
+          } finally {
+            // Only clear the timer reference if this is the latest scheduled run.
+            if (textTokenRef.current === token) {
+              textDebounceRef.current = null;
+            }
+          }
+        })();
+      }, 150);
+    },
+    [computeHash],
   );
 
   const copyDigest = useCallback(async () => {
@@ -170,6 +192,13 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
     onRegisterActions?.({ copyDigest, clearInputs, compare });
     return () => onRegisterActions?.(null);
   }, [clearInputs, compare, copyDigest, onRegisterActions]);
+
+  useEffect(() => {
+    return () => {
+      if (textDebounceRef.current) window.clearTimeout(textDebounceRef.current);
+      abortRef.current?.abort();
+    };
+  }, []);
 
   const comparisonTone = comparison === "match" ? "accent" : comparison === "invalid" || comparison === "mismatch" ? "danger" : "muted";
 
