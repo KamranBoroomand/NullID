@@ -1,52 +1,60 @@
-# NullID
+# NullID 🟨🖥️
 
-NullID is an offline-first Vite + React + TypeScript SPA with a terminal-style UI. All tooling ships locally; no runtime network calls or external CDNs.
+An offline-first, terminal-style security toolbox built as a Vite + React + TypeScript SPA. Everything runs locally in your browser—no runtime network calls, no external CDNs, no analytics. Designed to feel like a real operator console: minimal, fast, and auditable.
 
-## Scripts
+## Preview 👀
 
-```bash
-npm ci
-npm run dev       # start on http://localhost:5173
-npm run validate  # typecheck + lint + tests + build (outputs to dist/)
-npm run build     # production build (outputs to dist/)
-npm run preview   # preview production build
-```
+![NullID preview](images/nullid-preview.png)
 
-## Deploy
+## What’s inside 📂
 
-- `npm run build` emits the static site to `dist/`.
-- For GitHub Pages, the workflow sets `VITE_BASE` to `/${REPO_NAME}/` and publishes `dist/`.
+- index.html – Minimal shell that mounts the app.
+- src/ – React UI, tool modules, routing/state, and terminal-style layout.
+- src/tools/ – Tool implementations (hashing, generators, encryption, redaction, sanitization, etc.).
+- src/crypto/ – WebCrypto wrappers and versioned envelope utilities.
+- src/storage/ – IndexedDB + local persistence (Vault, settings, exports/imports).
+- public/ – Static assets (icons, manifest, any local wordlists).
+- tests/ – Unit/integration tests for core utilities and tool correctness.
 
-## Clean export checklist
+## What it does 🧰
 
-- Install dependencies: `npm ci`
-- Validate and build locally: `npm run validate`
-- Preview the production bundle: `npm run preview`
-- Deploy via GitHub Pages: push to `main`; the Pages workflow publishes `dist/`.
-- Zip-ready folder: exclude `node_modules/`, `dist/`, `docs/`, `coverage/`, `build-test/`, `.env*`, and OS/editor artifacts.
+- Hash & Verify: SHA-256 / SHA-512 / SHA-1 (legacy), text + chunked file hashing, verify mode.
+- Password Generator: crypto.getRandomValues, presets, ambiguity toggle, entropy display.
+- Passphrase Generator: local diceware-style list, configurable formatting, entropy display.
+- Encrypt / Decrypt: versioned envelope (NULLID:ENC:1), PBKDF2 + AES-GCM, text + files, .nullid export.
+- Secure Notes (Vault): IndexedDB-backed encrypted notes, auto-lock, export/import, wipe.
+- Metadata Inspector: EXIF parsing for common images + re-encode stripping (limits clearly surfaced).
+- Text Redaction: preset detectors + custom rules, mask modes, copy/download outputs.
+- Log Sanitizer: presets for common log formats, diff-style reporting, replacement counts.
 
-## Responsive test checklist
+## Safety notes 🔒
 
-Manually spot-check the UI (minimal page scrolling; internal panels should scroll instead):
+- No runtime network traffic by design.
+  - Quick checks: rg "fetch" src and DevTools → Network tab (should stay empty).
+- Crypto uses WebCrypto + local dependencies; no external services.
+- “Wipe data” clears local storage and IndexedDB. Note: browsers/OSes may still retain remnants at the filesystem level (platform limitation).
 
-- 1280x800 (13" MacBook)
-- 1366x768
-- 1440x900
-- 1920x1080
+## Idea behind it 💡
 
-## Tools: capabilities & limits
+NullID exists to provide a serious, local-first security toolkit you can run anywhere—especially on untrusted networks—without sending anything to a server. It’s built as a portfolio-grade demonstration of practical security UI, careful client-side crypto patterns, and disciplined offline behavior.
 
-- **Hash & Verify**: SHA-256 / SHA-512 / SHA-1 (legacy). Text + chunked file hashing, hex/base64/`sha256sum` output, verify mode (case/whitespace-tolerant).
-- **Password Generator**: Uses `crypto.getRandomValues` + rejection sampling. Presets (high security, no symbols, PIN), ambiguity toggle, accurate entropy display, copy-to-clipboard with toast.
-- **Passphrase Generator**: Local 7,776-entry diceware-style list (offline), configurable word count/separators, optional casing/digit/symbol injection, entropy shown.
-- **Encrypt / Decrypt**: Versioned envelope (`NULLID:ENC:1`) with PBKDF2 + AES-GCM (AAD bound). Text and file sealing, `.nullid` download, clean failure on bad passphrase, optional auto-clear timer.
-- **Secure Notes (Vault)**: IndexedDB-backed, PBKDF2-derived vault key + AES-GCM per note. Unlock required to view; titles/bodies encrypted; canary check, auto-lock timer, export/import, wipe.
-- **Metadata Inspector**: EXIF parse for common images (JPEG/PNG/WebP). HEIC and non-images are called out as unsupported. Canvas re-encode to strip metadata; before/after fields and removed keys listed.
-- **Text Redaction**: Preset detectors (email/phone/IP/token/ID), highlight view, full/partial mask modes, custom regex rules with validation, copy/download outputs.
-- **Log Sanitizer**: Presets for nginx/apache/auth/JSON logs, rule toggles, replacement counts + lines changed report, token-level diff highlighting.
+## Running locally 💻
 
-## Safety & offline checks
+- Install: npm ci
+- Dev server: npm run dev (http://localhost:5173)
+- Validate: npm run validate
+- Production build: npm run build
+- Preview build: npm run preview
 
-- No runtime network traffic: verify with `rg "fetch" src` or devtools network tab (should stay empty).
-- Cryptography uses WebCrypto + local dependencies; no analytics, fonts, or CDN assets.
-- “Wipe data” clears local storage and IndexedDB vault content.
+## Deploy 🚀
+
+- npm run build emits the static site to dist/.
+- For GitHub Pages, the workflow sets VITE_BASE to /${REPO_NAME}/ and publishes dist/.
+
+## Contribution 🤝
+
+Issues and PRs are welcome. If you add tools, please keep the footprint small and aligned with:
+- offline-first behavior
+- minimal dependencies
+- explicit formats and clear failure modes
+- no telemetry, no external CDNs
