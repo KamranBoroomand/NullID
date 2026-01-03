@@ -98,7 +98,13 @@ export async function decryptBlob(passphrase: string, blob: string): Promise<{ p
   }
   const encoded = normalized.slice(`${ENVELOPE_PREFIX}.`.length);
   const envelopeBytes = fromBase64Url(encoded);
-  const envelope: Envelope = JSON.parse(bytesToUtf8(envelopeBytes));
+  let envelope: Envelope;
+  try {
+    envelope = JSON.parse(bytesToUtf8(envelopeBytes)) as Envelope;
+  } catch (error) {
+    console.error("Envelope parse failed", error);
+    throw new Error("Invalid envelope format");
+  }
   if (envelope.header.version !== ENVELOPE_VERSION || envelope.header.algo !== "AES-GCM") {
     throw new Error("Unsupported envelope version");
   }

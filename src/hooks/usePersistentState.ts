@@ -11,7 +11,11 @@ export function usePersistentState<T>(key: string, initial: T) {
   });
 
   useEffect(() => {
-    localStorage.setItem(key, JSON.stringify(value));
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (error) {
+      console.warn("persistent state write blocked", error);
+    }
   }, [key, value]);
 
   return [value, setValue] as const;

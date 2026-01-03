@@ -26,6 +26,7 @@ An offline-first, terminal-style security toolbox built as a Vite + React + Type
 - Metadata Inspector: EXIF parsing for common images + re-encode stripping (limits clearly surfaced).
 - Text Redaction: preset detectors + custom rules, mask modes, copy/download outputs.
 - Log Sanitizer: presets for common log formats, diff-style reporting, replacement counts.
+- Self-test: built-in diagnostics for hashing responsiveness, storage availability, and envelope round-trips.
 
 ## Safety notes 🔒
 
@@ -33,6 +34,14 @@ An offline-first, terminal-style security toolbox built as a Vite + React + Type
   - Quick checks: rg "fetch" src and DevTools → Network tab (should stay empty).
 - Crypto uses WebCrypto + local dependencies; no external services.
 - “Wipe data” clears local storage and IndexedDB. Note: browsers/OSes may still retain remnants at the filesystem level (platform limitation).
+
+## Compatibility notes 🌐
+
+- Browsers: Chrome/Chromium, Firefox, and Safari are supported on desktop and mobile. Mobile layout uses touch-friendly horizontal nav when space is tight.
+- Storage: Secure Notes prefers IndexedDB. If a browser blocks it (iOS private mode, quota issues), the app falls back to localStorage and surfaces a warning.
+- Hashing & crypto: File hashing is chunked (2–4MB slices) with 50MB file caps to avoid OOM. Encryption caps files at 25MB. Text hashing limits input to ~1MB to stay responsive.
+- Downloads: Envelope/file downloads use a Safari-safe anchor pattern with delayed URL revocation.
+- Degraded environments: If clipboard/storage/IDB are blocked, the UI shows toasts instead of silently failing.
 
 ## Idea behind it 💡
 
@@ -43,6 +52,7 @@ NullID exists to provide a serious, local-first security toolkit you can run any
 - Install: npm ci
 - Dev server: npm run dev (http://localhost:5173)
 - Validate: npm run validate
+- E2E (Playwright): npm run e2e
 - Production build: npm run build
 - Preview build: npm run preview
 

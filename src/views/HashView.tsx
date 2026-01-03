@@ -41,11 +41,14 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
   const [fileCompareName, setFileCompareName] = useState<string>("none");
   const abortRef = useRef<AbortController | null>(null);
   const textDebounceRef = useRef<number | null>(null);
+  const jobRef = useRef<number>(0);
   const textTokenRef = useRef(0);
+  const [isComposing, setIsComposing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileCompareRef = useRef<HTMLInputElement>(null);
 
   const MAX_FILE_BYTES = 50 * 1024 * 1024; // 50MB (prevents browser OOM)
+  const MAX_TEXT_CHARS = 1_000_000; // ~1MB text safety guard
 
   const digestDisplay = useMemo(() => {
     if (!result) return "";
@@ -68,21 +71,26 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
+      const jobId = (jobRef.current += 1);
       try {
         const nextResult =
           input.kind === "file"
             ? await hashFile(input.file, algorithm, { onProgress: setProgress, signal: controller.signal })
-            : await hashText(input.value, algorithm);
-        setResult(nextResult);
-        setSource(input);
-        setFileName(input.kind === "file" ? input.file.name : "inline");
-        onStatus?.("digest ready", "accent");
+            : await hashText(input.value, algorithm, { signal: controller.signal, onProgress: setProgress });
+        if (jobId === jobRef.current) {
+          setResult(nextResult);
+          setSource(input);
+          setFileName(input.kind === "file" ? input.file.name : "inline");
+          onStatus?.("digest ready", "accent");
+        }
       } catch (error) {
         if ((error as Error).name === "AbortError") return;
         console.error(error);
         onStatus?.("hash failed", "danger");
       } finally {
-        setProgress(100);
+        if (jobId === jobRef.current) {
+          setProgress(100);
+        }
       }
     },
     [algorithm, onStatus],
@@ -110,6 +118,14 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
 
   const handleTextChange = useCallback(
     (value: string) => {
+      if (value.length > MAX_TEXT_CHARS) {
+        report("text too large for inline hashing", "danger");
+        return;
+      }
+      if (isComposing) {
+        setTextValue(value);
+        return;
+      }
       setTextValue(value);
       // Debounce hashing so the UI remains responsive while typing.
       if (textDebounceRef.current) window.clearTimeout(textDebounceRef.current);
@@ -127,7 +143,7 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
         })();
       }, 150);
     },
-    [computeHash],
+    [MAX_TEXT_CHARS, computeHash, isComposing, report],
   );
 
   const copyDigest = useCallback(async () => {
@@ -223,6 +239,11 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
             className="textarea"
             placeholder="Type or paste text to hash"
             value={textValue}
+            onCompositionStart={() => setIsComposing(true)}
+            onCompositionEnd={(event) => {
+              setIsComposing(false);
+              handleTextChange(event.currentTarget.value);
+            }}
             onChange={(event) => handleTextChange(event.target.value)}
             aria-label="Text to hash"
           />

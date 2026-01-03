@@ -1,12 +1,13 @@
 .app-surface {
   padding: 1rem;
   min-height: 100svh;
-  height: 100svh;
+  height: auto;
   background:
     radial-gradient(circle at 15% 18%, rgba(214, 239, 82, 0.07), transparent 32%),
     radial-gradient(circle at 85% 12%, rgba(14, 17, 22, 0.28), transparent 30%),
     var(--background);
-  overflow: hidden;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .app-surface.is-compact {

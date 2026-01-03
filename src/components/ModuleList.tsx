@@ -9,7 +9,8 @@ export type ModuleKey =
   | "enc"
   | "pw"
   | "vault"
-  | "guide";
+  | "guide"
+  | "selftest";
 
 export interface ModuleDefinition {
   key: ModuleKey;

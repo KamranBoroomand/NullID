@@ -13,7 +13,7 @@ import {
   saveNote,
   unlockVault,
 } from "../utils/vault";
-import { wipeVault } from "../utils/storage";
+import { getVaultBackendInfo, wipeVault } from "../utils/storage";
 import type { ModuleKey } from "../components/ModuleList";
 
 type DecryptedNote = { id: string; title: string; body: string; tags: string[]; createdAt: number; updatedAt: number };
@@ -35,6 +35,7 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [autoLockSeconds, setAutoLockSeconds] = useState(300);
   const [lockTimer, setLockTimer] = useState<number | null>(null);
+  const [backendInfo, setBackendInfo] = useState(() => getVaultBackendInfo());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const encryptedImportRef = useRef<HTMLInputElement>(null);
   const formatTs = useCallback((value: number) => new Date(value).toLocaleString(), []);
@@ -71,6 +72,16 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
     }
   }, [autoLockSeconds, resetLockTimer, unlocked]);
 
+  useEffect(() => {
+    setBackendInfo(getVaultBackendInfo());
+  }, [unlocked, notes.length]);
+
+  useEffect(() => {
+    if (backendInfo.fallbackReason) {
+      push(`storage fallback: ${backendInfo.fallbackReason}`, "danger");
+    }
+  }, [backendInfo.fallbackReason, push]);
+
   useEffect(() => () => {
     if (lockTimer) window.clearTimeout(lockTimer);
   }, [lockTimer]);
@@ -90,6 +101,7 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
       setKey(derived);
       setUnlocked(true);
       push("vault unlocked", "accent");
+      setBackendInfo(getVaultBackendInfo());
       const stored = await loadNotes();
       const decrypted = await Promise.all(
         stored.map(async (note) => {
@@ -112,6 +124,7 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
       setUnlocked(false);
       setKey(null);
       setNotes([]);
+      setBackendInfo(getVaultBackendInfo());
     }
   }, [passphrase, push, resetLockTimer]);
 
@@ -140,6 +153,7 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
     } catch (error) {
       console.error(error);
       push("save failed (storage blocked?)", "danger");
+      setBackendInfo(getVaultBackendInfo());
     }
   }, [activeId, body, key, notes, push, resetLockTimer, tags, title]);
 
@@ -353,6 +367,8 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
             <span>state</span>
             <Chip label={unlocked ? "unsealed" : "locked"} tone={unlocked ? "accent" : "muted"} />
             <span className="microcopy">notes: {notes.length}</span>
+            <Chip label={`storage: ${backendInfo.kind}`} tone={backendInfo.fallbackReason ? "danger" : "muted"} />
+            {backendInfo.fallbackReason && <span className="microcopy">fallback: {backendInfo.fallbackReason}</span>}
           </div>
           <div className="controls-row">
             <label className="section-title" htmlFor="vault-search">

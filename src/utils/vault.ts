@@ -7,6 +7,8 @@ const AAD = utf8ToBytes("nullid:vault:v1");
 export interface VaultMeta {
   salt: string;
   iterations: number;
+  version?: number;
+  lockedAt?: number;
 }
 
 export type VaultNote = {
@@ -19,10 +21,21 @@ export type VaultNote = {
 export async function ensureVaultMeta(): Promise<VaultMeta> {
   const backend = await getVaultBackend();
   const existing = await getValue<VaultMeta & { lockedAt: number }>(backend, "meta", "meta");
-  if (existing) return { salt: existing.salt, iterations: existing.iterations };
+  if (existing) {
+    const normalized: VaultMeta = {
+      salt: existing.salt,
+      iterations: existing.iterations,
+      version: existing.version ?? 1,
+      lockedAt: existing.lockedAt ?? Date.now(),
+    };
+    if (!existing.version) {
+      await putValue(backend, "meta", "meta", normalized);
+    }
+    return normalized;
+  }
   const salt = toBase64Url(randomBytes(16));
-  const meta: VaultMeta = { salt, iterations: 200_000 };
-  await putValue(backend, "meta", "meta", { ...meta, lockedAt: Date.now() });
+  const meta: VaultMeta = { salt, iterations: 200_000, version: 1, lockedAt: Date.now() };
+  await putValue(backend, "meta", "meta", meta);
   return meta;
 }
 

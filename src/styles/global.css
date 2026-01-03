@@ -10,7 +10,7 @@ body {
   color: var(--text-primary);
   background: var(--background);
   min-height: 100vh;
-  overflow: hidden;
+  overflow: auto;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -20,12 +20,6 @@ html,
 body,
 #root {
   height: 100%;
-}
-
-@media (max-width: 760px) {
-  body {
-    overflow: auto;
-  }
 }
 
 body::before {

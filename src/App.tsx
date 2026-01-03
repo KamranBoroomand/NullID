@@ -11,6 +11,7 @@ import { GuideView } from "./views/GuideView";
 import { RedactView } from "./views/RedactView";
 import { SanitizeView } from "./views/SanitizeView";
 import { VaultView } from "./views/VaultView";
+import { SelfTestView } from "./views/SelfTestView";
 import "./App.css";
 import { ToastProvider, useToast } from "./components/ToastHost";
 import { usePersistentState } from "./hooks/usePersistentState";
@@ -18,6 +19,7 @@ import { wipeVault } from "./utils/storage";
 import { applyTheme } from "./theme";
 import type { ThemeMode } from "./theme/tokens";
 import { downloadProfile, importProfileFile } from "./utils/profile";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 type StatusTone = "neutral" | "accent" | "danger";
 const modules: ModuleDefinition[] = [
@@ -28,6 +30,7 @@ const modules: ModuleDefinition[] = [
   { key: "enc", title: "Encrypt / Decrypt", subtitle: "envelopes" },
   { key: "pw", title: "Password & Passphrase", subtitle: "generator" },
   { key: "vault", title: "Secure Notes", subtitle: "sealed" },
+  { key: "selftest", title: "Self-test", subtitle: "diagnostics" },
   { key: "guide", title: "Guide", subtitle: "how-to" },
 ];
 
@@ -54,6 +57,8 @@ function WorkspaceView({ active, onRegisterHashActions, onStatus, onOpenGuide }:
       return <PwView onOpenGuide={onOpenGuide} />;
     case "vault":
       return <VaultView onOpenGuide={onOpenGuide} />;
+    case "selftest":
+      return <SelfTestView onOpenGuide={onOpenGuide} />;
     case "guide":
       return <GuideView />;
     default:
@@ -89,6 +94,23 @@ function AppShell() {
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
+
+  useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      console.error("window error", event.error || event.message);
+      push(`runtime error: ${event.message}`, "danger");
+    };
+    const handleRejection = (event: PromiseRejectionEvent) => {
+      console.error("unhandled rejection", event.reason);
+      push("unhandled promise rejection", "danger");
+    };
+    window.addEventListener("error", handleError);
+    window.addEventListener("unhandledrejection", handleRejection);
+    return () => {
+      window.removeEventListener("error", handleError);
+      window.removeEventListener("unhandledrejection", handleRejection);
+    };
+  }, [push]);
 
   const toggleTheme = useCallback(() => {
     setTheme((prev) => {
@@ -349,7 +371,9 @@ function AppShell() {
 export default function App() {
   return (
     <ToastProvider>
-      <AppShell />
+      <ErrorBoundary>
+        <AppShell />
+      </ErrorBoundary>
     </ToastProvider>
   );
 }
