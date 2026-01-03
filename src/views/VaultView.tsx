@@ -111,6 +111,7 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
       push("unlock failed: passphrase or data invalid", "danger");
       setUnlocked(false);
       setKey(null);
+      setNotes([]);
     }
   }, [passphrase, push, resetLockTimer]);
 
@@ -123,18 +124,23 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
       .split(",")
       .map((tag) => tag.trim())
       .filter(Boolean);
-    await saveNote(key, id, title.trim(), body.trim(), { createdAt, tags: tagsList });
-    const updated = { id, title: title.trim(), body: body.trim(), tags: tagsList, createdAt, updatedAt: Date.now() };
-    setNotes((prev) => {
-      const other = prev.filter((note) => note.id !== id);
-      return [updated, ...other].sort((a, b) => b.updatedAt - a.updatedAt);
-    });
-    setTitle("");
-    setBody("");
-    setTags("");
-    setActiveId(null);
-    push("note saved", "accent");
-    resetLockTimer();
+    try {
+      await saveNote(key, id, title.trim(), body.trim(), { createdAt, tags: tagsList });
+      const updated = { id, title: title.trim(), body: body.trim(), tags: tagsList, createdAt, updatedAt: Date.now() };
+      setNotes((prev) => {
+        const other = prev.filter((note) => note.id !== id);
+        return [updated, ...other].sort((a, b) => b.updatedAt - a.updatedAt);
+      });
+      setTitle("");
+      setBody("");
+      setTags("");
+      setActiveId(null);
+      push("note saved", "accent");
+      resetLockTimer();
+    } catch (error) {
+      console.error(error);
+      push("save failed (storage blocked?)", "danger");
+    }
   }, [activeId, body, key, notes, push, resetLockTimer, tags, title]);
 
   const handleEdit = useCallback(
@@ -187,8 +193,10 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
     const link = document.createElement("a");
     link.href = url;
     link.download = "nullid-vault.json";
+    document.body.appendChild(link);
     link.click();
-    URL.revokeObjectURL(url);
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
   }, []);
 
   const handleExportEncrypted = useCallback(async () => {
@@ -202,8 +210,10 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
     const link = document.createElement("a");
     link.href = url;
     link.download = "nullid-vault.enc";
+    document.body.appendChild(link);
     link.click();
-    URL.revokeObjectURL(url);
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
     push("encrypted export ready", "accent");
   }, [push]);
 
