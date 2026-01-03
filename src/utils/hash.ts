@@ -15,9 +15,15 @@ export interface HashOptions {
   signal?: AbortSignal;
 }
 
-type HashFactory = {
-  create: () => import("@noble/hashes/utils").Hash<Uint8Array>;
+type Hasher = {
+  update: (data: Uint8Array) => unknown;
+  digest: () => Uint8Array;
 };
+
+type HashFactory = {
+  create: () => Hasher;
+};
+
 
 const hashers: Record<HashAlgorithm, HashFactory> = {
   "SHA-1": { create: () => sha1.create() },
@@ -35,11 +41,11 @@ function ensureActive(signal?: AbortSignal) {
 }
 
 async function finalizeHash(
-  hasher: import("@noble/hashes/utils").Hash<Uint8Array>,
+  hasher: Hasher,
   started: number,
   onProgress?: (percent: number) => void
 ): Promise<HashResult> {
-  const bytes = new Uint8Array(hasher.digest());
+  const bytes = hasher.digest();
   const elapsed = Math.round(performance.now() - started);
   if (onProgress) onProgress(100);
   console.info(`hash: ${bytes.length * 8} bits in ${elapsed}ms`);
