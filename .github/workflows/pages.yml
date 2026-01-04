@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-   build:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -31,19 +31,25 @@ jobs:
           cache: "npm"
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
+
+      - name: Validate
+        run: npm run validate
 
       - name: Build
         env:
           VITE_BASE: /
           VITE_BUILD_ID: ${{ github.sha }}
+        run: npm run build
+
+      - name: Assert guide
+        run: node scripts/assert-guide.mjs
+
+      - name: Stamp build info
         run: |
-          npm run validate
-          node scripts/assert-guide.mjs
-          mkdir -p dist
           cat <<'STAMP' > dist/build.json
           {"commit":"${{ github.sha }}","runId":"${{ github.run_id }}","timestamp":"${{ github.run_started_at }}"}
           STAMP
