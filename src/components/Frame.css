@@ -59,14 +59,16 @@
 }
 
 .frame-content.is-stacked .frame-pane {
-  border-right: none;
-  border-bottom: 1px solid var(--border-subtle);
-
-  /* Mobile: avoid nested vertical scroll containers (iOS Safari can get “stuck”). */
-  max-height: none;
-  overflow: visible;
+  /* Keep navigation usable without consuming the whole viewport. */
+  max-height: 40svh;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
+.frame-content.is-stacked .frame-pane {
+  border-right: none;
+  border-bottom: 1px solid var(--border-subtle);
+}
 
 .frame-compact .frame-shell {
   gap: 0.5rem;

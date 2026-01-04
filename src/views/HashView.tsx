@@ -43,16 +43,6 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
   const textDebounceRef = useRef<number | null>(null);
   const jobRef = useRef<number>(0);
   const textTokenRef = useRef(0);
-  const sourceRef = useRef<HashSource | null>(null);
-
-  useEffect(() => {
-  sourceRef.current = source;
-}, [source]);
-
-// Keep hot values in refs so action callbacks can stay stable (prevents cascading updates while typing).
-  const resultRef = useRef<{ hex: string; base64: string } | null>(null);
-  const verifyRef = useRef<string>("");
-
   const [isComposing, setIsComposing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileCompareRef = useRef<HTMLInputElement>(null);
@@ -90,7 +80,6 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
         if (jobId === jobRef.current) {
           setResult(nextResult);
           setSource(input);
-	  resultRef.current = nextResult;
           setFileName(input.kind === "file" ? input.file.name : "inline");
           onStatus?.("digest ready", "accent");
         }
@@ -191,46 +180,29 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
     onStatus?.("cleared", "neutral");
   }, [onStatus]);
 
-const compare = useCallback(() => {
-  const current = resultRef.current;
-  if (!current) {
-    setComparison("invalid");
-    onStatus?.("digest missing", "danger");
-    return;
-  }
+  const compare = useCallback(() => {
+    if (!result) {
+      setComparison("invalid");
+      onStatus?.("digest missing", "danger");
+      return;
+    }
+    const normalized = normalizeHashInput(verifyValue);
+    const expected = expectedHashLengths[algorithm];
+    if (!normalized || (expected && normalized.length !== expected)) {
+      setComparison("invalid");
+      onStatus?.("invalid hash", "danger");
+      return;
+    }
+    const match = normalized === normalizeHashInput(result.hex);
+    setComparison(match ? "match" : "mismatch");
+    onStatus?.(match ? "hash match" : "hash mismatch", match ? "accent" : "danger");
+  }, [algorithm, onStatus, result, verifyValue]);
 
-  const normalized = normalizeHashInput(verifyRef.current);
-  const expected = expectedHashLengths[algorithm];
-
-  if (!normalized || (expected && normalized.length !== expected)) {
-    setComparison("invalid");
-    onStatus?.("invalid hash", "danger");
-    return;
-  }
-
-  const match = normalized === normalizeHashInput(current.hex);
-  setComparison(match ? "match" : "mismatch");
-  onStatus?.(match ? "hash match" : "hash mismatch", match ? "accent" : "danger");
-}, [algorithm, onStatus]);
-
-
-  // Re-hash ONLY when the algorithm changes.
-// IMPORTANT: Do NOT depend on `source` here, because computeHash() sets `source`
-// and that creates an infinite update loop ("Maximum update depth exceeded").
-useEffect(() => {
-  if (sourceRef.current) {
-    void computeHash(sourceRef.current);
-  }
-}, [algorithm, computeHash]);
-
-
-	useEffect(() => {
-  verifyRef.current = verifyValue;
-}, [verifyValue]);
-
-	useEffect(() => {
-  resultRef.current = result;
-}, [result]);
+  useEffect(() => {
+    if (source) {
+      void computeHash(source);
+    }
+  }, [algorithm, computeHash, source]);
 
   useEffect(() => {
     onRegisterActions?.({ copyDigest, clearInputs, compare });
