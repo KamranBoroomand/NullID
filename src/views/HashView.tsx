@@ -48,9 +48,9 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
   const [isComposing, setIsComposing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileCompareRef = useRef<HTMLInputElement>(null);
+  const algorithmRef = useRef(algorithm);
   const resultRef = useRef(result);
-  const normalizedVerifyRef = useRef("");
-  const expectedLengthRef = useRef(expectedHashLengths[algorithm]);
+  const verifyValueRef = useRef(verifyValue);
   const onStatusRef = useRef(onStatus);
 
   const MAX_FILE_BYTES = 50 * 1024 * 1024; // 50MB (prevents browser OOM)
@@ -191,20 +191,22 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
 
   const compare = useCallback(() => {
     const currentResult = resultRef.current;
-    const currentVerify = normalizedVerifyRef.current;
-    const expected = expectedLengthRef.current;
+    const currentVerify = verifyValueRef.current;
+    const currentAlgorithm = algorithmRef.current;
     const status = onStatusRef.current;
     if (!currentResult) {
       setComparison("invalid");
       status?.("digest missing", "danger");
       return;
     }
-    if (!currentVerify || (expected && currentVerify.length !== expected)) {
+    const normalized = normalizeHashInput(currentVerify);
+    const expected = expectedHashLengths[currentAlgorithm];
+    if (!normalized || (expected && normalized.length !== expected)) {
       setComparison("invalid");
       status?.("invalid hash", "danger");
       return;
     }
-    const match = currentVerify === normalizeHashInput(currentResult.hex);
+    const match = normalized === normalizeHashInput(currentResult.hex);
     setComparison(match ? "match" : "mismatch");
     status?.(match ? "hash match" : "hash mismatch", match ? "accent" : "danger");
   }, []);
@@ -220,7 +222,7 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
           compare();
           verifyDebounceRef.current = null;
         }
-      }, 300);
+      }, 200);
     },
     [compare],
   );
@@ -232,16 +234,16 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
   }, [algorithm, computeHash, source]);
 
   useEffect(() => {
+    algorithmRef.current = algorithm;
+  }, [algorithm]);
+
+  useEffect(() => {
     resultRef.current = result;
   }, [result]);
 
   useEffect(() => {
-    normalizedVerifyRef.current = normalizedVerify;
-  }, [normalizedVerify]);
-
-  useEffect(() => {
-    expectedLengthRef.current = expectedLength;
-  }, [expectedLength]);
+    verifyValueRef.current = verifyValue;
+  }, [verifyValue]);
 
   useEffect(() => {
     onStatusRef.current = onStatus;
