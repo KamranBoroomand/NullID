@@ -41,11 +41,17 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
   const [fileCompareName, setFileCompareName] = useState<string>("none");
   const abortRef = useRef<AbortController | null>(null);
   const textDebounceRef = useRef<number | null>(null);
+  const verifyDebounceRef = useRef<number | null>(null);
   const jobRef = useRef<number>(0);
   const textTokenRef = useRef(0);
+  const verifyTokenRef = useRef(0);
   const [isComposing, setIsComposing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileCompareRef = useRef<HTMLInputElement>(null);
+  const algorithmRef = useRef(algorithm);
+  const resultRef = useRef(result);
+  const verifyValueRef = useRef(verifyValue);
+  const onStatusRef = useRef(onStatus);
 
   const MAX_FILE_BYTES = 50 * 1024 * 1024; // 50MB (prevents browser OOM)
   const MAX_TEXT_CHARS = 1_000_000; // ~1MB text safety guard
@@ -181,28 +187,64 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
   }, [onStatus]);
 
   const compare = useCallback(() => {
-    if (!result) {
+    const currentResult = resultRef.current;
+    const currentVerify = verifyValueRef.current;
+    const currentAlgorithm = algorithmRef.current;
+    const status = onStatusRef.current;
+    if (!currentResult) {
       setComparison("invalid");
-      onStatus?.("digest missing", "danger");
+      status?.("digest missing", "danger");
       return;
     }
-    const normalized = normalizeHashInput(verifyValue);
-    const expected = expectedHashLengths[algorithm];
+    const normalized = normalizeHashInput(currentVerify);
+    const expected = expectedHashLengths[currentAlgorithm];
     if (!normalized || (expected && normalized.length !== expected)) {
       setComparison("invalid");
-      onStatus?.("invalid hash", "danger");
+      status?.("invalid hash", "danger");
       return;
     }
-    const match = normalized === normalizeHashInput(result.hex);
+    const match = normalized === normalizeHashInput(currentResult.hex);
     setComparison(match ? "match" : "mismatch");
-    onStatus?.(match ? "hash match" : "hash mismatch", match ? "accent" : "danger");
-  }, [algorithm, onStatus, result, verifyValue]);
+    status?.(match ? "hash match" : "hash mismatch", match ? "accent" : "danger");
+  }, []);
+
+  const handleVerifyChange = useCallback(
+    (value: string) => {
+      setVerifyValue(value);
+      setComparison("idle");
+      if (verifyDebounceRef.current) window.clearTimeout(verifyDebounceRef.current);
+      const token = (verifyTokenRef.current += 1);
+      verifyDebounceRef.current = window.setTimeout(() => {
+        if (verifyTokenRef.current === token) {
+          compare();
+          verifyDebounceRef.current = null;
+        }
+      }, 200);
+    },
+    [compare],
+  );
 
   useEffect(() => {
     if (source) {
       void computeHash(source);
     }
   }, [algorithm, computeHash, source]);
+
+  useEffect(() => {
+    algorithmRef.current = algorithm;
+  }, [algorithm]);
+
+  useEffect(() => {
+    resultRef.current = result;
+  }, [result]);
+
+  useEffect(() => {
+    verifyValueRef.current = verifyValue;
+  }, [verifyValue]);
+
+  useEffect(() => {
+    onStatusRef.current = onStatus;
+  }, [onStatus]);
 
   useEffect(() => {
     onRegisterActions?.({ copyDigest, clearInputs, compare });
@@ -212,6 +254,7 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
   useEffect(() => {
     return () => {
       if (textDebounceRef.current) window.clearTimeout(textDebounceRef.current);
+      if (verifyDebounceRef.current) window.clearTimeout(verifyDebounceRef.current);
       abortRef.current?.abort();
     };
   }, []);
@@ -341,7 +384,7 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
               className="input"
               placeholder="Paste hash to verify"
               value={verifyValue}
-              onChange={(event) => setVerifyValue(event.target.value)}
+              onChange={(event) => handleVerifyChange(event.target.value)}
               aria-label="Hash to verify"
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
