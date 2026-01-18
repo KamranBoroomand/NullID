@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Chip } from "../components/Chip";
 import { useToast } from "../components/ToastHost";
 import "./styles.css";
@@ -24,6 +24,87 @@ interface HashViewProps {
 type HashSource =
   | { kind: "file"; file: File }
   | { kind: "text"; value: string };
+
+type HashInputPanelProps = {
+  textValue: string;
+  fileName: string;
+  isBusy: boolean;
+  progress: number;
+  onTextChange: (value: string) => void;
+  onCompositionStart: () => void;
+  onCompositionEnd: (value: string) => void;
+  onFileDrop: (file?: File | null) => void | Promise<void>;
+  fileInputRef: RefObject<HTMLInputElement>;
+};
+
+const HashInputPanel = memo(function HashInputPanel({
+  textValue,
+  fileName,
+  isBusy,
+  progress,
+  onTextChange,
+  onCompositionStart,
+  onCompositionEnd,
+  onFileDrop,
+  fileInputRef,
+}: HashInputPanelProps) {
+  return (
+    <div className="panel" aria-label="Hash inputs">
+      <div className="panel-heading">
+        <span>Hash input</span>
+        <span className="panel-subtext">text or file</span>
+      </div>
+      <label className="section-title" htmlFor="hash-text">
+        Text
+      </label>
+      <textarea
+        id="hash-text"
+        className="textarea"
+        placeholder="Type or paste text to hash"
+        value={textValue}
+        onCompositionStart={onCompositionStart}
+        onCompositionEnd={(event) => onCompositionEnd(event.currentTarget.value)}
+        onChange={(event) => onTextChange(event.target.value)}
+        aria-label="Text to hash"
+      />
+      <div
+        className="dropzone"
+        role="button"
+        tabIndex={0}
+        aria-label="Drop file to hash"
+        onClick={() => fileInputRef.current?.click()}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            fileInputRef.current?.click();
+          }
+        }}
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={(event) => {
+          event.preventDefault();
+          void onFileDrop(event.dataTransfer.files?.[0] ?? null);
+        }}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          aria-label="Pick file"
+          onChange={(event) => void onFileDrop(event.target.files?.[0] ?? null)}
+          style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }}
+          tabIndex={-1}
+        />
+        <div className="section-title">Drop or select file</div>
+        <div className="microcopy">progressive chunk hashing</div>
+        {isBusy && <div className="microcopy">progress {progress}%</div>}
+      </div>
+      <div className="status-line">
+        <span>source</span>
+        <Chip label={fileName} tone="muted" />
+        {isBusy && <Chip label="hashing…" tone="accent" />}
+      </div>
+    </div>
+  );
+});
 
 export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewProps) {
   const { push } = useToast();
@@ -153,6 +234,18 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
     [MAX_TEXT_CHARS, computeHash, isComposing, report],
   );
 
+  const handleCompositionStart = useCallback(() => {
+    setIsComposing(true);
+  }, []);
+
+  const handleCompositionEnd = useCallback(
+    (value: string) => {
+      setIsComposing(false);
+      handleTextChange(value);
+    },
+    [handleTextChange],
+  );
+
   const copyDigest = useCallback(async () => {
     if (!digestDisplay) {
       report("no digest", "danger");
@@ -277,62 +370,17 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
         </button>
       </div>
       <div className="grid-two">
-        <div className="panel" aria-label="Hash inputs">
-          <div className="panel-heading">
-            <span>Hash input</span>
-            <span className="panel-subtext">text or file</span>
-          </div>
-          <label className="section-title" htmlFor="hash-text">
-            Text
-          </label>
-          <textarea
-            id="hash-text"
-            className="textarea"
-            placeholder="Type or paste text to hash"
-            value={textValue}
-            onCompositionStart={() => setIsComposing(true)}
-            onCompositionEnd={(event) => {
-              setIsComposing(false);
-              handleTextChange(event.currentTarget.value);
-            }}
-            onChange={(event) => handleTextChange(event.target.value)}
-            aria-label="Text to hash"
-          />
-          <div className="dropzone"
-            role="button"
-            tabIndex={0}
-            aria-label="Drop file to hash"
-            onClick={() => fileInputRef.current?.click()}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                fileInputRef.current?.click();
-              }
-            }}
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => {
-              event.preventDefault();
-              void handleFile(event.dataTransfer.files?.[0] ?? null);
-            }}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              aria-label="Pick file"
-              onChange={(event) => void handleFile(event.target.files?.[0] ?? null)}
-              style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }}
-              tabIndex={-1}
-            />
-            <div className="section-title">Drop or select file</div>
-            <div className="microcopy">progressive chunk hashing</div>
-            {isBusy && <div className="microcopy">progress {progress}%</div>}
-          </div>
-          <div className="status-line">
-            <span>source</span>
-            <Chip label={fileName} tone="muted" />
-            {isBusy && <Chip label="hashing…" tone="accent" />}
-          </div>
-        </div>
+        <HashInputPanel
+          textValue={textValue}
+          fileName={fileName}
+          isBusy={isBusy}
+          progress={progress}
+          onTextChange={handleTextChange}
+          onCompositionStart={handleCompositionStart}
+          onCompositionEnd={handleCompositionEnd}
+          onFileDrop={handleFile}
+          fileInputRef={fileInputRef}
+        />
         <div className="panel" aria-label="Hash output">
           <div className="panel-heading">
             <span>Digest</span>
