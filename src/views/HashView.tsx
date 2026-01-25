@@ -40,6 +40,7 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
   const [progress, setProgress] = useState<number>(0);
   const [fileComparison, setFileComparison] = useState<"idle" | "match" | "mismatch" | "pending">("idle");
   const [fileCompareName, setFileCompareName] = useState<string>("none");
+  const [isHashing, setIsHashing] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const textDebounceRef = useRef<number | null>(null);
   const verifyDebounceRef = useRef<number | null>(null);
@@ -59,6 +60,7 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
 
   const MAX_FILE_BYTES = 50 * 1024 * 1024; // 50MB (prevents browser OOM)
   const MAX_TEXT_CHARS = 1_000_000; // ~1MB text safety guard
+  const TEXT_DEBOUNCE_MS = 300;
 
   const digestDisplay = useMemo(() => {
     if (!result) return "";
@@ -78,6 +80,7 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
       setComparison("idle");
       setFileComparison("idle");
       setProgress(0);
+      setIsHashing(true);
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
@@ -108,6 +111,9 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
       } finally {
         if (jobId === jobRef.current && succeeded) {
           setProgress(100);
+        }
+        if (jobId === jobRef.current) {
+          setIsHashing(false);
         }
       }
     },
@@ -140,28 +146,9 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
         report("text too large for inline hashing", "danger");
         return;
       }
-      if (isComposing) {
-        setTextValue(value);
-        return;
-      }
       setTextValue(value);
-      // Debounce hashing so the UI remains responsive while typing.
-      if (textDebounceRef.current) window.clearTimeout(textDebounceRef.current);
-      const token = (textTokenRef.current += 1);
-      textDebounceRef.current = window.setTimeout(() => {
-        void (async () => {
-          try {
-            await computeHash({ kind: "text", value });
-          } finally {
-            // Only clear the timer reference if this is the latest scheduled run.
-            if (textTokenRef.current === token) {
-              textDebounceRef.current = null;
-            }
-          }
-        })();
-      }, 150);
     },
-    [MAX_TEXT_CHARS, computeHash, isComposing, report],
+    [MAX_TEXT_CHARS, report],
   );
 
   const copyDigest = useCallback(async () => {
@@ -232,6 +219,34 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
       void computeHash(source);
     }
   }, [algorithm, computeHash, source]);
+
+  useEffect(() => {
+    if (source?.kind === "file") return;
+    if (isComposing) return;
+    if (!textValue) {
+      setResult(null);
+      setSource(null);
+      setFileName("none");
+      setProgress(0);
+      setIsHashing(false);
+      return;
+    }
+    if (textDebounceRef.current) window.clearTimeout(textDebounceRef.current);
+    const token = (textTokenRef.current += 1);
+    textDebounceRef.current = window.setTimeout(() => {
+      void (async () => {
+        try {
+          await computeHash({ kind: "text", value: textValue });
+        } catch (error) {
+          console.error(error);
+        } finally {
+          if (textTokenRef.current === token) {
+            textDebounceRef.current = null;
+          }
+        }
+      })();
+    }, TEXT_DEBOUNCE_MS);
+  }, [TEXT_DEBOUNCE_MS, computeHash, isComposing, source, textValue]);
 
   useEffect(() => {
     algorithmRef.current = algorithm;
@@ -337,6 +352,7 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
             <div className="section-title">Drop or select file</div>
             <div className="microcopy">progressive chunk hashing</div>
             {isBusy && <div className="microcopy">progress {progress}%</div>}
+            {isHashing && <div className="microcopy">Hashing...</div>}
           </div>
           <div className="status-line">
             <span>source</span>
