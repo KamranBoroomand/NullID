@@ -53,6 +53,9 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
   const resultRef = useRef(result);
   const debouncedVerifyRef = useRef(debouncedVerifyValue);
   const onStatusRef = useRef(onStatus);
+  const handleProgress = useCallback((percent: number) => {
+    setProgress(percent);
+  }, []);
 
   const MAX_FILE_BYTES = 50 * 1024 * 1024; // 50MB (prevents browser OOM)
   const MAX_TEXT_CHARS = 1_000_000; // ~1MB text safety guard
@@ -79,28 +82,36 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
       const controller = new AbortController();
       abortRef.current = controller;
       const jobId = (jobRef.current += 1);
+      let succeeded = false;
       try {
         const nextResult =
           input.kind === "file"
-            ? await hashFile(input.file, algorithm, { onProgress: setProgress, signal: controller.signal })
-            : await hashText(input.value, algorithm, { signal: controller.signal, onProgress: setProgress });
+            ? await hashFile(input.file, algorithm, { onProgress: handleProgress, signal: controller.signal })
+            : await hashText(input.value, algorithm, { signal: controller.signal, onProgress: handleProgress });
         if (jobId === jobRef.current) {
           setResult(nextResult);
           setSource(input);
           setFileName(input.kind === "file" ? input.file.name : "inline");
+          succeeded = true;
           onStatus?.("digest ready", "accent");
         }
       } catch (error) {
         if ((error as Error).name === "AbortError") return;
         console.error(error);
-        onStatus?.("hash failed", "danger");
-      } finally {
         if (jobId === jobRef.current) {
+          setProgress(0);
+          setComparison("idle");
+          setFileComparison("idle");
+        }
+        const message = error instanceof Error ? error.message : "hash failed";
+        onStatus?.(message, "danger");
+      } finally {
+        if (jobId === jobRef.current && succeeded) {
           setProgress(100);
         }
       }
     },
-    [algorithm, onStatus],
+    [algorithm, handleProgress, onStatus],
   );
 
   const report = useCallback(
@@ -430,7 +441,7 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
                   }
                   setFileComparison("pending");
                   setFileCompareName(file.name);
-                  const compareDigest = await hashFile(file, algorithm, { onProgress: setProgress });
+                  const compareDigest = await hashFile(file, algorithm, { onProgress: handleProgress });
                   const match = compareDigest.hex === result.hex;
                   setFileComparison(match ? "match" : "mismatch");
                   onStatus?.(match ? "files match" : "files differ", match ? "accent" : "danger");

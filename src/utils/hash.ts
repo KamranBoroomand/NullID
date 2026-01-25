@@ -33,11 +33,38 @@ const hashers: Record<HashAlgorithm, HashFactory> = {
 
 const HASH_TEXT_CHUNK = 32_000;
 const HASH_FILE_CHUNK = 1024 * 1024 * 2; // 2MB slices keep memory bounded even on mobile.
+const YIELD_INTERVAL_MS = 16;
+const PROGRESS_THROTTLE_MS = 80;
 
 function ensureActive(signal?: AbortSignal) {
   if (signal?.aborted) {
     throw new DOMException("aborted", "AbortError");
   }
+}
+
+function createProgressReporter(onProgress?: (percent: number) => void) {
+  let lastPercent = -1;
+  let lastReport = 0;
+  return (percent: number) => {
+    if (!onProgress) return;
+    const clamped = Math.max(0, Math.min(100, Math.round(percent)));
+    const now = performance.now();
+    if (clamped === lastPercent) return;
+    if (clamped !== 100 && now - lastReport < PROGRESS_THROTTLE_MS) return;
+    lastPercent = clamped;
+    lastReport = now;
+    onProgress(clamped);
+  };
+}
+
+async function yieldToMain(lastYield: number) {
+  if (performance.now() - lastYield < YIELD_INTERVAL_MS) return lastYield;
+  if (typeof globalThis.requestAnimationFrame === "function") {
+    await new Promise<void>((resolve) => globalThis.requestAnimationFrame(() => resolve()));
+  } else {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  return performance.now();
 }
 
 async function finalizeHash(
@@ -47,31 +74,48 @@ async function finalizeHash(
 ): Promise<HashResult> {
   const bytes = hasher.digest();
   const elapsed = Math.round(performance.now() - started);
-  if (onProgress) onProgress(100);
+  const reportProgress = createProgressReporter(onProgress);
+  reportProgress(100);
   console.info(`hash: ${bytes.length * 8} bits in ${elapsed}ms`);
   return { hex: toHex(bytes), base64: toBase64(bytes) };
 }
 
 export async function hashText(text: string, algorithm: HashAlgorithm, options?: HashOptions): Promise<HashResult> {
-  const hasher = hashers[algorithm].create();
+  if (typeof text !== "string") {
+    throw new TypeError("Expected text to be a string");
+  }
+  const factory = hashers[algorithm];
+  if (!factory) {
+    throw new Error(`Unsupported hash algorithm: ${algorithm}`);
+  }
+  const hasher = factory.create();
   const encoder = new TextEncoder();
   const started = performance.now();
+  const reportProgress = createProgressReporter(options?.onProgress);
+  let lastYield = performance.now();
   for (let i = 0; i < text.length; i += HASH_TEXT_CHUNK) {
     ensureActive(options?.signal);
     const slice = text.slice(i, i + HASH_TEXT_CHUNK);
     hasher.update(encoder.encode(slice));
-    // Let the UI breathe during long inputs.
-    if (text.length > HASH_TEXT_CHUNK) {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
+    reportProgress(((i + slice.length) / text.length) * 100);
+    lastYield = await yieldToMain(lastYield);
   }
   return finalizeHash(hasher, started, options?.onProgress);
 }
 
 export async function hashFile(file: File, algorithm: HashAlgorithm, options?: HashOptions): Promise<HashResult> {
-  const hasher = hashers[algorithm].create();
+  if (!(file instanceof File)) {
+    throw new TypeError("Expected a File to hash");
+  }
+  const factory = hashers[algorithm];
+  if (!factory) {
+    throw new Error(`Unsupported hash algorithm: ${algorithm}`);
+  }
+  const hasher = factory.create();
   const started = performance.now();
   let offset = 0;
+  const reportProgress = createProgressReporter(options?.onProgress);
+  let lastYield = performance.now();
   while (offset < file.size) {
     ensureActive(options?.signal);
     const end = Math.min(offset + HASH_FILE_CHUNK, file.size);
@@ -79,15 +123,18 @@ export async function hashFile(file: File, algorithm: HashAlgorithm, options?: H
     const buffer = new Uint8Array(await slice.arrayBuffer());
     hasher.update(buffer);
     offset = end;
-    const percent = Math.min(99, Math.round((offset / file.size) * 100));
-    if (options?.onProgress) options.onProgress(percent);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    reportProgress((offset / file.size) * 100);
+    lastYield = await yieldToMain(lastYield);
   }
   return finalizeHash(hasher, started, options?.onProgress);
 }
 
 export function normalizeHashInput(value: string): string {
-  return value.replace(/[^a-f0-9]/gi, "").toLowerCase();
+  if (!value) return "";
+  const matches = value.trim().match(/[a-f0-9]+/gi);
+  if (!matches) return "";
+  const longest = matches.reduce((winner, current) => (current.length > winner.length ? current : winner), "");
+  return longest.toLowerCase();
 }
 
 export const expectedHashLengths: Record<HashAlgorithm, number> = {
