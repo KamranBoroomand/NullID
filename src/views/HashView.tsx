@@ -51,6 +51,7 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileCompareRef = useRef<HTMLInputElement>(null);
   const algorithmRef = useRef(algorithm);
+  const lastAlgorithmRef = useRef<HashAlgorithm>(algorithm);
   const resultRef = useRef(result);
   const debouncedVerifyRef = useRef(debouncedVerifyValue);
   const onStatusRef = useRef(onStatus);
@@ -215,9 +216,9 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
   );
 
   useEffect(() => {
-    if (source) {
-      void computeHash(source);
-    }
+    if (lastAlgorithmRef.current === algorithm) return;
+    lastAlgorithmRef.current = algorithm;
+    if (source?.kind === "file") void computeHash(source);
   }, [algorithm, computeHash, source]);
 
   useEffect(() => {
