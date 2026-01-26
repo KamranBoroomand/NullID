@@ -91,6 +91,10 @@ function AppShell() {
     }
   }, [activeModule, resolvedActiveModule, setActiveModule]);
 
+  const handleStatus = useCallback((message: string, tone: StatusTone = "neutral") => {
+    setStatus({ message, tone });
+  }, []);
+
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
@@ -350,7 +354,7 @@ function AppShell() {
             <WorkspaceView
               active={resolvedActiveModule}
               onRegisterHashActions={setHashActions}
-              onStatus={(message, tone = "neutral") => setStatus({ message, tone })}
+              onStatus={handleStatus}
               onOpenGuide={goToGuide}
             />
           </div>
