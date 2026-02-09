@@ -28,12 +28,11 @@ export function CommandPalette({ open, commands, completions = [], historyKey = 
   const history = useCommandHistory(historyKey);
 
   useEffect(() => {
-    if (open) {
-      setQuery("");
-      requestAnimationFrame(() => inputRef.current?.focus());
-      history.resetCursor();
-    }
-  }, [history, open]);
+    if (!open) return;
+    setQuery("");
+    requestAnimationFrame(() => inputRef.current?.focus());
+    history.resetCursor();
+  }, [open]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
