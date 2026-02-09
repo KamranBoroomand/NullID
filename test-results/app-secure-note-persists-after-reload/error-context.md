@@ -1,0 +1,150 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - button "Choose File"
+    - generic [ref=e4]:
+      - generic [ref=e6]:
+        - complementary [ref=e7]:
+          - generic [ref=e8]:
+            - generic [ref=e9]:
+              - generic [ref=e10]: Tools
+              - generic [ref=e11]: Navigate
+            - navigation "Module list" [ref=e12]:
+              - list [ref=e13]:
+                - listitem [ref=e14]:
+                  - button ":hash Hash & Verify digests" [ref=e15] [cursor=pointer]:
+                    - generic [ref=e16]: :hash
+                    - generic [ref=e17]:
+                      - generic [ref=e18]: Hash & Verify
+                      - generic [ref=e19]: digests
+                    - generic [ref=e20]: ⟡
+                - listitem [ref=e21]:
+                  - button ":redact Text Redaction pii scrubbing" [ref=e22] [cursor=pointer]:
+                    - generic [ref=e23]: :redact
+                    - generic [ref=e24]:
+                      - generic [ref=e25]: Text Redaction
+                      - generic [ref=e26]: pii scrubbing
+                    - generic [ref=e27]: ⟡
+                - listitem [ref=e28]:
+                  - button ":sanitize Log Sanitizer diff preview" [ref=e29] [cursor=pointer]:
+                    - generic [ref=e30]: :sanitize
+                    - generic [ref=e31]:
+                      - generic [ref=e32]: Log Sanitizer
+                      - generic [ref=e33]: diff preview
+                    - generic [ref=e34]: ⟡
+                - listitem [ref=e35]:
+                  - button ":meta Metadata Inspector exif" [ref=e36] [cursor=pointer]:
+                    - generic [ref=e37]: :meta
+                    - generic [ref=e38]:
+                      - generic [ref=e39]: Metadata Inspector
+                      - generic [ref=e40]: exif
+                    - generic [ref=e41]: ⟡
+                - listitem [ref=e42]:
+                  - button ":enc Encrypt / Decrypt envelopes" [ref=e43] [cursor=pointer]:
+                    - generic [ref=e44]: :enc
+                    - generic [ref=e45]:
+                      - generic [ref=e46]: Encrypt / Decrypt
+                      - generic [ref=e47]: envelopes
+                    - generic [ref=e48]: ⟡
+                - listitem [ref=e49]:
+                  - button ":pw Password & Passphrase generator" [ref=e50] [cursor=pointer]:
+                    - generic [ref=e51]: :pw
+                    - generic [ref=e52]:
+                      - generic [ref=e53]: Password & Passphrase
+                      - generic [ref=e54]: generator
+                    - generic [ref=e55]: ⟡
+                - listitem [ref=e56]:
+                  - button ":vault Secure Notes sealed" [ref=e57] [cursor=pointer]:
+                    - generic [ref=e58]: :vault
+                    - generic [ref=e59]:
+                      - generic [ref=e60]: Secure Notes
+                      - generic [ref=e61]: sealed
+                    - generic [ref=e62]: ⟡
+                - listitem [ref=e63]:
+                  - button ":selftest Self-test diagnostics" [ref=e64] [cursor=pointer]:
+                    - generic [ref=e65]: :selftest
+                    - generic [ref=e66]:
+                      - generic [ref=e67]: Self-test
+                      - generic [ref=e68]: diagnostics
+                    - generic [ref=e69]: ⟡
+                - listitem [ref=e70]:
+                  - button ":guide Guide how-to" [ref=e71] [cursor=pointer]:
+                    - generic [ref=e72]: :guide
+                    - generic [ref=e73]:
+                      - generic [ref=e74]: Guide
+                      - generic [ref=e75]: how-to
+                    - generic [ref=e76]: ⟡
+        - generic [ref=e77]:
+          - generic [ref=e78]:
+            - generic [ref=e81]: NullID
+            - generic [ref=e82]:
+              - generic [ref=e83]:
+                - generic [ref=e84]: Secure Notes
+                - generic [ref=e85]: :vault
+              - generic "Status" [ref=e86]: :vault ready
+            - generic [ref=e87]:
+              - generic "Connection indicators" [ref=e88]:
+                - generic "local" [ref=e89]
+                - generic "offline" [ref=e90]
+                - generic "no-net" [ref=e91]
+              - button "Open quick actions" [ref=e93] [cursor=pointer]: Actions
+          - generic [ref=e95]:
+            - button "? guide" [ref=e97] [cursor=pointer]
+            - generic [ref=e98]:
+              - generic "Vault controls" [ref=e99]:
+                - generic [ref=e100]:
+                  - generic [ref=e101]: Secure Notes
+                  - generic [ref=e102]: AES-GCM + PBKDF2
+                - generic [ref=e103]:
+                  - textbox "Vault key" [ref=e104]:
+                    - /placeholder: passphrase
+                    - text: playwright-pass
+                  - button "unlock" [disabled] [ref=e105]
+                  - button "lock" [ref=e106] [cursor=pointer]
+                - generic [ref=e107]:
+                  - button "export (json)" [disabled] [ref=e108]
+                  - button "export encrypted" [disabled] [ref=e109]
+                  - button "import" [ref=e110] [cursor=pointer]
+                  - button "import encrypted" [ref=e111] [cursor=pointer]
+                  - button "Choose File"
+                  - button "Choose File"
+                  - button "wipe" [ref=e112] [cursor=pointer]
+                - generic [ref=e113]:
+                  - generic [ref=e114]: state
+                  - generic "unsealed" [ref=e115]
+                  - generic [ref=e116]: "notes: 0"
+                  - 'generic "storage: idb" [ref=e117]'
+                - generic [ref=e118]:
+                  - generic [ref=e119]: Search
+                  - textbox "Search" [ref=e120]:
+                    - /placeholder: Filter title, body, or tags
+                - generic [ref=e121]:
+                  - generic [ref=e122]: Auto lock (seconds)
+                  - spinbutton "Auto lock (seconds)" [ref=e123]: "300"
+              - generic "Create note form" [ref=e124]:
+                - generic [ref=e125]:
+                  - generic [ref=e126]: Create note
+                  - generic [ref=e127]: encrypted body
+                - generic [ref=e128]: Title
+                - textbox "Note title" [ref=e129]:
+                  - /placeholder: Incident draft
+                - generic [ref=e130]: Body
+                - textbox "Note body" [ref=e131]:
+                  - /placeholder: Encrypted note body...
+                - generic [ref=e132]: Tags (comma separated)
+                - textbox "Note tags" [ref=e133]:
+                  - /placeholder: incident, access, case-142
+                - generic [ref=e134]:
+                  - button "store" [ref=e135] [cursor=pointer]
+                  - button "clear" [ref=e136] [cursor=pointer]
+            - generic "Notes list" [ref=e137]:
+              - generic [ref=e138]:
+                - generic [ref=e139]: Notes
+                - generic [ref=e140]: decrypted in-memory only
+              - generic [ref=e142]: no matching notes
+      - generic "Build marker" [ref=e143]:
+        - generic [ref=e144]: "build: ui-preview"
+  - status
+```

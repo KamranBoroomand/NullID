@@ -7,9 +7,9 @@ const config: PlaywrightTestConfig = {
     viewport: { width: 1280, height: 800 },
   },
   webServer: {
-    command: "npm run dev -- --host --port 4173",
+    command: "npm run dev -- --host 127.0.0.1 --port 4173 --strictPort",
     port: 4173,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: process.env.PW_REUSE_SERVER === "1",
     timeout: 60_000,
   },
   testDir: "tests/e2e",
