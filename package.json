@@ -5,14 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node scripts/generate-build-manifest.mjs",
+    "verify:build": "node scripts/verify-build-manifest.mjs",
+    "build:repro": "npm run build && npm run verify:build",
     "assets:brand": "node scripts/generate-brand-assets.mjs",
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "lint": "node scripts/lint.js",
     "test": "tsc -p tsconfig.test.json && node --test build-test/__tests__/*.js",
     "e2e": "playwright test",
-    "validate": "npm run typecheck && npm run lint && npm run test && npm run e2e && npm run build"
+    "validate": "npm run typecheck && npm run lint && npm run test && npm run e2e && npm run build && npm run verify:build"
   },
   "dependencies": {
     "@noble/hashes": "^1.4.0",

@@ -31,11 +31,11 @@ The app is organized into focused modules:
 - Hash & Verify: SHA-256, SHA-512, and SHA-1 (legacy) for text and files, plus digest comparison and multiple output formats.
 - Text Redaction: detector-based masking for common PII/secrets with custom regex rules and overlap-safe resolution.
 - Log Sanitizer: preset-driven log cleanup with rule toggles, diff preview, JSON-aware masking, and downloadable output.
-- Metadata Inspector: local EXIF parsing and clean image re-encoding with before/after preview and resize options.
+- Metadata Inspector: local metadata parsing (JPEG/TIFF EXIF, PNG/WebP/GIF metadata hints), compatibility diagnostics, and clean image re-encoding with before/after preview and resize options.
 - Encrypt / Decrypt: versioned `NULLID:ENC:1` envelope using PBKDF2 + AES-GCM with text/file support.
 - Password & Passphrase: random generators with entropy estimates, presets, and copy hygiene support.
-- Secure Notes Vault: encrypted notes, auto-lock, panic lock (`Ctrl+Shift+L`), and import/export (plain + encrypted).
-- Self-test: quick checks for crypto roundtrip, file envelope roundtrip, storage backend health, and hash responsiveness.
+- Secure Notes Vault: encrypted notes, auto-lock, panic lock (`Ctrl+Shift+L`), and import/export (plain + encrypted) with integrity metadata and optional signing.
+- Self-test: operational checks plus browser capability probes (secure context, WebCrypto, IndexedDB, clipboard, service worker, codec support) with remediation hints.
 - Installable PWA: install on desktop and mobile (including iOS) with offline app-shell caching and standalone launch.
 
 ## Tech Stack
@@ -110,7 +110,9 @@ Available npm scripts:
 | Script | Command | Description |
 | --- | --- | --- |
 | `npm run dev` | `vite` | Start local dev server. |
-| `npm run build` | `tsc -b && vite build` | Type-check and build production assets to `dist/`. |
+| `npm run build` | `tsc -b && vite build && node scripts/generate-build-manifest.mjs` | Type-check, build production assets, and generate deterministic `deploy-manifest.json` + `SHA256SUMS`. |
+| `npm run verify:build` | `node scripts/verify-build-manifest.mjs` | Verify all built file hashes/sizes against the manifest. |
+| `npm run build:repro` | `npm run build && npm run verify:build` | Build and immediately verify reproducible static artifact integrity. |
 | `npm run assets:brand` | `node scripts/generate-brand-assets.mjs` | Regenerate social preview and app icon assets from the shared brand template. |
 | `npm run preview` | `vite preview` | Preview the production build locally. |
 | `npm run typecheck` | `tsc -b` | Run TypeScript project checks. |
@@ -124,14 +126,24 @@ NullID is a static frontend deployment:
 
 1. Build:
    ```bash
-   npm run build
+   npm ci
+   SOURCE_DATE_EPOCH=1735689600 npm run build
    ```
-2. Publish the `dist/` folder to any static host (GitHub Pages, Netlify, Vercel static output, S3 + CDN, etc.).
-3. Serve over HTTPS so service workers and install prompts work reliably in browsers.
-4. If deploying to a repository subpath, set `VITE_BASE` during build. Example:
+2. Verify build reproducibility metadata:
    ```bash
-   VITE_BASE=/your-repo-name/ npm run build
+   npm run verify:build
    ```
+3. Publish the `dist/` folder to any static host (GitHub Pages, Netlify, Vercel static output, S3 + CDN, etc.).
+4. Serve over HTTPS so service workers and install prompts work reliably in browsers.
+5. If deploying to a repository subpath, set `VITE_BASE` during build. Example:
+   ```bash
+   SOURCE_DATE_EPOCH=1735689600 VITE_BASE=/your-repo-name/ npm run build
+   ```
+
+Reproducibility guidance:
+- Use `npm ci` (lockfile install) and a pinned Node runtime across environments.
+- Keep `SOURCE_DATE_EPOCH` fixed for byte-for-byte comparable manifests.
+- Compare `dist/SHA256SUMS` across CI/local builds to confirm parity.
 
 ## Security/Quality Notes
 - Offline-first by design: there is no runtime API integration, and lint checks scan `src/` for disallowed `fetch`/HTTP usage.
@@ -142,8 +154,7 @@ NullID is a static frontend deployment:
 - This project is not represented as an externally audited cryptography product; validate threat model and controls before high-risk production use.
 
 ## Roadmap
-- Expand self-test diagnostics with broader browser capability probes and clearer remediation hints.
-- Add more import/export integrity checks and optional signed profile/vault metadata.
-- Extend metadata cleaning support and compatibility diagnostics for additional image formats.
-- Increase automated regression coverage for module-specific edge cases and mobile behavior.
-- Improve packaging/documentation for reproducible static deployments across environments.
+- Continue hardening metadata parsing against malformed edge files and uncommon vendor tags.
+- Expand signed export UX beyond prompts (saved key-hint profiles + explicit verification dialogs).
+- Add visual regression snapshots for module-specific mobile layouts.
+- Add CI workflow to diff `SHA256SUMS` across matrix builds automatically.

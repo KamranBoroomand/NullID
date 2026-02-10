@@ -1,6 +1,8 @@
-export const PROFILE_SCHEMA_VERSION = 1;
+import { sha256Base64Url, signHash, verifyHashSignature } from "./integrity.js";
+export const PROFILE_SCHEMA_VERSION = 2;
+const LEGACY_PROFILE_SCHEMA_VERSION = 1;
 const PREFIX = "nullid:";
-export function collectProfile() {
+export async function collectProfile(options) {
     const entries = {};
     for (let i = 0; i < localStorage.length; i += 1) {
         const key = localStorage.key(i);
@@ -14,14 +16,35 @@ export function collectProfile() {
             entries[key] = value;
         }
     }
-    return {
+    const exportedAt = new Date().toISOString();
+    const payloadHash = await sha256Base64Url({
         schemaVersion: PROFILE_SCHEMA_VERSION,
-        exportedAt: new Date().toISOString(),
+        exportedAt,
         entries,
+    });
+    const snapshot = {
+        schemaVersion: PROFILE_SCHEMA_VERSION,
+        kind: "profile",
+        exportedAt,
+        entries,
+        integrity: {
+            entryCount: Object.keys(entries).length,
+            payloadHash,
+        },
+    };
+    if (options?.signingPassphrase) {
+        snapshot.signature = {
+            algorithm: "HMAC-SHA-256",
+            value: await signHash(payloadHash, options.signingPassphrase),
+            keyHint: options.keyHint?.trim().slice(0, 64) || undefined,
+        };
+    }
+    return {
+        ...snapshot,
     };
 }
-export function downloadProfile(filename = "nullid-profile.json") {
-    const snapshot = collectProfile();
+export async function downloadProfile(filename = "nullid-profile.json", options) {
+    const snapshot = await collectProfile(options);
     const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -29,27 +52,92 @@ export function downloadProfile(filename = "nullid-profile.json") {
     link.download = filename;
     link.click();
     URL.revokeObjectURL(url);
+    return {
+        signed: Boolean(snapshot.signature),
+        entryCount: Object.keys(snapshot.entries).length,
+    };
 }
-export async function importProfileFile(file) {
+export async function importProfileFile(file, options) {
     const text = await file.text();
     const parsed = JSON.parse(text);
-    if (parsed.schemaVersion !== PROFILE_SCHEMA_VERSION) {
-        throw new Error("Unsupported profile schema");
+    if (parsed.schemaVersion === LEGACY_PROFILE_SCHEMA_VERSION) {
+        const entries = parseLegacyEntries(parsed);
+        const applied = applyEntries(entries);
+        return { applied, signed: false, verified: false, legacy: true };
     }
-    if (!parsed.entries || typeof parsed.entries !== "object") {
+    if (parsed.schemaVersion !== PROFILE_SCHEMA_VERSION) {
+        throw new Error(`Unsupported profile schema: ${String(parsed.schemaVersion ?? "unknown")}`);
+    }
+    if (parsed.kind && parsed.kind !== "profile") {
+        throw new Error("Invalid profile payload kind");
+    }
+    if (!isPlainObject(parsed.entries)) {
         throw new Error("Invalid profile payload");
     }
+    if (!isPlainObject(parsed.integrity)) {
+        throw new Error("Profile integrity metadata missing");
+    }
+    const entryCount = parsed.integrity.entryCount;
+    const payloadHash = parsed.integrity.payloadHash;
+    if (!Number.isInteger(entryCount) || entryCount < 0 || typeof payloadHash !== "string" || payloadHash.length < 16) {
+        throw new Error("Invalid profile integrity metadata");
+    }
     const entries = parsed.entries;
+    if (Object.keys(entries).length !== entryCount) {
+        throw new Error("Profile integrity mismatch (entry count)");
+    }
+    if (!Object.values(entries).every((value) => isSupportedValue(value))) {
+        throw new Error("Profile payload contains unsupported value types");
+    }
+    const computedHash = await sha256Base64Url({
+        schemaVersion: PROFILE_SCHEMA_VERSION,
+        exportedAt: parsed.exportedAt,
+        entries,
+    });
+    if (computedHash !== payloadHash) {
+        throw new Error("Profile integrity mismatch (hash)");
+    }
+    let signed = false;
+    let verified = false;
+    if (parsed.signature) {
+        if (!isPlainObject(parsed.signature) || parsed.signature.algorithm !== "HMAC-SHA-256" || typeof parsed.signature.value !== "string") {
+            throw new Error("Invalid profile signature metadata");
+        }
+        signed = true;
+        const verifySecret = options?.verificationPassphrase;
+        if (!verifySecret) {
+            throw new Error("Profile is signed; verification passphrase required");
+        }
+        verified = await verifyHashSignature(payloadHash, parsed.signature.value, verifySecret);
+        if (!verified) {
+            throw new Error("Profile signature verification failed");
+        }
+    }
+    const applied = applyEntries(entries);
+    return { applied, signed, verified, legacy: false };
+}
+function parseLegacyEntries(parsed) {
+    if (!isPlainObject(parsed.entries)) {
+        throw new Error("Invalid legacy profile payload");
+    }
+    const entries = parsed.entries;
+    if (!Object.values(entries).every((value) => isSupportedValue(value))) {
+        throw new Error("Legacy profile contains unsupported value types");
+    }
+    return entries;
+}
+function applyEntries(entries) {
     let applied = 0;
     Object.entries(entries).forEach(([key, value]) => {
         if (!key.startsWith(PREFIX))
             return;
-        if (!isSupportedValue(value))
-            return;
         localStorage.setItem(key, JSON.stringify(value));
         applied += 1;
     });
-    return { applied };
+    return applied;
+}
+function isPlainObject(value) {
+    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 function isSupportedValue(value) {
     if (value === null)

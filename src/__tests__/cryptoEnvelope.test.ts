@@ -25,4 +25,11 @@ describe("crypto envelope", () => {
     assert.equal(decodedHeader.mime, "text/plain");
     assert.equal(new TextDecoder().decode(plaintext), "file-payload");
   });
+
+  it("accepts envelopes with wrapped whitespace", async () => {
+    const blob = await encryptText("wrap", "payload");
+    const wrapped = `\n  ${blob.slice(0, 24)} \n${blob.slice(24)} \n`;
+    const output = await decryptText("wrap", wrapped);
+    assert.equal(output, "payload");
+  });
 });

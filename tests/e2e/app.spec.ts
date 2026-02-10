@@ -54,10 +54,48 @@ test("download envelope button triggers download", async ({ page }) => {
   fs.unlinkSync(filePath);
 });
 
+test("redaction module applies masking for detected values", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /Text Redaction/i }).click();
+  await page.getByLabel("Redaction input").fill("Reach me at alice@example.com token abcdefghijklmnopqrstuvwxyz1234");
+  await page.getByRole("button", { name: /apply redaction/i }).click();
+  const output = page.getByLabel("Redacted output");
+  await expect(output).toContainText("[email]");
+  await expect(output).toContainText("[token]");
+});
+
+test("metadata module flags HEIC inputs as unsupported with remediation text", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /Metadata Inspector/i }).click();
+  const imageInput = page.locator('input[type="file"][accept="image/*"]');
+  await imageInput.setInputFiles({
+    name: "sample.heic",
+    mimeType: "image/heic",
+    buffer: Buffer.from("heic"),
+  });
+  await expect(page.getByText(/HEIC\/HEIF parsing is usually blocked/i)).toBeVisible();
+  await expect(page.getByText(/unsupported/i)).toBeVisible();
+});
+
 test("mobile navigation scrolls and allows selection", async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
   await page.goto("/");
   await page.getByRole("button", { name: /Encrypt \/ Decrypt/i }).click();
   await expect(page.getByText("Encrypt").first()).toBeVisible();
+  await context.close();
+});
+
+test("mobile secure notes flow supports create and render", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 375, height: 812 } });
+  const page = await context.newPage();
+  await page.goto("/");
+  await page.getByRole("button", { name: /Secure Notes/i }).click();
+  await page.getByLabel("Vault key").fill("mobile-pass");
+  await page.getByRole("button", { name: /^unlock$/i }).click();
+  await page.getByLabel("Note title").fill("mobile-note");
+  await page.getByLabel("Note body").fill("created on mobile");
+  await page.getByRole("button", { name: /^store$/i }).click();
+  await expect(page.getByText("mobile-note").first()).toBeVisible();
+  await context.close();
 });

@@ -8,12 +8,12 @@ export function CommandPalette({ open, commands, completions = [], historyKey = 
     const [activeIndex, setActiveIndex] = useState(0);
     const history = useCommandHistory(historyKey);
     useEffect(() => {
-        if (open) {
-            setQuery("");
-            requestAnimationFrame(() => inputRef.current?.focus());
-            history.resetCursor();
-        }
-    }, [history, open]);
+        if (!open)
+            return;
+        setQuery("");
+        requestAnimationFrame(() => inputRef.current?.focus());
+        history.resetCursor();
+    }, [open]);
     useEffect(() => {
         const handler = (event) => {
             if (event.key === "Escape" && open) {

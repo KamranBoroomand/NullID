@@ -164,7 +164,19 @@ export function VaultView({ onOpenGuide }) {
         push("vault wiped", "danger");
     }, [handleLock, push]);
     const handleExport = useCallback(async () => {
-        const blob = await exportVault();
+        const shouldSign = confirm("Sign vault export metadata with a passphrase?");
+        let signingPassphrase;
+        let keyHint;
+        if (shouldSign) {
+            const signaturePass = prompt("Signing passphrase:");
+            if (!signaturePass) {
+                push("export cancelled", "neutral");
+                return;
+            }
+            signingPassphrase = signaturePass;
+            keyHint = prompt("Optional key hint (for verification):")?.trim() || undefined;
+        }
+        const blob = await exportVault({ signingPassphrase, keyHint });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
@@ -173,14 +185,27 @@ export function VaultView({ onOpenGuide }) {
         link.click();
         link.remove();
         window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-    }, []);
+        push(`vault export ready${signingPassphrase ? " (signed)" : ""}`, "accent");
+    }, [push]);
     const handleExportEncrypted = useCallback(async () => {
         const pass = prompt("Set export passphrase:");
         if (!pass) {
             push("export cancelled", "neutral");
             return;
         }
-        const blob = await exportVaultEncrypted(pass);
+        const shouldSign = confirm("Sign vault metadata before encryption?");
+        let signingPassphrase;
+        let keyHint;
+        if (shouldSign) {
+            const signaturePass = prompt("Signing passphrase:");
+            if (!signaturePass) {
+                push("export cancelled", "neutral");
+                return;
+            }
+            signingPassphrase = signaturePass;
+            keyHint = prompt("Optional key hint (for verification):")?.trim() || undefined;
+        }
+        const blob = await exportVaultEncrypted(pass, { signingPassphrase, keyHint });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
@@ -189,7 +214,7 @@ export function VaultView({ onOpenGuide }) {
         link.click();
         link.remove();
         window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-        push("encrypted export ready", "accent");
+        push(`encrypted export ready${signingPassphrase ? " (signed metadata)" : ""}`, "accent");
     }, [push]);
     const handleImport = useCallback(async () => {
         fileInputRef.current?.click();
@@ -218,15 +243,24 @@ export function VaultView({ onOpenGuide }) {
                                             const file = event.target.files?.[0];
                                             if (!file)
                                                 return;
-                                            await importVault(file);
-                                            setUnlocked(false);
-                                            setKey(null);
-                                            setNotes([]);
-                                            setTitle("");
-                                            setBody("");
-                                            setTags("");
-                                            setActiveId(null);
-                                            push("vault imported; please unlock", "neutral");
+                                            try {
+                                                const verifyPassphrase = prompt("Verification passphrase for signed snapshots (optional):")?.trim() || undefined;
+                                                const result = await importVault(file, { verificationPassphrase: verifyPassphrase });
+                                                setUnlocked(false);
+                                                setKey(null);
+                                                setNotes([]);
+                                                setTitle("");
+                                                setBody("");
+                                                setTags("");
+                                                setActiveId(null);
+                                                const suffix = result.legacy ? "legacy" : result.signed ? result.verified ? "signed+verified" : "signed" : "unsigned";
+                                                push(`vault imported (${result.noteCount} notes, ${suffix}); please unlock`, "neutral");
+                                            }
+                                            catch (error) {
+                                                console.error(error);
+                                                const message = error instanceof Error ? error.message : "vault import failed";
+                                                push(`vault import failed: ${message}`, "danger");
+                                            }
                                         } }), _jsx("input", { ref: encryptedImportRef, type: "file", accept: "text/plain", tabIndex: -1, style: { position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }, onChange: async (event) => {
                                             const file = event.target.files?.[0];
                                             if (!file)
@@ -237,7 +271,8 @@ export function VaultView({ onOpenGuide }) {
                                                 return;
                                             }
                                             try {
-                                                await importVaultEncrypted(file, pass);
+                                                const verifyPassphrase = prompt("Verification passphrase for signed snapshots (optional):")?.trim() || undefined;
+                                                const result = await importVaultEncrypted(file, pass, { verificationPassphrase: verifyPassphrase });
                                                 setUnlocked(false);
                                                 setKey(null);
                                                 setNotes([]);
@@ -245,11 +280,13 @@ export function VaultView({ onOpenGuide }) {
                                                 setBody("");
                                                 setTags("");
                                                 setActiveId(null);
-                                                push("encrypted vault imported; please unlock", "accent");
+                                                const suffix = result.legacy ? "legacy" : result.signed ? result.verified ? "signed+verified" : "signed" : "unsigned";
+                                                push(`encrypted vault imported (${result.noteCount} notes, ${suffix}); please unlock`, "accent");
                                             }
                                             catch (error) {
                                                 console.error(error);
-                                                push("encrypted import failed", "danger");
+                                                const message = error instanceof Error ? error.message : "encrypted import failed";
+                                                push(`encrypted import failed: ${message}`, "danger");
                                             }
                                         } }), _jsx("button", { className: "button", type: "button", onClick: () => {
                                             if (confirm("Wipe all vault data?"))

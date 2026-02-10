@@ -142,9 +142,26 @@ function AppShell() {
                 label: "Export profile",
                 description: "Download preferences as JSON",
                 group: "System",
-                action: () => {
-                    downloadProfile(`nullid-profile-${Date.now()}.json`);
-                    push("profile exported", "accent");
+                action: async () => {
+                    const shouldSign = confirm("Sign profile metadata with a passphrase?");
+                    let signingPassphrase;
+                    let keyHint;
+                    if (shouldSign) {
+                        const pass = prompt("Signing passphrase:");
+                        if (!pass) {
+                            push("profile export cancelled", "neutral");
+                            setStatus({ message: "profile export cancelled", tone: "neutral" });
+                            return;
+                        }
+                        signingPassphrase = pass;
+                        const hint = prompt("Optional key hint (for future verification):");
+                        keyHint = hint?.trim() || undefined;
+                    }
+                    const result = await downloadProfile(`nullid-profile-${Date.now()}.json`, {
+                        signingPassphrase,
+                        keyHint,
+                    });
+                    push(`profile exported (${result.entryCount}${result.signed ? ", signed" : ""})`, "accent");
                     setStatus({ message: "profile exported", tone: "accent" });
                 },
             },
@@ -253,14 +270,17 @@ function AppShell() {
                     if (!file)
                         return;
                     try {
-                        const { applied } = await importProfileFile(file);
-                        push(`profile imported (${applied})`, "accent");
+                        const verifyPassphrase = prompt("Verification passphrase for signed profiles (optional):")?.trim() || undefined;
+                        const result = await importProfileFile(file, { verificationPassphrase: verifyPassphrase });
+                        const suffix = result.legacy ? "legacy" : result.signed ? result.verified ? "signed+verified" : "signed" : "unsigned";
+                        push(`profile imported (${result.applied}, ${suffix})`, "accent");
                         setStatus({ message: "profile imported", tone: "accent" });
                         window.location.reload();
                     }
                     catch (error) {
                         console.error(error);
-                        push("import failed", "danger");
+                        const message = error instanceof Error ? error.message : "import failed";
+                        push(`import failed: ${message}`, "danger");
                         setStatus({ message: "import failed", tone: "danger" });
                     }
                     event.target.value = "";
