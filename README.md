@@ -1,70 +1,146 @@
-# NullID 🟨🖥️
+# NullID
+Offline-first security toolbox for hashing, redaction, sanitization, encryption, and secure local notes, all running entirely in the browser.
 
-An offline-first, terminal-style security toolbox built as a Vite + React + TypeScript SPA. Everything runs locally in your browser—no runtime network calls, no external CDNs, no analytics. Designed to feel like a real operator console: minimal, fast, and auditable.
+## Table of Contents
+1. [Overview](#overview)
+2. [Core Features](#core-features)
+3. [Tech Stack](#tech-stack)
+4. [Architecture](#architecture)
+5. [Quick Start](#quick-start)
+6. [Configuration](#configuration)
+7. [Scripts](#scripts)
+8. [Deployment](#deployment)
+9. [Security/Quality Notes](#securityquality-notes)
+10. [Roadmap](#roadmap)
 
-## Preview 👀
+## Overview
+NullID is a Vite + React + TypeScript single-page app designed as a terminal-style local security workbench. It provides practical security and privacy tooling without relying on backend services.
 
-![NullID preview](nullid-preview.png)
+The app is organized into focused modules:
+- Hash & Verify
+- Text Redaction
+- Log Sanitizer
+- Metadata Inspector
+- Encrypt / Decrypt
+- Password & Passphrase generator
+- Secure Notes vault
+- Self-test diagnostics
+- Built-in Guide
 
-## What’s inside 📂
+## Core Features
+- Hash & Verify: SHA-256, SHA-512, and SHA-1 (legacy) for text and files, plus digest comparison and multiple output formats.
+- Text Redaction: detector-based masking for common PII/secrets with custom regex rules and overlap-safe resolution.
+- Log Sanitizer: preset-driven log cleanup with rule toggles, diff preview, JSON-aware masking, and downloadable output.
+- Metadata Inspector: local EXIF parsing and clean image re-encoding with before/after preview and resize options.
+- Encrypt / Decrypt: versioned `NULLID:ENC:1` envelope using PBKDF2 + AES-GCM with text/file support.
+- Password & Passphrase: random generators with entropy estimates, presets, and copy hygiene support.
+- Secure Notes Vault: encrypted notes, auto-lock, panic lock (`Ctrl+Shift+L`), and import/export (plain + encrypted).
+- Self-test: quick checks for crypto roundtrip, file envelope roundtrip, storage backend health, and hash responsiveness.
 
-- index.html – Minimal shell that mounts the app.
-- src/ – React UI, tool modules, routing/state, and terminal-style layout.
-- src/tools/ – Tool implementations (hashing, generators, encryption, redaction, sanitization, etc.).
-- src/crypto/ – WebCrypto wrappers and versioned envelope utilities.
-- src/storage/ – IndexedDB + local persistence (Vault, settings, exports/imports).
-- public/ – Static assets (icons, manifest, any local wordlists).
-- tests/ – Unit/integration tests for core utilities and tool correctness.
+## Tech Stack
+- Frontend: React 18, TypeScript 5, Vite 5
+- Cryptography:
+  - WebCrypto (`PBKDF2`, `AES-GCM`) for encryption
+  - `@noble/hashes` for SHA-1/SHA-256/SHA-512
+- Storage:
+  - IndexedDB for vault persistence
+  - localStorage fallback for restricted environments
+- Testing:
+  - Node test runner for utility tests
+  - Playwright for end-to-end browser coverage
 
-## What it does 🧰
+## Architecture
+High-level layout:
 
-- Hash & Verify: SHA-256 / SHA-512 / SHA-1 (legacy), text + chunked file hashing, verify mode.
-- Password Generator: crypto.getRandomValues, presets, ambiguity toggle, entropy display.
-- Passphrase Generator: local diceware-style list, configurable formatting, entropy display.
-- Encrypt / Decrypt: versioned envelope (NULLID:ENC:1), PBKDF2 + AES-GCM, text + files, .nullid export.
-- Secure Notes (Vault): IndexedDB-backed encrypted notes, auto-lock, export/import, wipe.
-- Metadata Inspector: EXIF parsing for common images + re-encode stripping (limits clearly surfaced).
-- Text Redaction: preset detectors + custom rules, mask modes, copy/download outputs.
-- Log Sanitizer: presets for common log formats, diff-style reporting, replacement counts.
-- Self-test: built-in diagnostics for hashing responsiveness, storage availability, and envelope round-trips.
+```text
+src/
+  components/      # shell, layout, command palette, toasts
+  views/           # per-tool UI modules
+  utils/           # crypto, hashing, storage, redaction helpers
+  hooks/           # persistence and UX hooks
+  content/         # guide/help content
+  theme/           # tokenized theme system
+tests/e2e/         # Playwright tests
+scripts/           # custom lint and repo checks
+```
 
-## Safety notes 🔒
+Runtime shape:
+- `src/App.tsx` manages active module, command palette, theming, status, and global actions.
+- Tool behavior is implemented in `src/views/*` and backed by isolated utilities in `src/utils/*`.
+- Persistent preferences use localStorage keys under `nullid:*`; vault data is stored separately in IndexedDB.
+- No runtime API client exists; all processing is local to the browser tab.
 
-- No runtime network traffic by design.
-  - Quick checks: rg "fetch" src and DevTools → Network tab (should stay empty).
-- Crypto uses WebCrypto + local dependencies; no external services.
-- “Wipe data” clears local storage and IndexedDB. Note: browsers/OSes may still retain remnants at the filesystem level (platform limitation).
+## Quick Start
+Requirements:
+- Node.js 18+ (or newer LTS)
+- npm
 
-## Compatibility notes 🌐
+Install and run:
 
-- Browsers: Chrome/Chromium, Firefox, and Safari are supported on desktop and mobile. Mobile layout uses touch-friendly horizontal nav when space is tight.
-- Storage: Secure Notes prefers IndexedDB. If a browser blocks it (iOS private mode, quota issues), the app falls back to localStorage and surfaces a warning.
-- Hashing & crypto: File hashing is chunked (2–4MB slices) with 50MB file caps to avoid OOM. Encryption caps files at 25MB. Text hashing limits input to ~1MB to stay responsive.
-- Downloads: Envelope/file downloads use a Safari-safe anchor pattern with delayed URL revocation.
-- Degraded environments: If clipboard/storage/IDB are blocked, the UI shows toasts instead of silently failing.
+```bash
+npm ci
+npm run dev
+```
 
-## Idea behind it 💡
+Default dev URL:
+- `http://127.0.0.1:4173` (Playwright target)
 
-NullID exists to provide a serious, local-first security toolkit you can run anywhere—especially on untrusted networks—without sending anything to a server. It’s built as a portfolio-grade demonstration of practical security UI, careful client-side crypto patterns, and disciplined offline behavior.
+Validation run:
 
-## Running locally 💻
+```bash
+npm run validate
+```
 
-- Install: npm ci
-- Dev server: npm run dev (http://localhost:5173)
-- Validate: npm run validate
-- E2E (Playwright): npm run e2e
-- Production build: npm run build
-- Preview build: npm run preview
+## Configuration
+Environment variables:
 
-## Deploy 🚀
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `VITE_BASE` | `/` | Base path for Vite builds (set this for subpath hosting such as GitHub Pages). |
+| `PW_REUSE_SERVER` | unset | If set to `1`, Playwright reuses an already running dev server. |
 
-- npm run build emits the static site to dist/.
-- For GitHub Pages, the workflow sets VITE_BASE to /${REPO_NAME}/ and publishes dist/.
+Local persisted app state:
+- UI/tool preferences are stored under `nullid:*` localStorage keys.
+- Vault content and metadata are stored in IndexedDB (`nullid-vault`) with automatic localStorage fallback if IndexedDB is unavailable.
 
-## Contribution 🤝
+## Scripts
+Available npm scripts:
 
-Issues and PRs are welcome. If you add tools, please keep the footprint small and aligned with:
-- offline-first behavior
-- minimal dependencies
-- explicit formats and clear failure modes
-- no telemetry, no external CDNs
+| Script | Command | Description |
+| --- | --- | --- |
+| `npm run dev` | `vite` | Start local dev server. |
+| `npm run build` | `tsc -b && vite build` | Type-check and build production assets to `dist/`. |
+| `npm run preview` | `vite preview` | Preview the production build locally. |
+| `npm run typecheck` | `tsc -b` | Run TypeScript project checks. |
+| `npm run lint` | `node scripts/lint.js` | Enforce offline policy by scanning for disallowed network patterns. |
+| `npm run test` | `tsc -p tsconfig.test.json && node --test build-test/__tests__/*.js` | Compile and run utility unit tests. |
+| `npm run e2e` | `playwright test` | Execute browser end-to-end tests. |
+| `npm run validate` | `npm run typecheck && npm run lint && npm run test && npm run e2e && npm run build` | Full validation pipeline. |
+
+## Deployment
+NullID is a static frontend deployment:
+
+1. Build:
+   ```bash
+   npm run build
+   ```
+2. Publish the `dist/` folder to any static host (GitHub Pages, Netlify, Vercel static output, S3 + CDN, etc.).
+3. If deploying to a repository subpath, set `VITE_BASE` during build. Example:
+   ```bash
+   VITE_BASE=/your-repo-name/ npm run build
+   ```
+
+## Security/Quality Notes
+- Offline-first by design: there is no runtime API integration, and lint checks scan `src/` for disallowed `fetch`/HTTP usage.
+- Encryption envelope format is explicit and versioned (`NULLID:ENC:1`) with authenticated encryption (AES-GCM + AAD).
+- Vault keys are derived from passphrases using PBKDF2; vault operations include canary verification and lock/wipe flows.
+- Clipboard copy helpers include best-effort auto-clear behavior to reduce residue after copying sensitive outputs.
+- Quality gates include unit tests (`cryptoEnvelope`, hash behavior, redaction overlap, theme contrast) and Playwright e2e coverage.
+- This project is not represented as an externally audited cryptography product; validate threat model and controls before high-risk production use.
+
+## Roadmap
+- Expand self-test diagnostics with broader browser capability probes and clearer remediation hints.
+- Add more import/export integrity checks and optional signed profile/vault metadata.
+- Extend metadata cleaning support and compatibility diagnostics for additional image formats.
+- Increase automated regression coverage for module-specific edge cases and mobile behavior.
+- Improve packaging/documentation for reproducible static deployments across environments.
