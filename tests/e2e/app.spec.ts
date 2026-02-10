@@ -57,11 +57,11 @@ test("download envelope button triggers download", async ({ page }) => {
 test("redaction module applies masking for detected values", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: /Text Redaction/i }).click();
-  await page.getByLabel("Redaction input").fill("Reach me at alice@example.com token abcdefghijklmnopqrstuvwxyz1234");
+  await page.getByRole("textbox", { name: "Redaction input" }).fill("Reach me at alice@example.com token abcdefghijklmnopqrstuvwxyz1234");
   await page.getByRole("button", { name: /apply redaction/i }).click();
   const output = page.getByLabel("Redacted output");
-  await expect(output).toContainText("[email]");
-  await expect(output).toContainText("[token]");
+  await expect(output).toContainText("[Email]");
+  await expect(output).toContainText("[Bearer / token]");
 });
 
 test("metadata module flags HEIC inputs as unsupported with remediation text", async ({ page }) => {
@@ -74,7 +74,7 @@ test("metadata module flags HEIC inputs as unsupported with remediation text", a
     buffer: Buffer.from("heic"),
   });
   await expect(page.getByText(/HEIC\/HEIF parsing is usually blocked/i)).toBeVisible();
-  await expect(page.getByText(/unsupported/i)).toBeVisible();
+  await expect(page.getByLabel("unsupported")).toBeVisible();
 });
 
 test("mobile navigation scrolls and allows selection", async ({ browser }) => {
