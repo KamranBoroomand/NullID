@@ -14,6 +14,8 @@ declare module "node:assert/strict" {
 declare const Buffer: any;
 
 interface ImportMetaEnv {
+  readonly PROD: boolean;
+  readonly BASE_URL: string;
   readonly VITE_BUILD_ID?: string;
 }
 

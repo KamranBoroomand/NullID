@@ -36,6 +36,7 @@ The app is organized into focused modules:
 - Password & Passphrase: random generators with entropy estimates, presets, and copy hygiene support.
 - Secure Notes Vault: encrypted notes, auto-lock, panic lock (`Ctrl+Shift+L`), and import/export (plain + encrypted).
 - Self-test: quick checks for crypto roundtrip, file envelope roundtrip, storage backend health, and hash responsiveness.
+- Installable PWA: install on desktop and mobile (including iOS) with offline app-shell caching and standalone launch.
 
 ## Tech Stack
 - Frontend: React 18, TypeScript 5, Vite 5
@@ -125,7 +126,8 @@ NullID is a static frontend deployment:
    npm run build
    ```
 2. Publish the `dist/` folder to any static host (GitHub Pages, Netlify, Vercel static output, S3 + CDN, etc.).
-3. If deploying to a repository subpath, set `VITE_BASE` during build. Example:
+3. Serve over HTTPS so service workers and install prompts work reliably in browsers.
+4. If deploying to a repository subpath, set `VITE_BASE` during build. Example:
    ```bash
    VITE_BASE=/your-repo-name/ npm run build
    ```
