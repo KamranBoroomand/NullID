@@ -111,6 +111,7 @@ Available npm scripts:
 | --- | --- | --- |
 | `npm run dev` | `vite` | Start local dev server. |
 | `npm run build` | `tsc -b && vite build` | Type-check and build production assets to `dist/`. |
+| `npm run assets:brand` | `node scripts/generate-brand-assets.mjs` | Regenerate social preview and app icon assets from the shared brand template. |
 | `npm run preview` | `vite preview` | Preview the production build locally. |
 | `npm run typecheck` | `tsc -b` | Run TypeScript project checks. |
 | `npm run lint` | `node scripts/lint.js` | Enforce offline policy by scanning for disallowed network patterns. |

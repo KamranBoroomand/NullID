@@ -1,12 +1,16 @@
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2";
 const CACHE_NAME = `nullid-cache-${CACHE_VERSION}`;
 const APP_SHELL_FILES = [
   ".",
   "index.html",
   "manifest.webmanifest",
+  "nullid-preview.png",
   "favicon.svg",
+  "icons/favicon-16.png",
+  "icons/favicon-32.png",
   "icons/icon-192.png",
   "icons/icon-512.png",
+  "icons/icon-512-maskable.png",
   "icons/apple-touch-icon.png",
 ];
 

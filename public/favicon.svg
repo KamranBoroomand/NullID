@@ -1,5 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" fill="#f7f7f2" />
-  <rect x="10" y="10" width="44" height="44" fill="none" stroke="#111" stroke-width="3" />
-  <path d="M18 24h28M18 32h28M18 40h16" stroke="#d8f500" stroke-width="3" />
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="64" y2="64">
+      <stop offset="0%" stop-color="#0a0f12" />
+      <stop offset="100%" stop-color="#142028" />
+    </linearGradient>
+    <linearGradient id="ring" x1="8" y1="8" x2="56" y2="56">
+      <stop offset="0%" stop-color="#e5ff67" />
+      <stop offset="100%" stop-color="#b4f500" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bg)" />
+  <rect x="9" y="9" width="46" height="46" rx="11" fill="none" stroke="url(#ring)" stroke-width="3.25" />
+  <path d="M20 45V19L43 45V19" fill="none" stroke="#f7f7f2" stroke-linecap="round" stroke-linejoin="round" stroke-width="6.2" />
+  <rect x="19" y="49.25" width="26" height="4.1" rx="2.05" fill="#d8f500" />
 </svg>

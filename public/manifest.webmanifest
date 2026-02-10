@@ -2,6 +2,7 @@
   "name": "NullID",
   "short_name": "NullID",
   "description": "Offline-first security toolbox for hashing, redaction, sanitization, encryption, and secure local notes.",
+  "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
@@ -19,7 +20,13 @@
       "src": "./icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
