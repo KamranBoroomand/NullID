@@ -119,7 +119,7 @@ Available npm scripts:
 | `npm run lint` | `node scripts/lint.js` | Enforce offline policy by scanning for disallowed network patterns. |
 | `npm run test` | `tsc -p tsconfig.test.json && node --test build-test/__tests__/*.js` | Compile and run utility unit tests. |
 | `npm run e2e` | `playwright test` | Execute browser end-to-end tests. |
-| `npm run validate` | `npm run typecheck && npm run lint && npm run test && npm run e2e && npm run build` | Full validation pipeline. |
+| `npm run validate` | `npm run typecheck && npm run lint && npm run test && npm run e2e && npm run build && npm run verify:build` | Full validation pipeline. |
 
 ## Deployment
 NullID is a static frontend deployment:
@@ -150,7 +150,7 @@ Reproducibility guidance:
 - Encryption envelope format is explicit and versioned (`NULLID:ENC:1`) with authenticated encryption (AES-GCM + AAD).
 - Vault keys are derived from passphrases using PBKDF2; vault operations include canary verification and lock/wipe flows.
 - Clipboard copy helpers include best-effort auto-clear behavior to reduce residue after copying sensitive outputs.
-- Quality gates include unit tests (`cryptoEnvelope`, hash behavior, redaction overlap, theme contrast) and Playwright e2e coverage.
+- Quality gates include unit tests (`cryptoEnvelope`, hash behavior, profile integrity, vault snapshot integrity, redaction overlap, theme contrast) and Playwright e2e coverage.
 - This project is not represented as an externally audited cryptography product; validate threat model and controls before high-risk production use.
 
 ## Roadmap
