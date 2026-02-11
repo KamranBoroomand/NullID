@@ -29,6 +29,9 @@ This roadmap tracks the major expansion areas required to make NullID a complete
 - [x] Expanded adversarial test corpus (malformed metadata, hostile regex payloads, envelope tamper cases).
 - [x] Formal security review checklist for release candidates.
 
+## Phase 5: Post-Phase Hardening (Planned)
+- [ ] Gap review + prioritization for next assurance track.
+
 ## Delivery Notes
 - Each phase is designed to remain fully offline-first.
 - Browser and CLI behavior should stay schema-compatible where applicable.
