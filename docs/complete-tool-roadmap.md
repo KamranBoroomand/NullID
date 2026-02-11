@@ -17,10 +17,10 @@ This roadmap tracks the major expansion areas required to make NullID a complete
 - [x] Workspace policy baseline files (`nullid.policy.json`) with deterministic merge rules.
 
 ## Phase 3: Platform Breadth
-- [ ] PDF metadata stripping workflow.
-- [ ] Office document metadata workflow (`docx/xlsx/pptx`).
-- [ ] Archive bundle sanitization (`zip`/folder package manifests).
-- [ ] Desktop packaging path (Tauri) for regulated/offline desktop environments.
+- [x] PDF metadata stripping workflow.
+- [x] Office document metadata workflow (`docx/xlsx/pptx`).
+- [x] Archive bundle sanitization (`zip`/folder package manifests).
+- [x] Desktop packaging path (Tauri) for regulated/offline desktop environments.
 
 ## Phase 4: Trust Hardening
 - [x] Deterministic SBOM generation in build outputs.

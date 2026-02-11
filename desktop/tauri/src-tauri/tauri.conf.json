@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "NullID",
+  "version": "0.1.0",
+  "identifier": "com.nullid.app",
+  "build": {
+    "beforeDevCommand": "npm run dev -- --host 127.0.0.1 --port 4173",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../../dist",
+    "devUrl": "http://127.0.0.1:4173"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "NullID",
+        "width": 1280,
+        "height": 860,
+        "resizable": true
+      }
+    ]
+  },
+  "bundle": {
+    "active": false,
+    "targets": "all",
+    "icon": [
+      "../../public/icons/icon-192.png",
+      "../../public/icons/icon-512.png"
+    ]
+  }
+}

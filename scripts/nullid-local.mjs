@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
+import os from "node:os";
 
 const ENVELOPE_PREFIX = "NULLID:ENC:1";
 const ENVELOPE_AAD = Buffer.from("nullid:enc:v1", "utf8");
@@ -59,6 +60,15 @@ function main() {
         break;
       case "meta":
         runMeta(args);
+        break;
+      case "pdf-clean":
+        runPdfClean(args);
+        break;
+      case "office-clean":
+        runOfficeClean(args);
+        break;
+      case "archive-sanitize":
+        runArchiveSanitize(args);
         break;
       case "precommit":
         runPrecommit(args);
@@ -489,6 +499,241 @@ function runMeta(argv) {
   console.log(JSON.stringify(summary, null, 2));
 }
 
+function runPdfClean(argv) {
+  const inputPath = argv[0];
+  const outputPath = argv[1];
+  if (!inputPath || !outputPath) {
+    throw new Error("Usage: pdf-clean <input.pdf> <output.pdf>");
+  }
+
+  const fullInput = path.resolve(inputPath);
+  const fullOutput = path.resolve(outputPath);
+  const buffer = fs.readFileSync(fullInput);
+  if (!buffer.subarray(0, 5).toString("ascii").startsWith("%PDF-")) {
+    throw new Error("Input file is not a PDF");
+  }
+
+  const text = buffer.toString("latin1");
+  const report = [];
+  let output = text;
+
+  const rewrite = (regex, transform, label) => {
+    const result = replaceSameLength(output, regex, transform);
+    output = result.output;
+    if (result.count > 0) report.push(`${label}:${result.count}`);
+  };
+
+  rewrite(
+    /(\/(?:Author|Creator|Producer|Title|Subject|Keywords)\s*)(\((?:\\.|[^()])*\)|<[^>]*>)/g,
+    (_match, prefix, value) => `${prefix}${maskPdfValue(value, "redacted")}`,
+    "info-fields",
+  );
+  rewrite(
+    /(\/(?:CreationDate|ModDate)\s*)(\((?:\\.|[^()])*\)|<[^>]*>)/g,
+    (_match, prefix, value) => `${prefix}${maskPdfValue(value, "D:19700101000000Z")}`,
+    "date-fields",
+  );
+  rewrite(/(<x:xmpmeta[\s\S]*?<\/x:xmpmeta>)/g, (match) => " ".repeat(match.length), "xmp-blocks");
+  rewrite(/(<\?xpacket[\s\S]*?\?>)/g, (match) => " ".repeat(match.length), "xpacket-blocks");
+  rewrite(/(\/Metadata\s+)(\d+\s+\d+\s+R)/g, (_match, prefix, ref) => `${prefix}${maskPdfRef(ref)}`, "metadata-refs");
+
+  fs.mkdirSync(path.dirname(fullOutput), { recursive: true });
+  fs.writeFileSync(fullOutput, Buffer.from(output, "latin1"));
+  console.log(
+    JSON.stringify(
+      {
+        input: inputPath,
+        output: outputPath,
+        bytes: buffer.length,
+        actions: report.length > 0 ? report : ["no-visible-metadata-found"],
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+function runOfficeClean(argv) {
+  const inputPath = argv[0];
+  const outputPath = argv[1];
+  if (!inputPath || !outputPath) {
+    throw new Error("Usage: office-clean <input.docx|input.xlsx|input.pptx> <output-file>");
+  }
+
+  const fullInput = path.resolve(inputPath);
+  const fullOutput = path.resolve(outputPath);
+  const ext = path.extname(fullInput).toLowerCase();
+  if (![".docx", ".xlsx", ".pptx"].includes(ext)) {
+    throw new Error("Office clean supports .docx, .xlsx, and .pptx only");
+  }
+  ensureZipTooling();
+
+  const summary = withTempDir("nullid-office-", (extractDir) => {
+    unzipArchive(fullInput, extractDir);
+    const marker = path.join(extractDir, "[Content_Types].xml");
+    if (!fs.existsSync(marker)) {
+      throw new Error("Input does not look like an Office Open XML package");
+    }
+
+    let rewritten = 0;
+    let removed = 0;
+
+    const corePath = path.join(extractDir, "docProps", "core.xml");
+    if (fs.existsSync(corePath)) {
+      fs.writeFileSync(corePath, buildOfficeCoreXml(), "utf8");
+      rewritten += 1;
+    }
+
+    const appPath = path.join(extractDir, "docProps", "app.xml");
+    if (fs.existsSync(appPath)) {
+      fs.writeFileSync(appPath, buildOfficeAppXml(), "utf8");
+      rewritten += 1;
+    }
+
+    const customPath = path.join(extractDir, "docProps", "custom.xml");
+    if (fs.existsSync(customPath)) {
+      fs.rmSync(customPath, { force: true });
+      removed += 1;
+    }
+
+    const personPath = path.join(extractDir, "docProps", "person.xml");
+    if (fs.existsSync(personPath)) {
+      fs.rmSync(personPath, { force: true });
+      removed += 1;
+    }
+
+    fs.mkdirSync(path.dirname(fullOutput), { recursive: true });
+    if (fs.existsSync(fullOutput)) fs.rmSync(fullOutput, { force: true });
+    zipDirectory(extractDir, fullOutput);
+    return { rewritten, removed };
+  });
+
+  console.log(
+    JSON.stringify(
+      {
+        input: inputPath,
+        output: outputPath,
+        rewrittenXmlFiles: summary.rewritten,
+        removedFiles: summary.removed,
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+function runArchiveSanitize(argv) {
+  const inputPath = argv[0];
+  const outputPath = argv[1];
+  if (!inputPath || !outputPath) {
+    throw new Error(
+      "Usage: archive-sanitize <input-dir|input.zip> <output.zip> [--policy <policy-json>] [--baseline <nullid.policy.json>] [--merge-mode strict-override|prefer-stricter] [--sanitize-text true|false] [--max-bytes <n>] [--include-ext .txt,.json]",
+    );
+  }
+  ensureZipTooling();
+
+  const fullInput = path.resolve(inputPath);
+  const fullOutput = path.resolve(outputPath);
+  const options = parseSanitizeOptions(argv);
+  const sanitizeText = parseBoolean(getOption(argv, "--sanitize-text"), true);
+  const maxBytes = clampInt(getOption(argv, "--max-bytes"), 1024, 100_000_000, 2_000_000);
+  const includeExt = parseExtFilter(
+    getOption(argv, "--include-ext") ||
+      ".log,.txt,.json,.ndjson,.csv,.xml,.yaml,.yml,.md,.env,.ini,.cfg,.conf,.toml,.properties,.js,.ts,.tsx,.jsx,.py,.sh,.sql",
+  );
+
+  const sourceIsZip = fs.existsSync(fullInput) && fs.statSync(fullInput).isFile() && path.extname(fullInput).toLowerCase() === ".zip";
+  const sourceIsDir = fs.existsSync(fullInput) && fs.statSync(fullInput).isDirectory();
+  if (!sourceIsZip && !sourceIsDir) {
+    throw new Error("archive-sanitize input must be a directory or .zip file");
+  }
+
+  const summary = withTempDir("nullid-archive-", (workspace) => {
+    const sourceRoot = path.join(workspace, "source");
+    const stageRoot = path.join(workspace, "stage");
+    fs.mkdirSync(sourceRoot, { recursive: true });
+    fs.mkdirSync(stageRoot, { recursive: true });
+
+    if (sourceIsZip) {
+      unzipArchive(fullInput, sourceRoot);
+    } else {
+      copyDirectory(fullInput, sourceRoot);
+    }
+
+    const files = walkFiles(sourceRoot);
+    const entries = [];
+    let sanitizedCount = 0;
+
+    files.forEach((sourceFile) => {
+      const rel = path.relative(sourceRoot, sourceFile);
+      const targetFile = path.join(stageRoot, rel);
+      fs.mkdirSync(path.dirname(targetFile), { recursive: true });
+
+      const sourceBuffer = fs.readFileSync(sourceFile);
+      const ext = path.extname(sourceFile).toLowerCase();
+      const beforeHash = sha256Hex(sourceBuffer);
+      let outputBuffer = sourceBuffer;
+      let sanitized = false;
+
+      if (sanitizeText && includeExt.has(ext) && sourceBuffer.length <= maxBytes && !looksBinary(sourceBuffer)) {
+        const text = sourceBuffer.toString("utf8");
+        const result = sanitizeWithOptions(text, options);
+        outputBuffer = Buffer.from(result.output, "utf8");
+        sanitized = outputBuffer.toString("utf8") !== text;
+      }
+
+      fs.writeFileSync(targetFile, outputBuffer);
+      if (sanitized) sanitizedCount += 1;
+      entries.push({
+        path: rel,
+        bytesBefore: sourceBuffer.length,
+        bytesAfter: outputBuffer.length,
+        sha256Before: beforeHash,
+        sha256After: sha256Hex(outputBuffer),
+        sanitized,
+      });
+    });
+
+    const manifest = {
+      schemaVersion: 1,
+      kind: "nullid-archive-manifest",
+      createdAt: new Date().toISOString(),
+      source: {
+        input: inputPath,
+        sourceType: sourceIsZip ? "zip" : "directory",
+      },
+      policy: {
+        mergeMode: options.mergeMode,
+        baseline: options.baselinePath ? path.relative(process.cwd(), options.baselinePath) : null,
+      },
+      summary: {
+        fileCount: entries.length,
+        sanitizedCount,
+      },
+      files: entries,
+    };
+    fs.writeFileSync(path.join(stageRoot, "nullid-archive-manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+    fs.mkdirSync(path.dirname(fullOutput), { recursive: true });
+    if (fs.existsSync(fullOutput)) fs.rmSync(fullOutput, { force: true });
+    zipDirectory(stageRoot, fullOutput);
+    return manifest.summary;
+  });
+
+  console.log(
+    JSON.stringify(
+      {
+        input: inputPath,
+        output: outputPath,
+        files: summary.fileCount,
+        sanitized: summary.sanitizedCount,
+      },
+      null,
+      2,
+    ),
+  );
+}
+
 function runPolicyInit(argv) {
   const outputPath = path.resolve(argv[0] || "nullid.policy.json");
   if (fs.existsSync(outputPath) && !hasFlag(argv, "--force")) {
@@ -626,6 +871,9 @@ Commands:
   dec <input-envelope-file> <output-file> [--pass <passphrase>|--pass-env <VAR>]
   pwgen [--kind password|passphrase] [...options]
   meta <input-file>
+  pdf-clean <input.pdf> <output.pdf>
+  office-clean <input.docx|input.xlsx|input.pptx> <output-file>
+  archive-sanitize <input-dir|input.zip> <output.zip> [--baseline <nullid.policy.json>] [--sanitize-text true|false]
   precommit [--staged|--git-range <range>|--files a,b] [--threshold high|medium|low] [--baseline <nullid.policy.json>] [--apply-sanitize]
   policy-init [output-file] [--preset nginx|apache|auth|json] [--merge-mode strict-override|prefer-stricter] [--force]
 
@@ -634,6 +882,9 @@ Examples:
   node scripts/nullid-local.mjs sanitize ./raw.ndjson ./clean.ndjson --format ndjson --preset json
   node scripts/nullid-local.mjs sanitize-dir ./logs ./logs-clean --ext .log,.json --report ./sanitize-report.json
   node scripts/nullid-local.mjs redact ./incident.txt ./incident.redacted.txt --mode partial
+  node scripts/nullid-local.mjs pdf-clean ./report.pdf ./report.clean.pdf
+  node scripts/nullid-local.mjs office-clean ./incident.docx ./incident.clean.docx
+  node scripts/nullid-local.mjs archive-sanitize ./evidence ./evidence-sanitized.zip --baseline ./nullid.policy.json
   node scripts/nullid-local.mjs precommit --staged --baseline ./nullid.policy.json --threshold high
   node scripts/nullid-local.mjs policy-init ./nullid.policy.json --preset nginx
   NULLID_PASSPHRASE='dev-secret' node scripts/nullid-local.mjs enc ./backup.tar ./backup.tar.nullid --profile strong
@@ -1559,6 +1810,119 @@ function runGit(args) {
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(`git command failed: git ${args.join(" ")} (${detail})`);
   }
+}
+
+function replaceSameLength(input, regex, transform) {
+  let count = 0;
+  const output = input.replace(regex, (...args) => {
+    count += 1;
+    const match = args[0];
+    const next = String(transform(...args));
+    return fitToLength(next, match.length);
+  });
+  return { output, count };
+}
+
+function fitToLength(value, length, fillChar = " ") {
+  if (value.length === length) return value;
+  if (value.length > length) return value.slice(0, length);
+  return value + fillChar.repeat(length - value.length);
+}
+
+function maskPdfValue(value, token) {
+  if (value.startsWith("(") && value.endsWith(")") && value.length >= 2) {
+    const inner = fitToLength(token, value.length - 2);
+    return `(${inner})`;
+  }
+  if (value.startsWith("<") && value.endsWith(">") && value.length >= 2) {
+    const hexToken = token.replace(/[^0-9a-f]/gi, "").toLowerCase() || "00";
+    const evenLength = Math.max(2, (value.length - 2) % 2 === 0 ? value.length - 2 : value.length - 3);
+    const inner = fitToLength(hexToken.repeat(Math.ceil(evenLength / Math.max(1, hexToken.length))), value.length - 2, "0");
+    return `<${inner}>`;
+  }
+  return fitToLength(token, value.length);
+}
+
+function maskPdfRef(value) {
+  return fitToLength("0 0 R", value.length);
+}
+
+function ensureZipTooling() {
+  assertCommandAvailable("zip");
+  assertCommandAvailable("unzip");
+}
+
+function assertCommandAvailable(command) {
+  try {
+    execFileSync("which", [command], { stdio: "ignore" });
+  } catch {
+    throw new Error(`${command} command not found; install it to use this workflow`);
+  }
+}
+
+function unzipArchive(zipPath, outputDir) {
+  fs.mkdirSync(outputDir, { recursive: true });
+  try {
+    execFileSync("unzip", ["-qq", zipPath, "-d", outputDir], { stdio: "pipe" });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`unzip failed for ${zipPath}: ${detail}`);
+  }
+}
+
+function zipDirectory(sourceDir, outputZipPath) {
+  try {
+    execFileSync("zip", ["-qr", outputZipPath, "."], { cwd: sourceDir, stdio: "pipe" });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`zip failed for ${sourceDir}: ${detail}`);
+  }
+}
+
+function withTempDir(prefix, action) {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  try {
+    return action(tempDir);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+function copyDirectory(sourceDir, targetDir) {
+  fs.cpSync(sourceDir, targetDir, { recursive: true });
+}
+
+function buildOfficeCoreXml() {
+  return [
+    "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>",
+    "<cp:coreProperties xmlns:cp=\"http://schemas.openxmlformats.org/package/2006/metadata/core-properties\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:dcterms=\"http://purl.org/dc/terms/\" xmlns:dcmitype=\"http://purl.org/dc/dcmitype/\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">",
+    "<dc:title></dc:title>",
+    "<dc:subject></dc:subject>",
+    "<dc:creator>redacted</dc:creator>",
+    "<cp:keywords></cp:keywords>",
+    "<dc:description></dc:description>",
+    "<cp:lastModifiedBy>redacted</cp:lastModifiedBy>",
+    "<dcterms:created xsi:type=\"dcterms:W3CDTF\">1970-01-01T00:00:00Z</dcterms:created>",
+    "<dcterms:modified xsi:type=\"dcterms:W3CDTF\">1970-01-01T00:00:00Z</dcterms:modified>",
+    "</cp:coreProperties>",
+    "",
+  ].join("\n");
+}
+
+function buildOfficeAppXml() {
+  return [
+    "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>",
+    "<Properties xmlns=\"http://schemas.openxmlformats.org/officeDocument/2006/extended-properties\" xmlns:vt=\"http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes\">",
+    "<Application>NullID</Application>",
+    "<DocSecurity>0</DocSecurity>",
+    "<ScaleCrop>false</ScaleCrop>",
+    "<LinksUpToDate>false</LinksUpToDate>",
+    "<SharedDoc>false</SharedDoc>",
+    "<HyperlinksChanged>false</HyperlinksChanged>",
+    "<AppVersion>1.0</AppVersion>",
+    "</Properties>",
+    "",
+  ].join("\n");
 }
 
 function parseBoolean(value, fallback) {

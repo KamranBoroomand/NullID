@@ -70,7 +70,7 @@ export const guideTools: GuideToolContent[] = [
     key: "meta",
     title: "Metadata Inspector",
     whatItDoes:
-      "Reads local image metadata (JPEG/TIFF EXIF, PNG/WebP/GIF hints), surfaces browser compatibility diagnostics, and re-encodes images to strip metadata.",
+      "Reads local image metadata (JPEG/TIFF EXIF, PNG/WebP/GIF hints), surfaces browser compatibility diagnostics, re-encodes images to strip metadata, and pairs with CLI workflows for PDF/Office metadata cleaning.",
     whatWhen: ["Clear camera/location data before sharing images", "Downsize images while removing EXIF/metadata"],
     howSteps: [
       "Drop an image (JPEG/PNG/WebP/AVIF/GIF/BMP/TIFF) and inspect parsed metadata fields.",
@@ -81,6 +81,7 @@ export const guideTools: GuideToolContent[] = [
       "HEIC/HEIF is usually unsupported in-browser and is explicitly blocked with remediation guidance.",
       "Canvas re-encode may change compression or flatten animation/transparency for some formats.",
       "Previews are contained; large images are scaled for display only.",
+      "PDF/Office metadata cleaning is CLI-based (`pdf-clean`, `office-clean`) and best-effort for complex/encoded formats.",
     ],
   },
   {

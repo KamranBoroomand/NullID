@@ -32,13 +32,13 @@ The app is organized into focused modules:
 - Hash & Verify: SHA-256, SHA-512, and SHA-1 (legacy) for text and files, plus digest comparison and multiple output formats.
 - Text Redaction: detector-based masking for common PII/secrets with custom regex rules and overlap-safe resolution.
 - Log Sanitizer: preset-driven cleanup with rule toggles, reusable local policy packs (import/export), signed policy pack verification, JSON-aware masking, batch file processing, safe-share bundle export, and broader format handling in CLI (`text/json/ndjson/csv/xml/yaml`).
-- Metadata Inspector: local metadata parsing (JPEG/TIFF EXIF, PNG/WebP/GIF metadata hints), compatibility diagnostics, and clean image re-encoding with before/after preview and resize options.
+- Metadata Inspector: local metadata parsing (JPEG/TIFF EXIF, PNG/WebP/GIF metadata hints), compatibility diagnostics, clean image re-encoding with before/after preview and resize options, plus CLI workflows for PDF and Office metadata cleanup.
 - Encrypt / Decrypt: versioned `NULLID:ENC:1` envelope using PBKDF2 + AES-GCM with text/file support and selectable KDF profiles (`compat`, `strong`, `paranoid`).
 - Password & Passphrase: random generators with entropy estimates, presets, and copy hygiene support.
 - Secure Notes Vault: encrypted notes, auto-lock, panic lock (`Ctrl+Shift+L`), and import/export (plain + encrypted) with integrity metadata and optional signing.
 - Self-test: operational checks plus browser capability probes (secure context, WebCrypto, IndexedDB, clipboard, service worker, codec support) with remediation hints.
 - Installable PWA: install on desktop and mobile (including iOS) with offline app-shell caching and standalone launch.
-- Local CLI parity: `hash`, `sanitize`, `sanitize-dir`, `bundle`, `redact`, `enc`, `dec`, `pwgen`, `meta`, `precommit`, and `policy-init`.
+- Local CLI parity: `hash`, `sanitize`, `sanitize-dir`, `bundle`, `redact`, `enc`, `dec`, `pwgen`, `meta`, `pdf-clean`, `office-clean`, `archive-sanitize`, `precommit`, and `policy-init`.
 
 ## Tech Stack
 - Frontend: React 18, TypeScript 5, Vite 5
@@ -124,6 +124,7 @@ Available npm scripts:
 | `npm run build:repro` | `npm run build && npm run verify:build` | Build and immediately verify reproducible static artifact integrity. |
 | `npm run sbom` | `node scripts/generate-sbom.mjs` | Generate lockfile-based SBOM JSON for dependency inventory. |
 | `npm run setup:precommit` | `node scripts/install-precommit.mjs` | Install `.git/hooks/pre-commit` helper for local NullID sanitize/redact enforcement. |
+| `npm run desktop:init` | `node scripts/tauri-init.mjs` | Bootstrap `desktop/tauri` packaging path (Tauri v2 scaffold). |
 | `npm run assets:brand` | `node scripts/generate-brand-assets.mjs` | Regenerate social preview and app icon assets from the shared brand template. |
 | `npm run preview` | `vite preview` | Preview the production build locally. |
 | `npm run typecheck` | `tsc -b` | Run TypeScript project checks. |
@@ -136,6 +137,7 @@ Team enforcement helpers:
 - Commit `nullid.policy.json` as the workspace baseline used by CLI merge rules.
 - Install local enforcement with `npm run setup:precommit`.
 - Reuse CI templates from `.github/workflow-templates/nullid-pr-sanitize.yml` and `.github/workflow-templates/nullid-artifact-checks.yml`.
+- Platform-breadth workflow reference: `docs/phase3-workflows.md`.
 
 ## Deployment
 NullID is a static frontend deployment:
