@@ -1,5 +1,5 @@
 # NullID
-Offline-first security toolbox for hashing, redaction, sanitization, encryption, and secure local notes, all running entirely in the browser.
+Offline-first security toolbox for hashing, redaction, sanitization, encryption, and secure local notes, with matching browser + CLI workflows and no external services.
 
 ## Table of Contents
 1. [Overview](#overview)
@@ -26,17 +26,19 @@ The app is organized into focused modules:
 - Secure Notes vault
 - Self-test diagnostics
 - Built-in Guide
+- Local automation CLI
 
 ## Core Features
 - Hash & Verify: SHA-256, SHA-512, and SHA-1 (legacy) for text and files, plus digest comparison and multiple output formats.
 - Text Redaction: detector-based masking for common PII/secrets with custom regex rules and overlap-safe resolution.
-- Log Sanitizer: preset-driven cleanup with rule toggles, reusable local policy packs (import/export), JSON-aware masking, batch file processing, and safe-share bundle export.
+- Log Sanitizer: preset-driven cleanup with rule toggles, reusable local policy packs (import/export), JSON-aware masking, batch file processing, safe-share bundle export, and broader format handling in CLI (`text/json/ndjson/csv/xml/yaml`).
 - Metadata Inspector: local metadata parsing (JPEG/TIFF EXIF, PNG/WebP/GIF metadata hints), compatibility diagnostics, and clean image re-encoding with before/after preview and resize options.
-- Encrypt / Decrypt: versioned `NULLID:ENC:1` envelope using PBKDF2 + AES-GCM with text/file support.
+- Encrypt / Decrypt: versioned `NULLID:ENC:1` envelope using PBKDF2 + AES-GCM with text/file support and selectable KDF profiles (`compat`, `strong`, `paranoid`).
 - Password & Passphrase: random generators with entropy estimates, presets, and copy hygiene support.
 - Secure Notes Vault: encrypted notes, auto-lock, panic lock (`Ctrl+Shift+L`), and import/export (plain + encrypted) with integrity metadata and optional signing.
 - Self-test: operational checks plus browser capability probes (secure context, WebCrypto, IndexedDB, clipboard, service worker, codec support) with remediation hints.
 - Installable PWA: install on desktop and mobile (including iOS) with offline app-shell caching and standalone launch.
+- Local CLI parity: `hash`, `sanitize`, `sanitize-dir`, `bundle`, `redact`, `enc`, `dec`, `pwgen`, and `meta`.
 
 ## Tech Stack
 - Frontend: React 18, TypeScript 5, Vite 5
@@ -116,10 +118,11 @@ Available npm scripts:
 | Script | Command | Description |
 | --- | --- | --- |
 | `npm run dev` | `vite` | Start local dev server. |
-| `npm run cli` | `node scripts/nullid-local.mjs` | Run local CLI workflows (`hash`, `sanitize`, `bundle`) without external services. |
-| `npm run build` | `tsc -b && vite build && node scripts/generate-build-manifest.mjs` | Type-check, build production assets, and generate deterministic `deploy-manifest.json` + `SHA256SUMS`. |
+| `npm run cli` | `node scripts/nullid-local.mjs` | Run local CLI workflows (`hash`, `sanitize`, `sanitize-dir`, `bundle`, `redact`, `enc`, `dec`, `pwgen`, `meta`) without external services. |
+| `npm run build` | `tsc -b && vite build && node scripts/generate-sbom.mjs dist/sbom.json && node scripts/generate-build-manifest.mjs` | Type-check, build production assets, generate deterministic SBOM (`dist/sbom.json`), and generate deterministic `deploy-manifest.json` + `SHA256SUMS`. |
 | `npm run verify:build` | `node scripts/verify-build-manifest.mjs` | Verify all built file hashes/sizes against the manifest. |
 | `npm run build:repro` | `npm run build && npm run verify:build` | Build and immediately verify reproducible static artifact integrity. |
+| `npm run sbom` | `node scripts/generate-sbom.mjs` | Generate lockfile-based SBOM JSON for dependency inventory. |
 | `npm run assets:brand` | `node scripts/generate-brand-assets.mjs` | Regenerate social preview and app icon assets from the shared brand template. |
 | `npm run preview` | `vite preview` | Preview the production build locally. |
 | `npm run typecheck` | `tsc -b` | Run TypeScript project checks. |
@@ -154,10 +157,11 @@ Reproducibility guidance:
 
 ## Security/Quality Notes
 - Offline-first by design: there is no runtime API integration, and lint checks scan `src/` for disallowed `fetch`/HTTP usage.
-- Encryption envelope format is explicit and versioned (`NULLID:ENC:1`) with authenticated encryption (AES-GCM + AAD).
+- Encryption envelope format is explicit and versioned (`NULLID:ENC:1`) with authenticated encryption (AES-GCM + AAD) and configurable PBKDF2 strength profiles for encryption.
 - Vault keys are derived from passphrases using PBKDF2; vault operations include canary verification and lock/wipe flows.
 - Clipboard copy helpers include best-effort auto-clear behavior to reduce residue after copying sensitive outputs.
 - Sanitizer policy packs, batch runs, and safe-share bundles are fully local and do not require paid infrastructure.
+- Build outputs now include `dist/sbom.json`; reproducibility checks still validate full artifact integrity via `SHA256SUMS`.
 - Quality gates include unit tests (`cryptoEnvelope`, hash behavior, profile integrity, vault snapshot integrity, redaction overlap, theme contrast) and Playwright e2e coverage.
 - This project is not represented as an externally audited cryptography product; validate threat model and controls before high-risk production use.
 
@@ -165,4 +169,4 @@ Reproducibility guidance:
 - Continue hardening metadata parsing against malformed edge files and uncommon vendor tags.
 - Expand signed export UX beyond prompts (saved key-hint profiles + explicit verification dialogs).
 - Add visual regression snapshots for module-specific mobile layouts.
-- Add CI workflow to diff `SHA256SUMS` across matrix builds automatically.
+- Continue complete-tool rollout tracked in `docs/complete-tool-roadmap.md`.

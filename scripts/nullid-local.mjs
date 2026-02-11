@@ -3,27 +3,69 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 
+const ENVELOPE_PREFIX = "NULLID:ENC:1";
+const ENVELOPE_AAD = Buffer.from("nullid:enc:v1", "utf8");
+const sanitizeFormats = new Set(["auto", "text", "json", "ndjson", "csv", "xml", "yaml"]);
+const sensitiveKeys = new Set([
+  "token",
+  "authorization",
+  "password",
+  "secret",
+  "apikey",
+  "api_key",
+  "session",
+  "cookie",
+  "bearer",
+  "aws_secret_access_key",
+  "access_token",
+  "refresh_token",
+]);
+
 const command = process.argv[2];
 const args = process.argv.slice(3);
 
-if (!command || command === "help" || command === "--help" || command === "-h") {
-  printUsage();
-  process.exit(0);
-}
-
-try {
-  if (command === "hash") {
-    runHash(args);
-  } else if (command === "sanitize") {
-    runSanitize(args);
-  } else if (command === "bundle") {
-    runBundle(args);
-  } else {
-    throw new Error(`Unknown command: ${command}`);
+function main() {
+  if (!command || command === "help" || command === "--help" || command === "-h") {
+    printUsage();
+    process.exit(0);
   }
-} catch (error) {
-  console.error(`[nullid-cli] ${(error instanceof Error ? error.message : String(error)).trim()}`);
-  process.exit(1);
+
+  try {
+    switch (command) {
+      case "hash":
+        runHash(args);
+        break;
+      case "sanitize":
+        runSanitize(args);
+        break;
+      case "sanitize-dir":
+        runSanitizeDir(args);
+        break;
+      case "bundle":
+        runBundle(args);
+        break;
+      case "redact":
+        runRedact(args);
+        break;
+      case "enc":
+        runEncrypt(args);
+        break;
+      case "dec":
+        runDecrypt(args);
+        break;
+      case "pwgen":
+        runPwgen(args);
+        break;
+      case "meta":
+        runMeta(args);
+        break;
+      default:
+        throw new Error(`Unknown command: ${command}`);
+    }
+  } catch (error) {
+    console.error(`[nullid-cli] ${(error instanceof Error ? error.message : String(error)).trim()}`);
+    process.exit(1);
+  }
 }
 
 function runHash(argv) {
@@ -35,29 +77,28 @@ function runHash(argv) {
   }
   const buffer = fs.readFileSync(path.resolve(input));
   const hex = crypto.createHash(algo).update(buffer).digest("hex");
-  console.log(JSON.stringify({ file: input, algorithm: algo, sha: hex }, null, 2));
+  console.log(JSON.stringify({ file: input, bytes: buffer.length, algorithm: algo, sha: hex }, null, 2));
 }
 
 function runSanitize(argv) {
   const inputPath = argv[0];
   const outputPath = argv[1];
   if (!inputPath || !outputPath) {
-    throw new Error("Usage: sanitize <input-file> <output-file> [--preset nginx|apache|auth|json] [--policy <policy-json>] [--json-aware true|false]");
+    throw new Error(
+      "Usage: sanitize <input-file> <output-file> [--preset nginx|apache|auth|json] [--policy <policy-json>] [--json-aware true|false] [--format auto|text|json|ndjson|csv|xml|yaml]",
+    );
   }
 
   const input = fs.readFileSync(path.resolve(inputPath), "utf8");
-  const preset = getOption(argv, "--preset") || "nginx";
-  const policyPath = getOption(argv, "--policy");
-  const jsonAware = parseBoolean(getOption(argv, "--json-aware"), true);
-
-  const policy = policyPath ? loadPolicy(path.resolve(policyPath)) : buildPolicyFromPreset(preset, jsonAware);
-  const result = applySanitize(input, policy);
+  const options = parseSanitizeOptions(argv);
+  const result = sanitizeWithOptions(input, options);
   fs.writeFileSync(path.resolve(outputPath), result.output, "utf8");
   console.log(
     JSON.stringify(
       {
         input: inputPath,
         output: outputPath,
+        detectedFormat: result.detectedFormat,
         linesAffected: result.linesAffected,
         appliedRules: result.applied,
         report: result.report,
@@ -68,25 +109,108 @@ function runSanitize(argv) {
   );
 }
 
+function runSanitizeDir(argv) {
+  const inputDir = argv[0];
+  const outputDir = argv[1];
+  if (!inputDir || !outputDir) {
+    throw new Error(
+      "Usage: sanitize-dir <input-dir> <output-dir> [--preset nginx|apache|auth|json] [--policy <policy-json>] [--json-aware true|false] [--format auto|text|json|ndjson|csv|xml|yaml] [--ext .log,.txt,.json]",
+    );
+  }
+
+  const sourceRoot = path.resolve(inputDir);
+  const targetRoot = path.resolve(outputDir);
+  if (!fs.existsSync(sourceRoot) || !fs.statSync(sourceRoot).isDirectory()) {
+    throw new Error(`Input directory does not exist: ${sourceRoot}`);
+  }
+  ensureDir(targetRoot);
+
+  const options = parseSanitizeOptions(argv);
+  const extOption = getOption(argv, "--ext");
+  const extFilter = extOption
+    ? new Set(
+        extOption
+          .split(",")
+          .map((value) => value.trim().toLowerCase())
+          .filter(Boolean),
+      )
+    : null;
+
+  const files = walkFiles(sourceRoot);
+  const processed = [];
+  const skipped = [];
+  const failed = [];
+
+  files.forEach((filePath) => {
+    const rel = path.relative(sourceRoot, filePath);
+    const ext = path.extname(filePath).toLowerCase();
+    if (extFilter && !extFilter.has(ext)) {
+      skipped.push({ file: rel, reason: "extension-filter" });
+      return;
+    }
+
+    const buffer = fs.readFileSync(filePath);
+    if (looksBinary(buffer)) {
+      skipped.push({ file: rel, reason: "binary" });
+      return;
+    }
+
+    try {
+      const input = buffer.toString("utf8");
+      const result = sanitizeWithOptions(input, options);
+      const outPath = path.join(targetRoot, rel);
+      ensureDir(path.dirname(outPath));
+      fs.writeFileSync(outPath, result.output, "utf8");
+      processed.push({
+        file: rel,
+        output: rel,
+        detectedFormat: result.detectedFormat,
+        linesAffected: result.linesAffected,
+      });
+    } catch (error) {
+      failed.push({ file: rel, error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
+  const reportPath = getOption(argv, "--report");
+  const summary = {
+    inputDir: sourceRoot,
+    outputDir: targetRoot,
+    counts: {
+      scanned: files.length,
+      processed: processed.length,
+      skipped: skipped.length,
+      failed: failed.length,
+    },
+    processed,
+    skipped,
+    failed,
+  };
+  if (reportPath) {
+    fs.writeFileSync(path.resolve(reportPath), `${JSON.stringify(summary, null, 2)}\n`, "utf8");
+  }
+  console.log(JSON.stringify(summary, null, 2));
+}
+
 function runBundle(argv) {
   const inputPath = argv[0];
   const outputPath = argv[1];
   if (!inputPath || !outputPath) {
-    throw new Error("Usage: bundle <input-file> <output-json> [--preset nginx|apache|auth|json] [--policy <policy-json>] [--json-aware true|false]");
+    throw new Error(
+      "Usage: bundle <input-file> <output-json> [--preset nginx|apache|auth|json] [--policy <policy-json>] [--json-aware true|false] [--format auto|text|json|ndjson|csv|xml|yaml]",
+    );
   }
   const input = fs.readFileSync(path.resolve(inputPath), "utf8");
-  const preset = getOption(argv, "--preset") || "nginx";
-  const policyPath = getOption(argv, "--policy");
-  const jsonAware = parseBoolean(getOption(argv, "--json-aware"), true);
-  const policy = policyPath ? loadPolicy(path.resolve(policyPath)) : buildPolicyFromPreset(preset, jsonAware);
-  const result = applySanitize(input, policy);
+  const options = parseSanitizeOptions(argv);
+  const result = sanitizeWithOptions(input, options);
   const bundle = {
     schemaVersion: 1,
     kind: "nullid-safe-share",
     createdAt: new Date().toISOString(),
     tool: "sanitize",
     sourceFile: inputPath,
-    policy,
+    detectedFormat: result.detectedFormat,
+    policy: options.policy,
     input: {
       bytes: Buffer.byteLength(input, "utf8"),
       sha256: sha256Hex(input),
@@ -103,41 +227,308 @@ function runBundle(argv) {
     },
   };
   fs.writeFileSync(path.resolve(outputPath), `${JSON.stringify(bundle, null, 2)}\n`, "utf8");
-  console.log(JSON.stringify({ output: outputPath, sha256: bundle.output.sha256, linesAffected: result.linesAffected }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        output: outputPath,
+        detectedFormat: result.detectedFormat,
+        sha256: bundle.output.sha256,
+        linesAffected: result.linesAffected,
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+function runRedact(argv) {
+  const inputPath = argv[0];
+  const outputPath = argv[1];
+  if (!inputPath || !outputPath) {
+    throw new Error(
+      "Usage: redact <input-file> <output-file> [--mode full|partial] [--detectors email,phone,token,ip,id,iban,card,ipv6,awskey,awssecret]",
+    );
+  }
+
+  const text = fs.readFileSync(path.resolve(inputPath), "utf8");
+  const mode = (getOption(argv, "--mode") || "full").toLowerCase();
+  if (mode !== "full" && mode !== "partial") {
+    throw new Error(`Unsupported redact mode: ${mode}`);
+  }
+
+  const detectors = buildRedactDetectors();
+  const selectedKeys = (getOption(argv, "--detectors") || "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+  const selected = selectedKeys.length > 0 ? detectors.filter((detector) => selectedKeys.includes(detector.key)) : detectors;
+
+  const findings = scanRedaction(text, selected);
+  const output = applyRedaction(text, findings.matches, mode);
+  fs.writeFileSync(path.resolve(outputPath), output, "utf8");
+
+  console.log(
+    JSON.stringify(
+      {
+        input: inputPath,
+        output: outputPath,
+        mode,
+        enabledDetectors: selected.map((detector) => detector.key),
+        findingCount: findings.total,
+        severity: findings.overall,
+        byType: findings.counts,
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+function runEncrypt(argv) {
+  const inputPath = argv[0];
+  const outputPath = argv[1];
+  if (!inputPath || !outputPath) {
+    throw new Error(
+      "Usage: enc <input-file> <output-envelope-file> [--pass <passphrase>|--pass-env <VAR>] [--profile compat|strong|paranoid] [--iterations <n>] [--kdf-hash sha256|sha512] [--name <name>] [--mime <mime>]",
+    );
+  }
+
+  const passphrase = resolvePassphrase(argv);
+  const data = fs.readFileSync(path.resolve(inputPath));
+  const profile = resolveKdfProfile(getOption(argv, "--profile"));
+  const overrideIterations = getOption(argv, "--iterations");
+  const overrideHash = getOption(argv, "--kdf-hash");
+  const kdf = resolveKdfSettings(profile, overrideIterations, overrideHash);
+  const mime = getOption(argv, "--mime") || detectMimeFromPath(inputPath);
+  const name = getOption(argv, "--name") || path.basename(inputPath);
+
+  const salt = crypto.randomBytes(16);
+  const iv = crypto.randomBytes(12);
+  const key = crypto.pbkdf2Sync(Buffer.from(passphrase, "utf8"), salt, kdf.iterations, 32, kdf.nodeHash);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+  cipher.setAAD(ENVELOPE_AAD);
+  const ciphertext = Buffer.concat([cipher.update(data), cipher.final(), cipher.getAuthTag()]);
+
+  const header = {
+    version: 1,
+    algo: "AES-GCM",
+    kdf: {
+      name: "PBKDF2",
+      iterations: kdf.iterations,
+      hash: kdf.headerHash,
+      salt: toBase64Url(salt),
+    },
+    iv: toBase64Url(iv),
+    mime,
+    name,
+  };
+
+  const payload = {
+    header,
+    ciphertext: toBase64Url(ciphertext),
+  };
+  const blob = `${ENVELOPE_PREFIX}.${toBase64Url(Buffer.from(JSON.stringify(payload), "utf8"))}`;
+  fs.writeFileSync(path.resolve(outputPath), `${blob}\n`, "utf8");
+
+  console.log(
+    JSON.stringify(
+      {
+        input: inputPath,
+        output: outputPath,
+        bytes: data.length,
+        envelopePrefix: ENVELOPE_PREFIX,
+        kdf: {
+          profile: kdf.profile,
+          iterations: kdf.iterations,
+          hash: kdf.headerHash,
+        },
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+function runDecrypt(argv) {
+  const inputPath = argv[0];
+  const outputPath = argv[1];
+  if (!inputPath || !outputPath) {
+    throw new Error("Usage: dec <input-envelope-file> <output-file> [--pass <passphrase>|--pass-env <VAR>]");
+  }
+
+  const passphrase = resolvePassphrase(argv);
+  const blob = fs.readFileSync(path.resolve(inputPath), "utf8").trim();
+  const normalized = blob.replace(/\s+/g, "");
+  if (!normalized.startsWith(`${ENVELOPE_PREFIX}.`)) {
+    throw new Error("Unsupported envelope prefix");
+  }
+
+  const encoded = normalized.slice(`${ENVELOPE_PREFIX}.`.length);
+  const envelopePayload = fromBase64Url(encoded);
+  let envelope;
+  try {
+    envelope = JSON.parse(envelopePayload.toString("utf8"));
+  } catch {
+    throw new Error("Invalid envelope format");
+  }
+
+  if (!envelope?.header || envelope.header.version !== 1 || envelope.header.algo !== "AES-GCM") {
+    throw new Error("Unsupported envelope version");
+  }
+  if (!envelope.header.kdf || envelope.header.kdf.name !== "PBKDF2") {
+    throw new Error("Unsupported envelope kdf");
+  }
+
+  const nodeHash = normalizeKdfHash(envelope.header.kdf.hash).nodeHash;
+  const iterations = normalizeIterations(envelope.header.kdf.iterations);
+  const salt = fromBase64Url(envelope.header.kdf.salt);
+  const iv = fromBase64Url(envelope.header.iv);
+  const ciphertextWithTag = fromBase64Url(envelope.ciphertext);
+  if (ciphertextWithTag.length < 17) {
+    throw new Error("Invalid envelope ciphertext");
+  }
+  const ciphertext = ciphertextWithTag.subarray(0, ciphertextWithTag.length - 16);
+  const authTag = ciphertextWithTag.subarray(ciphertextWithTag.length - 16);
+
+  const key = crypto.pbkdf2Sync(Buffer.from(passphrase, "utf8"), salt, iterations, 32, nodeHash);
+  const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+  decipher.setAAD(ENVELOPE_AAD);
+  decipher.setAuthTag(authTag);
+
+  let plaintext;
+  try {
+    plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+  } catch {
+    throw new Error("Decrypt failed: bad passphrase or envelope integrity failure");
+  }
+
+  fs.writeFileSync(path.resolve(outputPath), plaintext);
+  console.log(
+    JSON.stringify(
+      {
+        input: inputPath,
+        output: outputPath,
+        bytes: plaintext.length,
+        mime: envelope.header.mime || "application/octet-stream",
+        name: envelope.header.name || path.basename(outputPath),
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+function runPwgen(argv) {
+  const kind = (getOption(argv, "--kind") || "password").toLowerCase();
+  if (kind !== "password" && kind !== "passphrase") {
+    throw new Error(`Unsupported pwgen kind: ${kind}`);
+  }
+
+  if (kind === "password") {
+    const settings = {
+      length: clampInt(getOption(argv, "--length"), 8, 128, 20),
+      upper: parseBoolean(getOption(argv, "--upper"), true),
+      lower: parseBoolean(getOption(argv, "--lower"), true),
+      digits: parseBoolean(getOption(argv, "--digits"), true),
+      symbols: parseBoolean(getOption(argv, "--symbols"), true),
+      avoidAmbiguity: parseBoolean(getOption(argv, "--avoid-ambiguous"), true),
+      enforceMix: parseBoolean(getOption(argv, "--enforce-mix"), true),
+    };
+    const value = generatePassword(settings);
+    const entropy = estimatePasswordEntropy(settings);
+    console.log(JSON.stringify({ kind, value, entropyBits: entropy, settings }, null, 2));
+    return;
+  }
+
+  const settings = {
+    words: clampInt(getOption(argv, "--words"), 3, 12, 5),
+    separator: getOption(argv, "--separator") || "-",
+    randomCase: parseBoolean(getOption(argv, "--random-case"), true),
+    appendNumber: parseBoolean(getOption(argv, "--append-number"), true),
+    appendSymbol: parseBoolean(getOption(argv, "--append-symbol"), true),
+  };
+  const wordlist = buildWordlist();
+  const value = generatePassphrase(settings, wordlist);
+  const entropy = estimatePassphraseEntropy(settings, wordlist.length);
+  console.log(JSON.stringify({ kind, value, entropyBits: entropy, settings }, null, 2));
+}
+
+function runMeta(argv) {
+  const inputPath = argv[0];
+  if (!inputPath) {
+    throw new Error("Usage: meta <input-file>");
+  }
+
+  const fullPath = path.resolve(inputPath);
+  const data = fs.readFileSync(fullPath);
+  const format = detectFileFormat(data);
+  const ext = path.extname(fullPath).toLowerCase();
+  const digest = crypto.createHash("sha256").update(data).digest("hex");
+  const exifHint = data.includes(Buffer.from("Exif\u0000\u0000", "binary"));
+
+  const summary = {
+    file: inputPath,
+    bytes: data.length,
+    sha256: digest,
+    extension: ext || "(none)",
+    detectedFormat: format,
+    metadataHints: {
+      exifMarker: exifHint,
+      browserCleanExportFriendly: ["jpeg", "png", "webp", "avif", "gif", "bmp", "tiff"].includes(format),
+      knownHardBlock: format === "heic" || format === "heif",
+    },
+  };
+
+  console.log(JSON.stringify(summary, null, 2));
 }
 
 function printUsage() {
-  console.log(`
-NullID local CLI (free, no servers)
+  console.log(
+    `
+NullID local CLI (offline, no servers)
 
 Commands:
   hash <input-file> [--algo sha256|sha512|sha1]
-  sanitize <input-file> <output-file> [--preset nginx|apache|auth|json] [--policy <policy-json>] [--json-aware true|false]
-  bundle <input-file> <output-json> [--preset nginx|apache|auth|json] [--policy <policy-json>] [--json-aware true|false]
+  sanitize <input-file> <output-file> [--preset nginx|apache|auth|json] [--policy <policy-json>] [--json-aware true|false] [--format auto|text|json|ndjson|csv|xml|yaml]
+  sanitize-dir <input-dir> <output-dir> [--preset ...|--policy ...] [--format auto|text|json|ndjson|csv|xml|yaml] [--ext .log,.txt,.json] [--report <json-file>]
+  bundle <input-file> <output-json> [--preset ...|--policy ...] [--format auto|text|json|ndjson|csv|xml|yaml]
+  redact <input-file> <output-file> [--mode full|partial] [--detectors email,phone,token,ip,id,iban,card,ipv6,awskey,awssecret]
+  enc <input-file> <output-envelope-file> [--pass <passphrase>|--pass-env <VAR>] [--profile compat|strong|paranoid] [--iterations <n>] [--kdf-hash sha256|sha512]
+  dec <input-envelope-file> <output-file> [--pass <passphrase>|--pass-env <VAR>]
+  pwgen [--kind password|passphrase] [...options]
+  meta <input-file>
 
 Examples:
-  node scripts/nullid-local.mjs hash ./app.log
-  node scripts/nullid-local.mjs sanitize ./raw.log ./clean.log --preset nginx
-  node scripts/nullid-local.mjs bundle ./raw.log ./safe-share.json --policy ./policy.json
-`.trim());
+  node scripts/nullid-local.mjs hash ./server.log --algo sha512
+  node scripts/nullid-local.mjs sanitize ./raw.ndjson ./clean.ndjson --format ndjson --preset json
+  node scripts/nullid-local.mjs sanitize-dir ./logs ./logs-clean --ext .log,.json --report ./sanitize-report.json
+  node scripts/nullid-local.mjs redact ./incident.txt ./incident.redacted.txt --mode partial
+  NULLID_PASSPHRASE='dev-secret' node scripts/nullid-local.mjs enc ./backup.tar ./backup.tar.nullid --profile strong
+  NULLID_PASSPHRASE='dev-secret' node scripts/nullid-local.mjs dec ./backup.tar.nullid ./backup.tar
+  node scripts/nullid-local.mjs pwgen --kind passphrase --words 6 --separator _
+  node scripts/nullid-local.mjs meta ./photo.jpg
+`.trim(),
+  );
 }
 
-function sha256Hex(input) {
-  return crypto.createHash("sha256").update(input).digest("hex");
+function parseSanitizeOptions(argv) {
+  const preset = getOption(argv, "--preset") || "nginx";
+  const policyPath = getOption(argv, "--policy");
+  const jsonAware = parseBoolean(getOption(argv, "--json-aware"), true);
+  const format = (getOption(argv, "--format") || "auto").toLowerCase();
+  if (!sanitizeFormats.has(format)) {
+    throw new Error(`Unsupported sanitize format: ${format}`);
+  }
+  const policy = policyPath ? loadPolicy(path.resolve(policyPath)) : buildPolicyFromPreset(preset, jsonAware);
+  return { preset, policy, jsonAware, format };
 }
 
-function parseBoolean(value, fallback) {
-  if (value == null) return fallback;
-  const normalized = String(value).toLowerCase();
-  if (normalized === "true" || normalized === "1" || normalized === "yes") return true;
-  if (normalized === "false" || normalized === "0" || normalized === "no") return false;
-  return fallback;
-}
-
-function getOption(argv, flag) {
-  const index = argv.findIndex((arg) => arg === flag);
-  if (index < 0) return undefined;
-  return argv[index + 1];
+function sanitizeWithOptions(input, options) {
+  return applySanitize(input, {
+    policy: options.policy,
+    jsonAware: options.jsonAware,
+    format: options.format,
+  });
 }
 
 const presetRules = {
@@ -175,14 +566,24 @@ function loadPolicy(policyPath) {
   const parsed = JSON.parse(text);
   const packEntry = Array.isArray(parsed?.packs) ? parsed.packs[0] : parsed?.pack;
   const config = packEntry?.config;
-  if (!config || typeof config !== "object") {
-    throw new Error("Invalid policy file: expected sanitize-policy-pack payload");
+
+  if (config && typeof config === "object") {
+    return {
+      rulesState: normalizeRulesState(config.rulesState),
+      jsonAware: Boolean(config.jsonAware),
+      customRules: normalizeCustomRules(config.customRules),
+    };
   }
-  return {
-    rulesState: normalizeRulesState(config.rulesState),
-    jsonAware: Boolean(config.jsonAware),
-    customRules: normalizeCustomRules(config.customRules),
-  };
+
+  if (parsed && typeof parsed === "object") {
+    return {
+      rulesState: normalizeRulesState(parsed.rulesState),
+      jsonAware: Boolean(parsed.jsonAware),
+      customRules: normalizeCustomRules(parsed.customRules),
+    };
+  }
+
+  throw new Error("Invalid policy file: expected sanitize-policy-pack payload or direct policy config");
 }
 
 function normalizeRulesState(input) {
@@ -218,11 +619,18 @@ function normalizeCustomRules(input) {
     .filter(Boolean);
 }
 
-function applySanitize(input, policy) {
-  let output = input;
-  const applied = [];
+function applySanitize(input, options) {
+  const policy = options.policy;
   const report = [];
+  const normalizedFormat = (options.format || "auto").toLowerCase();
+  const detectedFormat = resolveSanitizeFormat(input, normalizedFormat, Boolean(options.jsonAware));
+  report.push(`format:${detectedFormat}`);
 
+  const structured = applyStructuredFormatSanitize(input, detectedFormat);
+  let output = structured.output;
+  if (structured.report.length) report.push(...structured.report);
+
+  const applied = [];
   const applyRule = (enabled, label, fn) => {
     if (!enabled) return;
     const next = fn(output);
@@ -258,29 +666,7 @@ function applySanitize(input, policy) {
   applyRule(policy.rulesState.maskCard, "maskCard", replaceCardNumbers);
   applyRule(policy.rulesState.maskIban, "maskIban", replaceIban);
 
-  const redactKeys = ["token", "authorization", "password", "secret", "apikey", "session", "cookie"];
-  const jsonClean = (value) => {
-    if (Array.isArray(value)) return value.map(jsonClean);
-    if (value && typeof value === "object") {
-      return Object.fromEntries(
-        Object.entries(value).map(([key, item]) => [key, redactKeys.includes(key.toLowerCase()) ? "[redacted]" : jsonClean(item)]),
-      );
-    }
-    return value;
-  };
-
-  let scope = "text";
-  if (policy.jsonAware) {
-    try {
-      const parsed = JSON.parse(output);
-      output = JSON.stringify(jsonClean(parsed), null, 2);
-      scope = "json";
-      report.push("json-aware-clean: 1");
-    } catch {
-      scope = "text";
-    }
-  }
-
+  const scope = detectedFormat === "json" || detectedFormat === "ndjson" ? "json" : "text";
   policy.customRules.forEach((rule) => {
     if (rule.scope !== "both" && rule.scope !== scope) return;
     const regex = new RegExp(rule.pattern, rule.flags);
@@ -295,7 +681,214 @@ function applySanitize(input, policy) {
   const inputLines = input.split("\n");
   const outputLines = output.split("\n");
   const linesAffected = inputLines.reduce((count, line, index) => (line === outputLines[index] ? count : count + 1), 0);
-  return { output, applied, report, linesAffected };
+  return { output, applied, report, linesAffected, detectedFormat };
+}
+
+function resolveSanitizeFormat(input, explicit, jsonAware) {
+  if (explicit && explicit !== "auto") return explicit;
+
+  const text = (input || "").trim();
+  if (!text) return "text";
+
+  if (jsonAware && (text.startsWith("{") || text.startsWith("["))) {
+    try {
+      JSON.parse(text);
+      return "json";
+    } catch {
+      // Ignore and continue format heuristics.
+    }
+  }
+
+  if (looksLikeNdjson(text)) return "ndjson";
+  if (looksLikeCsv(text)) return "csv";
+  if (looksLikeXml(text)) return "xml";
+  if (looksLikeYaml(text)) return "yaml";
+  return "text";
+}
+
+function looksLikeNdjson(text) {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length < 2) return false;
+  return lines.every((line) => {
+    if (!(line.startsWith("{") || line.startsWith("["))) return false;
+    try {
+      JSON.parse(line);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+}
+
+function looksLikeCsv(text) {
+  const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
+  if (lines.length < 2) return false;
+  return lines[0].includes(",");
+}
+
+function looksLikeXml(text) {
+  return /^\s*</.test(text) && /<[^>]+>/.test(text);
+}
+
+function looksLikeYaml(text) {
+  return /^\s*[A-Za-z0-9_.-]+\s*:\s*.+/m.test(text);
+}
+
+function applyStructuredFormatSanitize(input, format) {
+  if (format === "json") {
+    try {
+      const parsed = JSON.parse(input);
+      const cleaned = jsonClean(parsed);
+      return { output: JSON.stringify(cleaned, null, 2), report: ["json-aware-clean:1"] };
+    } catch {
+      return { output: input, report: ["json-aware-clean:0(parse-failed)"] };
+    }
+  }
+
+  if (format === "ndjson") {
+    const lines = input.split(/\r?\n/);
+    let cleanedCount = 0;
+    const outputLines = lines.map((line) => {
+      if (!line.trim()) return line;
+      try {
+        const parsed = JSON.parse(line);
+        const cleaned = jsonClean(parsed);
+        cleanedCount += 1;
+        return JSON.stringify(cleaned);
+      } catch {
+        return line;
+      }
+    });
+    return {
+      output: outputLines.join("\n"),
+      report: [cleanedCount > 0 ? `ndjson-aware-clean:${cleanedCount}` : "ndjson-aware-clean:0"],
+    };
+  }
+
+  if (format === "csv") {
+    const rows = parseCsv(input);
+    if (rows.length === 0) return { output: input, report: ["csv-redaction:0"] };
+    const headers = rows[0].map((value) => normalizeHeader(value));
+    const sensitiveColumns = headers.map((name) => isSensitiveHeader(name));
+    let masked = 0;
+    const nextRows = rows.map((row, rowIndex) => {
+      if (rowIndex === 0) return row;
+      return row.map((value, columnIndex) => {
+        if (!sensitiveColumns[columnIndex]) return value;
+        if (!value) return value;
+        masked += 1;
+        return "[redacted]";
+      });
+    });
+    return { output: serializeCsv(nextRows), report: [masked > 0 ? `csv-redaction:${masked}` : "csv-redaction:0"] };
+  }
+
+  if (format === "xml") {
+    let count = 0;
+    const keyGroup = "token|authorization|password|secret|apikey|session|cookie|access_token|refresh_token";
+    let output = input.replace(
+      new RegExp(`(<\\s*(?:${keyGroup})\\b[^>]*>)[\\s\\S]*?(<\\/\\s*(?:${keyGroup})\\s*>)`, "gi"),
+      (_match, open, close) => {
+        count += 1;
+        return `${open}[redacted]${close}`;
+      },
+    );
+    output = output.replace(
+      new RegExp(`(\\b(?:${keyGroup})\\b\\s*=\\s*[\"'])[^\"']*([\"'])`, "gi"),
+      (_match, prefix, suffix) => {
+        count += 1;
+        return `${prefix}[redacted]${suffix}`;
+      },
+    );
+    return { output, report: [count > 0 ? `xml-redaction:${count}` : "xml-redaction:0"] };
+  }
+
+  if (format === "yaml") {
+    let count = 0;
+    const output = input.replace(
+      /^([ \t-]*)(token|authorization|password|secret|apikey|session|cookie|access_token|refresh_token)\s*:\s*.+$/gim,
+      (_match, indent, key) => {
+        count += 1;
+        return `${indent}${key}: [redacted]`;
+      },
+    );
+    return { output, report: [count > 0 ? `yaml-redaction:${count}` : "yaml-redaction:0"] };
+  }
+
+  return { output: input, report: [] };
+}
+
+function jsonClean(value) {
+  if (Array.isArray(value)) return value.map((item) => jsonClean(item));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, sensitiveKeys.has(key.toLowerCase()) ? "[redacted]" : jsonClean(item)]),
+    );
+  }
+  return value;
+}
+
+function parseCsv(input) {
+  const lines = input.split(/\r?\n/);
+  return lines.filter((line) => line.length > 0).map((line) => parseCsvLine(line));
+}
+
+function parseCsvLine(line) {
+  const row = [];
+  let value = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        value += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (char === "," && !inQuotes) {
+      row.push(value);
+      value = "";
+      continue;
+    }
+    value += char;
+  }
+  row.push(value);
+  return row;
+}
+
+function serializeCsv(rows) {
+  return rows
+    .map((row) =>
+      row
+        .map((cell) => {
+          if (/[,"\n]/.test(cell)) {
+            return `"${cell.replace(/"/g, '""')}"`;
+          }
+          return cell;
+        })
+        .join(","),
+    )
+    .join("\n");
+}
+
+function normalizeHeader(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, "");
+}
+
+function isSensitiveHeader(value) {
+  if (!value) return false;
+  if (sensitiveKeys.has(value)) return true;
+  return value.endsWith("token") || value.includes("password") || value.includes("secret");
 }
 
 function replaceWithCount(input, regex, replacement) {
@@ -361,3 +954,414 @@ function isValidIban(value) {
   }
   return remainder === 1;
 }
+
+function buildRedactDetectors() {
+  return [
+    { key: "email", label: "Email", regex: /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, severity: "medium", mask: "[email]" },
+    { key: "phone", label: "Phone", regex: /\b(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4}\b/g, severity: "low", mask: "[phone]" },
+    {
+      key: "token",
+      label: "Bearer / token",
+      regex: /\b(?:authorization[:=]\s*)?(?:bearer\s+)?[A-Za-z0-9._-]{20,}\b/gi,
+      severity: "high",
+      mask: "[token]",
+    },
+    { key: "ip", label: "IP", regex: /\b(?:\d{1,3}\.){3}\d{1,3}\b/g, severity: "medium", mask: "[ip]" },
+    { key: "id", label: "ID", regex: /\b\d{3}-\d{2}-\d{4}\b/g, severity: "high", mask: "[id]" },
+    {
+      key: "iban",
+      label: "IBAN",
+      regex: /\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/gi,
+      severity: "high",
+      mask: "[iban]",
+      validate: isValidIban,
+    },
+    {
+      key: "card",
+      label: "Credit card",
+      regex: /\b(?:\d[ -]?){12,19}\b/g,
+      severity: "high",
+      mask: "[card]",
+      validate: passesLuhn,
+    },
+    { key: "ipv6", label: "IPv6", regex: /\b(?:[A-F0-9]{1,4}:){2,7}[A-F0-9]{1,4}\b/gi, severity: "medium", mask: "[ipv6]" },
+    { key: "awskey", label: "AWS key", regex: /\bAKIA[0-9A-Z]{16}\b/g, severity: "high", mask: "[aws-key]" },
+    {
+      key: "awssecret",
+      label: "AWS secret",
+      regex: /\baws_secret_access_key\s*[:=]\s*[A-Za-z0-9/+=]{40}\b/gi,
+      severity: "high",
+      mask: "[aws-secret]",
+    },
+  ];
+}
+
+function scanRedaction(text, detectors) {
+  const counts = {};
+  const severityMap = {};
+  const matches = [];
+
+  detectors.forEach((detector) => {
+    const regex = new RegExp(detector.regex, detector.regex.flags);
+    regex.lastIndex = 0;
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      const value = match[0];
+      if (detector.validate && !detector.validate(value)) {
+        if (!regex.global) break;
+        continue;
+      }
+      counts[detector.label] = (counts[detector.label] || 0) + 1;
+      severityMap[detector.label] = detector.severity;
+      matches.push({
+        start: match.index,
+        end: match.index + value.length,
+        label: detector.label,
+        severity: detector.severity,
+        mask: detector.mask,
+      });
+      if (!regex.global) break;
+    }
+  });
+
+  const resolved = resolveOverlaps(matches);
+  const total = Object.values(counts).reduce((sum, value) => sum + Number(value || 0), 0);
+  const overall =
+    resolved
+      .map((match) => match.severity)
+      .sort((a, b) => severityRank(b) - severityRank(a))[0] || "low";
+
+  return { counts, severityMap, total, overall, matches: resolved };
+}
+
+function resolveOverlaps(matches) {
+  if (matches.length === 0) return [];
+  const byStart = [...matches].sort((a, b) => a.start - b.start);
+  const resolved = [];
+  let i = 0;
+  while (i < byStart.length) {
+    const group = [byStart[i]];
+    let windowEnd = byStart[i].end;
+    let j = i + 1;
+    while (j < byStart.length && byStart[j].start < windowEnd) {
+      group.push(byStart[j]);
+      windowEnd = Math.max(windowEnd, byStart[j].end);
+      j += 1;
+    }
+    const best = [...group].sort((a, b) => {
+      const lenDiff = b.end - b.start - (a.end - a.start);
+      if (lenDiff !== 0) return lenDiff;
+      const sevDiff = severityRank(b.severity) - severityRank(a.severity);
+      if (sevDiff !== 0) return sevDiff;
+      return a.start - b.start;
+    })[0];
+    resolved.push(best);
+    i = j;
+  }
+  return resolved.sort((a, b) => a.start - b.start);
+}
+
+function applyRedaction(text, matches, mode) {
+  if (!matches.length) return text;
+  const sorted = [...matches].sort((a, b) => a.start - b.start);
+  let cursor = 0;
+  let output = "";
+  sorted.forEach((match) => {
+    output += text.slice(cursor, match.start);
+    output += mode === "full" ? match.mask : partialMask(text.slice(match.start, match.end));
+    cursor = match.end;
+  });
+  output += text.slice(cursor);
+  return output;
+}
+
+function partialMask(value) {
+  if (value.length <= 4) return "*".repeat(value.length);
+  return "*".repeat(Math.max(0, value.length - 4)) + value.slice(-4);
+}
+
+function severityRank(value) {
+  return value === "high" ? 3 : value === "medium" ? 2 : 1;
+}
+
+const kdfProfiles = {
+  compat: { profile: "compat", iterations: 250_000, nodeHash: "sha256", headerHash: "SHA-256" },
+  strong: { profile: "strong", iterations: 600_000, nodeHash: "sha512", headerHash: "SHA-512" },
+  paranoid: { profile: "paranoid", iterations: 1_000_000, nodeHash: "sha512", headerHash: "SHA-512" },
+};
+
+function resolveKdfProfile(value) {
+  const normalized = String(value || "compat").toLowerCase();
+  if (!kdfProfiles[normalized]) {
+    throw new Error(`Unsupported profile: ${value}`);
+  }
+  return kdfProfiles[normalized];
+}
+
+function resolveKdfSettings(profile, overrideIterations, overrideHash) {
+  const normalizedHash = overrideHash ? normalizeKdfHash(overrideHash) : { nodeHash: profile.nodeHash, headerHash: profile.headerHash };
+  return {
+    profile: profile.profile,
+    iterations: overrideIterations ? normalizeIterations(overrideIterations) : profile.iterations,
+    nodeHash: normalizedHash.nodeHash,
+    headerHash: normalizedHash.headerHash,
+  };
+}
+
+function normalizeKdfHash(value) {
+  const normalized = String(value || "").toLowerCase();
+  if (normalized === "sha512" || normalized === "sha-512") {
+    return { nodeHash: "sha512", headerHash: "SHA-512" };
+  }
+  if (normalized === "sha256" || normalized === "sha-256" || normalized === "") {
+    return { nodeHash: "sha256", headerHash: "SHA-256" };
+  }
+  throw new Error(`Unsupported kdf hash: ${value}`);
+}
+
+function normalizeIterations(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 100_000 || parsed > 2_000_000) {
+    throw new Error("KDF iterations must be between 100000 and 2000000");
+  }
+  return Math.floor(parsed);
+}
+
+function resolvePassphrase(argv) {
+  const direct = getOption(argv, "--pass");
+  if (direct) return direct;
+
+  const passEnv = getOption(argv, "--pass-env");
+  if (passEnv) {
+    const value = process.env[passEnv];
+    if (!value) {
+      throw new Error(`Passphrase env variable not found: ${passEnv}`);
+    }
+    return value;
+  }
+
+  if (process.env.NULLID_PASSPHRASE) {
+    return process.env.NULLID_PASSPHRASE;
+  }
+
+  throw new Error("Passphrase required: use --pass, --pass-env, or NULLID_PASSPHRASE");
+}
+
+function detectMimeFromPath(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  const map = {
+    ".txt": "text/plain",
+    ".log": "text/plain",
+    ".json": "application/json",
+    ".csv": "text/csv",
+    ".xml": "application/xml",
+    ".yaml": "application/yaml",
+    ".yml": "application/yaml",
+    ".md": "text/markdown",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+    ".avif": "image/avif",
+    ".pdf": "application/pdf",
+  };
+  return map[ext] || "application/octet-stream";
+}
+
+function detectFileFormat(buffer) {
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return "jpeg";
+  if (buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "png";
+  if (buffer.length >= 6) {
+    const sig = buffer.subarray(0, 6).toString("ascii");
+    if (sig === "GIF87a" || sig === "GIF89a") return "gif";
+  }
+  if (buffer.length >= 12) {
+    const riff = buffer.subarray(0, 4).toString("ascii");
+    const webp = buffer.subarray(8, 12).toString("ascii");
+    if (riff === "RIFF" && webp === "WEBP") return "webp";
+  }
+  if (buffer.length >= 12 && buffer.subarray(4, 8).toString("ascii") === "ftyp") {
+    const brand = buffer.subarray(8, 12).toString("ascii").toLowerCase();
+    if (brand.startsWith("avif") || brand.startsWith("avis")) return "avif";
+    if (brand.startsWith("heic") || brand.startsWith("heif") || brand.startsWith("heix") || brand.startsWith("hevc")) return "heic";
+    return "isobmff";
+  }
+  if (buffer.length >= 4 && buffer.subarray(0, 4).equals(Buffer.from([0x49, 0x49, 0x2a, 0x00]))) return "tiff";
+  if (buffer.length >= 4 && buffer.subarray(0, 4).equals(Buffer.from([0x4d, 0x4d, 0x00, 0x2a]))) return "tiff";
+  if (buffer.length >= 2 && buffer.subarray(0, 2).toString("ascii") === "BM") return "bmp";
+  if (buffer.length >= 4 && buffer.subarray(0, 4).toString("ascii") === "%PDF") return "pdf";
+  return "unknown";
+}
+
+const symbols = "!@#$%^&*()-_=+[]{}<>?/|~";
+const ambiguous = new Set(["l", "1", "I", "O", "0", "o"]);
+
+function generatePassword(settings) {
+  const pools = [];
+  if (settings.upper) pools.push("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+  if (settings.lower) pools.push("abcdefghijklmnopqrstuvwxyz");
+  if (settings.digits) pools.push("0123456789");
+  if (settings.symbols) pools.push(symbols);
+  if (pools.length === 0) pools.push("abcdefghijklmnopqrstuvwxyz", "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+
+  const filteredPools = settings.avoidAmbiguity ? pools.map((pool) => [...pool].filter((ch) => !ambiguous.has(ch)).join("")) : pools;
+  const alphabet = filteredPools.join("");
+
+  const baseline = [];
+  if (settings.enforceMix) {
+    filteredPools.forEach((pool) => {
+      if (pool.length > 0) baseline.push(pool[randomIndex(pool.length)]);
+    });
+  }
+
+  const remaining = Math.max(settings.length - baseline.length, 0);
+  for (let i = 0; i < remaining; i += 1) {
+    baseline.push(alphabet[randomIndex(alphabet.length)]);
+  }
+
+  return shuffle(baseline).join("");
+}
+
+function generatePassphrase(settings, wordlist) {
+  const sep = settings.separator === "space" ? " " : settings.separator;
+  const picks = [];
+
+  for (let i = 0; i < settings.words; i += 1) {
+    let word = wordlist[randomIndex(wordlist.length)];
+    if (settings.randomCase) word = maybeCapitalize(word);
+    picks.push(word);
+  }
+
+  if (settings.appendNumber) picks.push(String(randomIndex(10)));
+  if (settings.appendSymbol) picks.push(symbols[randomIndex(symbols.length)]);
+
+  return picks.join(sep);
+}
+
+function maybeCapitalize(value) {
+  if (!value.length) return value;
+  const mode = randomIndex(3);
+  if (mode === 0) return value.toUpperCase();
+  if (mode === 1) return value[0].toUpperCase() + value.slice(1);
+  return value;
+}
+
+function estimatePasswordEntropy(settings) {
+  const pools = [];
+  if (settings.upper) pools.push("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+  if (settings.lower) pools.push("abcdefghijklmnopqrstuvwxyz");
+  if (settings.digits) pools.push("0123456789");
+  if (settings.symbols) pools.push(symbols);
+  const alphabet = (settings.avoidAmbiguity ? pools.map((pool) => [...pool].filter((ch) => !ambiguous.has(ch)).join("")) : pools).join("");
+  const size = alphabet.length || 1;
+  return Math.round(settings.length * Math.log2(size));
+}
+
+function estimatePassphraseEntropy(settings, wordlistSize) {
+  const base = wordlistSize > 0 ? wordlistSize : 1;
+  const wordEntropy = settings.words * Math.log2(base);
+  const numberEntropy = settings.appendNumber ? Math.log2(10) : 0;
+  const symbolEntropy = settings.appendSymbol ? Math.log2(symbols.length) : 0;
+  const caseEntropy = settings.randomCase ? settings.words * Math.log2(3) : 0;
+  return Math.round(wordEntropy + numberEntropy + symbolEntropy + caseEntropy);
+}
+
+function buildWordlist() {
+  const syllables = ["amber", "bison", "cinder", "delta", "ember", "fable"];
+  const list = [];
+  for (let a = 0; a < 6; a += 1) {
+    for (let b = 0; b < 6; b += 1) {
+      for (let c = 0; c < 6; c += 1) {
+        for (let d = 0; d < 6; d += 1) {
+          for (let e = 0; e < 6; e += 1) {
+            const word = `${syllables[a]}${syllables[b].slice(0, 2)}${syllables[c].slice(-2)}${syllables[d][0]}${syllables[e].slice(1, 3)}`;
+            list.push(word);
+          }
+        }
+      }
+    }
+  }
+  return list;
+}
+
+function randomIndex(max) {
+  if (max <= 0) throw new Error("max must be positive");
+  return crypto.randomInt(0, max);
+}
+
+function shuffle(items) {
+  const next = [...items];
+  for (let i = next.length - 1; i > 0; i -= 1) {
+    const j = randomIndex(i + 1);
+    [next[i], next[j]] = [next[j], next[i]];
+  }
+  return next;
+}
+
+function getOption(argv, flag) {
+  const index = argv.findIndex((arg) => arg === flag);
+  if (index < 0) return undefined;
+  return argv[index + 1];
+}
+
+function parseBoolean(value, fallback) {
+  if (value == null) return fallback;
+  const normalized = String(value).toLowerCase();
+  if (normalized === "true" || normalized === "1" || normalized === "yes") return true;
+  if (normalized === "false" || normalized === "0" || normalized === "no") return false;
+  return fallback;
+}
+
+function clampInt(value, min, max, fallback) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, Math.floor(parsed)));
+}
+
+function ensureDir(dirPath) {
+  fs.mkdirSync(dirPath, { recursive: true });
+}
+
+function walkFiles(dir) {
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  const files = [];
+  entries.forEach((entry) => {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...walkFiles(full));
+      return;
+    }
+    if (entry.isFile()) files.push(full);
+  });
+  return files;
+}
+
+function looksBinary(buffer) {
+  const sample = buffer.subarray(0, Math.min(buffer.length, 8000));
+  for (let i = 0; i < sample.length; i += 1) {
+    if (sample[i] === 0) return true;
+  }
+  return false;
+}
+
+function sha256Hex(input) {
+  return crypto.createHash("sha256").update(input).digest("hex");
+}
+
+function toBase64Url(value) {
+  const buffer = Buffer.isBuffer(value) ? value : Buffer.from(value);
+  return buffer
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function fromBase64Url(value) {
+  const normalized = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
+  const padLength = (4 - (normalized.length % 4)) % 4;
+  return Buffer.from(normalized + "=".repeat(padLength), "base64");
+}
+
+main();

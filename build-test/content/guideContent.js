@@ -70,10 +70,10 @@ export const guideTools = [
     {
         key: "enc",
         title: "Encrypt / Decrypt",
-        whatItDoes: "NULLID envelope (PBKDF2 + AES-GCM) for sealing text or files; supports encrypted download and decrypt with AAD.",
+        whatItDoes: "NULLID envelope (PBKDF2 + AES-GCM) for sealing text or files; supports KDF strength profiles, encrypted download, and decrypt with AAD.",
         whatWhen: ["Send a sealed blob through untrusted channels", "Quickly encrypt a snippet without installing tools"],
         howSteps: [
-            "Enter plaintext and passphrase; seal text or file. Downloads use .nullid.",
+            "Enter plaintext and passphrase; choose KDF profile (compat/strong/paranoid), then seal text or file. Downloads use .nullid.",
             "Decrypt by pasting the envelope or loading a file, then supply the passphrase.",
             "Use hygiene auto-clear timers to wipe plaintext after a delay.",
         ],

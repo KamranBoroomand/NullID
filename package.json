@@ -6,9 +6,10 @@
   "scripts": {
     "dev": "vite",
     "cli": "node scripts/nullid-local.mjs",
-    "build": "tsc -b && vite build && node scripts/generate-build-manifest.mjs",
+    "build": "tsc -b && vite build && node scripts/generate-sbom.mjs dist/sbom.json && node scripts/generate-build-manifest.mjs",
     "verify:build": "node scripts/verify-build-manifest.mjs",
     "build:repro": "npm run build && npm run verify:build",
+    "sbom": "node scripts/generate-sbom.mjs",
     "assets:brand": "node scripts/generate-brand-assets.mjs",
     "preview": "vite preview",
     "typecheck": "tsc -b",

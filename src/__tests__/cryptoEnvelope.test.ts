@@ -32,4 +32,16 @@ describe("crypto envelope", () => {
     const output = await decryptText("wrap", wrapped);
     assert.equal(output, "payload");
   });
+
+  it("supports stronger KDF profiles while keeping same envelope prefix", async () => {
+    const { blob, header } = await encryptBytes("profile-pass", new TextEncoder().encode("kdf-profile"), {
+      kdfProfile: "strong",
+      mime: "text/plain",
+    });
+    assert.equal(blob.startsWith("NULLID:ENC:1."), true);
+    assert.equal(header.kdf.hash, "SHA-512");
+    assert.equal(header.kdf.iterations, 600_000);
+    const { plaintext } = await decryptBlob("profile-pass", blob);
+    assert.equal(new TextDecoder().decode(plaintext), "kdf-profile");
+  });
 });

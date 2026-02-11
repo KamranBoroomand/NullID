@@ -3,11 +3,17 @@ import { fromBase64Url, toBase64Url, utf8ToBytes, bytesToUtf8, randomBytes } fro
 export const ENVELOPE_VERSION = 1;
 export const ENVELOPE_PREFIX = "NULLID:ENC:1";
 const AAD = utf8ToBytes("nullid:enc:v1");
+const MIN_KDF_ITERATIONS = 100_000;
+const MAX_KDF_ITERATIONS = 2_000_000;
+const DEFAULT_KDF_ITERATIONS = 250_000;
+
+export type KdfHash = "SHA-256" | "SHA-512";
+export type KdfProfile = "compat" | "strong" | "paranoid";
 
 export interface EnvelopeHeader {
   version: number;
   algo: "AES-GCM";
-  kdf: { name: "PBKDF2"; iterations: number; hash: "SHA-256"; salt: string };
+  kdf: { name: "PBKDF2"; iterations: number; hash: KdfHash; salt: string };
   iv: string;
   mime?: string;
   name?: string;
@@ -23,11 +29,58 @@ export interface DerivedKey {
   salt: Uint8Array;
 }
 
-export async function deriveKey(passphrase: string, salt?: Uint8Array, iterations = 250_000): Promise<DerivedKey> {
+export interface KdfOptions {
+  iterations?: number;
+  hash?: KdfHash;
+}
+
+export interface EncryptOptions {
+  mime?: string;
+  name?: string;
+  kdfProfile?: KdfProfile;
+  kdf?: KdfOptions;
+}
+
+export interface ResolvedKdf {
+  iterations: number;
+  hash: KdfHash;
+}
+
+export const KDF_PROFILES: Record<KdfProfile, ResolvedKdf> = {
+  compat: { iterations: DEFAULT_KDF_ITERATIONS, hash: "SHA-256" },
+  strong: { iterations: 600_000, hash: "SHA-512" },
+  paranoid: { iterations: 1_000_000, hash: "SHA-512" },
+};
+
+function clampIterations(value?: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_KDF_ITERATIONS;
+  const rounded = Math.floor(value as number);
+  return Math.max(MIN_KDF_ITERATIONS, Math.min(MAX_KDF_ITERATIONS, rounded));
+}
+
+function normalizeHash(value?: string): KdfHash {
+  return value === "SHA-512" ? "SHA-512" : "SHA-256";
+}
+
+export function resolveKdfOptions(profile?: KdfProfile, overrides?: KdfOptions): ResolvedKdf {
+  const fromProfile = profile ? KDF_PROFILES[profile] : KDF_PROFILES.compat;
+  return {
+    iterations: clampIterations(overrides?.iterations ?? fromProfile.iterations),
+    hash: normalizeHash(overrides?.hash ?? fromProfile.hash),
+  };
+}
+
+export async function deriveKey(passphrase: string, salt?: Uint8Array, options?: KdfOptions): Promise<DerivedKey> {
+  const resolved = resolveKdfOptions(undefined, options);
   const saltBytes = salt ?? randomBytes(16);
   const keyMaterial = await crypto.subtle.importKey("raw", utf8ToBytes(passphrase).buffer as ArrayBuffer, "PBKDF2", false, ["deriveKey"]);
   const key = await crypto.subtle.deriveKey(
-    { name: "PBKDF2", salt: saltBytes.buffer as ArrayBuffer, iterations, hash: "SHA-256" },
+    {
+      name: "PBKDF2",
+      salt: saltBytes.buffer as ArrayBuffer,
+      iterations: resolved.iterations,
+      hash: resolved.hash,
+    },
     keyMaterial,
     { name: "AES-GCM", length: 256 },
     false,
@@ -36,9 +89,9 @@ export async function deriveKey(passphrase: string, salt?: Uint8Array, iteration
   return { key, salt: saltBytes };
 }
 
-export async function encryptText(passphrase: string, plaintext: string): Promise<string> {
+export async function encryptText(passphrase: string, plaintext: string, options?: EncryptOptions): Promise<string> {
   const data = utf8ToBytes(plaintext);
-  const { blob } = await encryptBytes(passphrase, data);
+  const { blob } = await encryptBytes(passphrase, data, options);
   return blob;
 }
 
@@ -58,9 +111,10 @@ function normalizeEnvelopeBlob(blob: string): string {
 export async function encryptBytes(
   passphrase: string,
   bytes: Uint8Array,
-  options?: { mime?: string; name?: string },
+  options?: EncryptOptions,
 ): Promise<{ blob: string; header: EnvelopeHeader; ciphertext: Uint8Array }> {
-  const { key, salt } = await deriveKey(passphrase);
+  const kdf = resolveKdfOptions(options?.kdfProfile, options?.kdf);
+  const { key, salt } = await deriveKey(passphrase, undefined, kdf);
   const iv = randomBytes(12);
   const ciphertext = new Uint8Array(
     await crypto.subtle.encrypt(
@@ -75,8 +129,8 @@ export async function encryptBytes(
     iv: toBase64Url(iv),
     kdf: {
       name: "PBKDF2",
-      iterations: 250_000,
-      hash: "SHA-256",
+      iterations: kdf.iterations,
+      hash: kdf.hash,
       salt: toBase64Url(salt),
     },
   };
@@ -108,8 +162,14 @@ export async function decryptBlob(passphrase: string, blob: string): Promise<{ p
   if (envelope.header.version !== ENVELOPE_VERSION || envelope.header.algo !== "AES-GCM") {
     throw new Error("Unsupported envelope version");
   }
+  if (envelope.header.kdf?.name !== "PBKDF2" || typeof envelope.header.kdf.salt !== "string") {
+    throw new Error("Unsupported envelope kdf");
+  }
   const salt = fromBase64Url(envelope.header.kdf.salt);
-  const { key } = await deriveKey(passphrase, salt, envelope.header.kdf.iterations);
+  const { key } = await deriveKey(passphrase, salt, {
+    iterations: clampIterations(envelope.header.kdf.iterations),
+    hash: normalizeHash(envelope.header.kdf.hash),
+  });
   const iv = fromBase64Url(envelope.header.iv);
   const ciphertext = fromBase64Url(envelope.ciphertext);
   const plaintext = new Uint8Array(

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./styles.css";
 import { bytesToUtf8 } from "../utils/encoding";
-import { decryptBlob, decryptText, encryptBytes, encryptText } from "../utils/cryptoEnvelope";
+import { KDF_PROFILES, KdfProfile, decryptBlob, decryptText, encryptBytes, encryptText } from "../utils/cryptoEnvelope";
 import { Chip } from "../components/Chip";
 import { useToast } from "../components/ToastHost";
 import type { ModuleKey } from "../components/ModuleList";
@@ -17,6 +17,7 @@ export function EncView({ onOpenGuide }: EncViewProps) {
   const [cipherText, setCipherText] = useState("");
   const [decPass, setDecPass] = useState("");
   const [decrypted, setDecrypted] = useState("");
+  const [kdfProfile, setKdfProfile] = useState<KdfProfile>("compat");
   const [encFile, setEncFile] = useState<File | null>(null);
   const [encFileBlob, setEncFileBlob] = useState<string | null>(null);
   const [decFileBlob, setDecFileBlob] = useState<Uint8Array | null>(null);
@@ -33,6 +34,7 @@ export function EncView({ onOpenGuide }: EncViewProps) {
   const clearTimerRef = useRef<number | null>(null);
 
   const MAX_FILE_BYTES = 25 * 1024 * 1024; // 25MB (envelope expands ~33%)
+  const kdfConfig = KDF_PROFILES[kdfProfile];
 
   const scheduleClear = useCallback(() => {
     if (!autoClear) return;
@@ -53,7 +55,7 @@ export function EncView({ onOpenGuide }: EncViewProps) {
     if (!plain || !encPass) return;
     setIsEncrypting(true);
     try {
-      const blob = await encryptText(encPass, plain);
+      const blob = await encryptText(encPass, plain, { kdfProfile });
       setCipherText(blob.trim());
       setEncFileBlob(blob.trim());
       push("sealed", "accent");
@@ -67,7 +69,7 @@ export function EncView({ onOpenGuide }: EncViewProps) {
     } finally {
       setIsEncrypting(false);
     }
-  }, [encPass, plain, push, scheduleClear]);
+  }, [encPass, kdfProfile, plain, push, scheduleClear]);
 
   const handleEncryptFile = useCallback(async () => {
     if (!encPass || !encFile) return;
@@ -80,7 +82,7 @@ export function EncView({ onOpenGuide }: EncViewProps) {
     }
     try {
       const bytes = new Uint8Array(await encFile.arrayBuffer());
-      const { blob } = await encryptBytes(encPass, bytes, { mime: encFile.type, name: encFile.name });
+      const { blob } = await encryptBytes(encPass, bytes, { mime: encFile.type, name: encFile.name, kdfProfile });
       setEncFileBlob(blob);
       setCipherText(blob.trim());
       push("file sealed", "accent");
@@ -93,7 +95,7 @@ export function EncView({ onOpenGuide }: EncViewProps) {
     } finally {
       setIsEncrypting(false);
     }
-  }, [encFile, encPass, push, scheduleClear]);
+  }, [encFile, encPass, kdfProfile, push, scheduleClear]);
 
   const handleDecryptText = useCallback(async () => {
     if (!cipherText || !decPass) return;
@@ -216,6 +218,22 @@ export function EncView({ onOpenGuide }: EncViewProps) {
             onChange={(event) => setEncPass(event.target.value)}
           />
           <div className="controls-row">
+            <span className="section-title">KDF profile</span>
+            <div className="pill-buttons" role="group" aria-label="KDF profile">
+              {(["compat", "strong", "paranoid"] as KdfProfile[]).map((profile) => (
+                <button
+                  key={profile}
+                  type="button"
+                  className={kdfProfile === profile ? "active" : ""}
+                  onClick={() => setKdfProfile(profile)}
+                >
+                  {profile}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="microcopy">PBKDF2 {kdfConfig.hash.toLowerCase()} · {kdfConfig.iterations.toLocaleString()} iterations</div>
+          <div className="controls-row">
             <button className="button" type="button" onClick={handleEncryptText} disabled={!plain || !encPass || isEncrypting}>
               seal text
             </button>
@@ -305,7 +323,10 @@ export function EncView({ onOpenGuide }: EncViewProps) {
           <span className="panel-subtext">NULLID:ENC:1</span>
         </div>
         <div className="note-box">
-          <div className="microcopy">prefix NULLID:ENC:1, AES-GCM, PBKDF2:250k, AAD bound</div>
+          <div className="microcopy">
+            prefix NULLID:ENC:1, AES-GCM, PBKDF2 profile: {kdfProfile} ({kdfConfig.hash.toLowerCase()} / {kdfConfig.iterations.toLocaleString()}),
+            AAD bound
+          </div>
           <pre className="output">{cipherText || "Generate an envelope to view"}</pre>
         </div>
         <div className="controls-row">

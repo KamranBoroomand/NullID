@@ -1,0 +1,61 @@
+name: Reproducible Build Check
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build reproducible artifacts
+        env:
+          SOURCE_DATE_EPOCH: 1735689600
+        run: npm run build:repro
+
+      - name: Capture checksums
+        run: cp dist/SHA256SUMS SHA256SUMS-node${{ matrix.node-version }}.txt
+
+      - name: Upload checksum artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sha256-node${{ matrix.node-version }}
+          path: SHA256SUMS-node${{ matrix.node-version }}.txt
+
+  compare:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download node20 checksums
+        uses: actions/download-artifact@v4
+        with:
+          name: sha256-node20
+          path: checksums/node20
+
+      - name: Download node22 checksums
+        uses: actions/download-artifact@v4
+        with:
+          name: sha256-node22
+          path: checksums/node22
+
+      - name: Compare checksums
+        run: diff -u checksums/node20/SHA256SUMS-node20.txt checksums/node22/SHA256SUMS-node22.txt
