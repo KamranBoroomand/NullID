@@ -48,12 +48,14 @@ export const guideTools: GuideToolContent[] = [
     key: "sanitize",
     title: "Log Sanitizer",
     whatItDoes:
-      "Rule-based scrubbing for logs with diff preview. Rules cover IP + IPv6, emails, JWT/bearer tokens, AWS keys/secrets, IBAN/credit cards, cookies, UAs, timestamps, usernames, and JSON secrets.",
-    whatWhen: ["Share log snippets in tickets", "Normalize noisy logs for demos or docs"],
+      "Rule-based scrubbing for logs with diff preview, local policy packs, batch file sanitization, and safe-share bundle export.",
+    whatWhen: ["Share log snippets in tickets", "Normalize noisy logs for demos/docs", "Generate portable sanitized bundles with integrity metadata"],
     howSteps: [
       "Paste logs or load a preset, toggle rules, and enable JSON-aware cleaning if applicable.",
+      "Save/import policy packs to reuse rule sets and custom regexes locally.",
       "Review the before/after diff; enable wrap for narrow screens.",
-      "Copy or download the sanitized output; custom regex replacements can be added per scope.",
+      "Run batch mode for multiple files, then export outputs/report.",
+      "Export a safe-share bundle (optionally encrypted) with policy + SHA-256 hashes.",
     ],
     limits: [
       "Regex operates per line; extremely unstructured logs may need custom rules.",

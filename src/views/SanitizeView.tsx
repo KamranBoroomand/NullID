@@ -1,164 +1,47 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import "./styles.css";
 import { usePersistentState } from "../hooks/usePersistentState";
 import { useToast } from "../components/ToastHost";
 import { useClipboardPrefs, writeClipboard } from "../utils/clipboard";
+import { hashText } from "../utils/hash";
+import { encryptText } from "../utils/cryptoEnvelope";
+import {
+  applySanitizeRules,
+  buildRulesState,
+  getRuleKeys,
+  getRuleLabel,
+  normalizePolicyConfig,
+  runBatchSanitize,
+  sanitizePresets,
+  type BatchOutput,
+  type CustomRule,
+  type CustomRuleScope,
+  type PolicyPack,
+  type PresetKey,
+  type RulesState,
+} from "../utils/sanitizeEngine";
 import type { ModuleKey } from "../components/ModuleList";
-
-type RuleKey =
-  | "maskIp"
-  | "maskIpv6"
-  | "maskEmail"
-  | "scrubJwt"
-  | "maskBearer"
-  | "maskCard"
-  | "maskIban"
-  | "maskAwsKey"
-  | "maskAwsSecret"
-  | "stripCookies"
-  | "dropUA"
-  | "normalizeTs"
-  | "maskUser"
-  | "stripJsonSecrets";
-
-type Rule = {
-  key: RuleKey;
-  label: string;
-  apply: (input: string) => { output: string; count: number };
-};
-
-type PresetKey = "nginx" | "apache" | "auth" | "json";
-
-const rules: Rule[] = [
-  {
-    key: "maskIp",
-    label: "Mask IP addresses",
-    apply: (input) => replaceWithCount(input, /\b(\d{1,3}\.){3}\d{1,3}\b/g, "[ip]"),
-  },
-  {
-    key: "maskIpv6",
-    label: "Mask IPv6",
-    apply: (input) => replaceWithCount(input, /\b(?:[A-F0-9]{1,4}:){2,7}[A-F0-9]{1,4}\b/gi, "[ipv6]"),
-  },
-  {
-    key: "maskEmail",
-    label: "Mask emails",
-    apply: (input) => replaceWithCount(input, /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]"),
-  },
-  {
-    key: "scrubJwt",
-    label: "Scrub JWT",
-    apply: (input) =>
-      replaceWithCount(input, /(?:bearer\s+)?[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/gi, "[jwt]"),
-  },
-  {
-    key: "maskBearer",
-    label: "Mask bearer tokens",
-    apply: (input) => replaceWithCount(input, /\b(?:authorization[:=]\s*)?(?:bearer\s+)[A-Za-z0-9._-]{20,}\b/gi, "[token]"),
-  },
-  {
-    key: "maskCard",
-    label: "Mask credit cards",
-    apply: replaceCardNumbers,
-  },
-  {
-    key: "maskIban",
-    label: "Mask IBAN",
-    apply: replaceIban,
-  },
-  {
-    key: "maskAwsKey",
-    label: "Mask AWS key",
-    apply: (input) => replaceWithCount(input, /\bAKIA[0-9A-Z]{16}\b/g, "[aws-key]"),
-  },
-  {
-    key: "maskAwsSecret",
-    label: "Mask AWS secret",
-    apply: (input) =>
-      replaceWithCount(input, /\baws_secret_access_key\s*[:=]\s*[A-Za-z0-9/+=]{40}\b/gi, "aws_secret_access_key=[redacted]"),
-  },
-  {
-    key: "stripCookies",
-    label: "Strip cookies",
-    apply: (input) => replaceWithCount(input, /cookie=[^ ;\n]+/gi, "cookie=[stripped]"),
-  },
-  {
-    key: "dropUA",
-    label: "Drop user agents",
-    apply: (input) => replaceWithCount(input, /ua=[^\s]+|user-agent:[^\n]+/gi, "ua=[dropped]"),
-  },
-  {
-    key: "normalizeTs",
-    label: "Normalize timestamps",
-    apply: (input) => replaceWithCount(input, /\[\d{2}\/[A-Za-z]{3}\/\d{4}:\d{2}:\d{2}:\d{2}\]/g, "[timestamp]"),
-  },
-  {
-    key: "maskUser",
-    label: "Mask usernames",
-    apply: (input) => replaceWithCount(input, /\buser=([A-Za-z0-9._-]+)\b/gi, "user=[user]"),
-  },
-  {
-    key: "stripJsonSecrets",
-    label: "Strip JSON secrets",
-    apply: (input) => replaceWithCount(input, /\"(token|secret|password)\"\s*:\s*\"[^\"]+\"/gi, '"$1":"[redacted]"'),
-  },
-];
-
-const presets: Record<PresetKey, { label: string; description: string; sample: string; rules: RuleKey[] }> = {
-  nginx: {
-    label: "nginx access",
-    description: "IPs, cookies, UA, JWT",
-    sample:
-      `127.0.0.1 - - [14/Mar/2025:10:12:33 +0000] "POST /auth" 200 user=alice token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9 cookie=sessionid=abc123 ua=Mozilla/5.0`,
-    rules: ["maskIp", "maskIpv6", "stripCookies", "dropUA", "scrubJwt", "maskBearer", "maskUser", "normalizeTs", "maskAwsKey", "maskAwsSecret", "maskCard", "maskIban"],
-  },
-  apache: {
-    label: "apache access",
-    description: "IPs, emails, JWT",
-    sample:
-      `10.0.0.2 - bob@example.com [14/Mar/2025:11:12:33 +0000] "GET /admin" 403 512 "-" "Mozilla/5.0" token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9`,
-    rules: ["maskIp", "maskIpv6", "maskEmail", "scrubJwt", "maskBearer", "normalizeTs", "maskCard", "maskIban"],
-  },
-  auth: {
-    label: "auth log",
-    description: "usernames + IPs",
-    sample: `Mar 14 08:15:22 host sshd[1201]: Failed password for root from 203.0.113.10 port 22 ssh2`,
-    rules: ["maskIp", "maskIpv6", "maskUser"],
-  },
-  json: {
-    label: "JSON log",
-    description: "drop secrets",
-    sample: `{"ts":"2025-03-14T10:15:00Z","user":"alice","token":"abc.def.ghi","password":"hunter2","ip":"192.168.0.8"}`,
-    rules: ["maskIp", "maskIpv6", "stripJsonSecrets", "maskUser", "maskAwsKey", "maskAwsSecret", "maskCard", "maskIban"],
-  },
-};
-
-type CustomRuleScope = "text" | "json" | "both";
-
-type CustomRule = {
-  id: string;
-  pattern: string;
-  replacement: string;
-  flags: string;
-  scope: CustomRuleScope;
-};
 
 interface SanitizeViewProps {
   onOpenGuide?: (key?: ModuleKey) => void;
 }
 
+const ruleKeys = getRuleKeys();
+const presetKeys = Object.keys(sanitizePresets) as PresetKey[];
+const defaultRules = Object.fromEntries(ruleKeys.map((key) => [key, true])) as RulesState;
+
 export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
   const { push } = useToast();
   const [clipboardPrefs] = useClipboardPrefs();
-  const [log, setLog] = useState(presets.nginx.sample);
-  const [rulesState, setRulesState] = usePersistentState<Record<RuleKey, boolean>>(
-    "nullid:sanitize:rules",
-    Object.fromEntries(rules.map((rule) => [rule.key, true])) as Record<RuleKey, boolean>,
-  );
+  const [log, setLog] = useState(sanitizePresets.nginx.sample);
+  const [rulesState, setRulesState] = usePersistentState<RulesState>("nullid:sanitize:rules", defaultRules);
   const [preset, setPreset] = usePersistentState<PresetKey>("nullid:sanitize:preset", "nginx");
   const [wrapLines, setWrapLines] = usePersistentState<boolean>("nullid:sanitize:wrap", false);
   const [jsonAware, setJsonAware] = usePersistentState<boolean>("nullid:sanitize:json", true);
   const [customRules, setCustomRules] = usePersistentState<CustomRule[]>("nullid:sanitize:custom", []);
+  const [policyPacks, setPolicyPacks] = usePersistentState<PolicyPack[]>("nullid:sanitize:policy-packs", []);
+  const [selectedPolicyId, setSelectedPolicyId] = useState("");
+  const [policyName, setPolicyName] = useState("");
   const [customRuleDraft, setCustomRuleDraft] = useState<CustomRule>({
     id: "",
     pattern: "",
@@ -167,20 +50,25 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
     scope: "both",
   });
   const [customRuleError, setCustomRuleError] = useState<string | null>(null);
+  const [batchResults, setBatchResults] = useState<BatchOutput[]>([]);
+  const [bundlePassphrase, setBundlePassphrase] = useState("");
+  const [isBatching, setIsBatching] = useState(false);
+  const [isExportingBundle, setIsExportingBundle] = useState(false);
+  const batchFileInputRef = useRef<HTMLInputElement>(null);
+  const policyImportRef = useRef<HTMLInputElement>(null);
 
   const result = useMemo(
-    () => applyRules(log, rulesState, customRules, jsonAware),
+    () => applySanitizeRules(log, rulesState, customRules, jsonAware),
     [customRules, jsonAware, log, rulesState],
   );
 
+  const selectedPolicy = useMemo(() => policyPacks.find((pack) => pack.id === selectedPolicyId) ?? null, [policyPacks, selectedPolicyId]);
+
   const applyPreset = (key: PresetKey) => {
     setPreset(key);
-    setLog(presets[key].sample);
-    const nextState = Object.fromEntries(rules.map((rule) => [rule.key, presets[key].rules.includes(rule.key)])) as Record<
-      RuleKey,
-      boolean
-    >;
-    setRulesState(nextState);
+    setLog(sanitizePresets[key].sample);
+    setRulesState(buildRulesState(sanitizePresets[key].rules));
+    push(`preset loaded: ${sanitizePresets[key].label}`, "accent");
   };
 
   const addCustomRule = () => {
@@ -189,7 +77,7 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
       return;
     }
     try {
-      // Validate regex
+      // Validate regex before saving
       // eslint-disable-next-line no-new
       new RegExp(customRuleDraft.pattern, customRuleDraft.flags);
       const next: CustomRule = { ...customRuleDraft, id: crypto.randomUUID() };
@@ -202,6 +90,188 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
   };
 
   const removeCustomRule = (id: string) => setCustomRules((prev) => prev.filter((rule) => rule.id !== id));
+
+  const savePolicyPack = () => {
+    const name = policyName.trim();
+    if (!name) {
+      push("policy name required", "danger");
+      return;
+    }
+    const config = {
+      rulesState,
+      jsonAware,
+      customRules,
+    };
+    let savedId = "";
+    setPolicyPacks((prev) => {
+      const existing = prev.find((pack) => pack.name.toLowerCase() === name.toLowerCase());
+      if (existing) {
+        savedId = existing.id;
+        return prev.map((pack) => (pack.id === existing.id ? { ...pack, config, createdAt: new Date().toISOString(), name } : pack));
+      }
+      const created: PolicyPack = {
+        id: crypto.randomUUID(),
+        name,
+        createdAt: new Date().toISOString(),
+        config,
+      };
+      savedId = created.id;
+      return [created, ...prev].slice(0, 30);
+    });
+    if (savedId) {
+      setSelectedPolicyId(savedId);
+    }
+    push("policy pack saved locally", "accent");
+  };
+
+  const applyPolicyPack = (pack: PolicyPack) => {
+    setRulesState(pack.config.rulesState);
+    setJsonAware(pack.config.jsonAware);
+    setCustomRules(pack.config.customRules);
+    setPolicyName(pack.name);
+    setSelectedPolicyId(pack.id);
+    push(`policy applied: ${pack.name}`, "accent");
+  };
+
+  const deletePolicyPack = () => {
+    if (!selectedPolicy) return;
+    setPolicyPacks((prev) => prev.filter((pack) => pack.id !== selectedPolicy.id));
+    setSelectedPolicyId("");
+    push("policy pack removed", "neutral");
+  };
+
+  const exportPolicyPack = (pack?: PolicyPack | null) => {
+    const payload = {
+      schemaVersion: 1,
+      kind: "sanitize-policy-pack",
+      exportedAt: new Date().toISOString(),
+      packs: (pack ? [pack] : policyPacks).map((entry) => ({
+        name: entry.name,
+        createdAt: entry.createdAt,
+        config: entry.config,
+      })),
+    };
+    const safe = sanitizeFileStem(pack?.name ?? "sanitize-policy-packs");
+    downloadBlob(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }), `${safe}.json`);
+    push(pack ? "policy exported" : "all policies exported", "accent");
+  };
+
+  const importPolicyPack = async (file?: File | null) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as unknown;
+      const imported = parsePolicyImportPayload(parsed);
+      if (imported.length === 0) {
+        throw new Error("No valid policy packs found");
+      }
+      setPolicyPacks((prev) => mergePolicyPacks(prev, imported));
+      setSelectedPolicyId(imported[0].id);
+      setPolicyName(imported[0].name);
+      push(`imported ${imported.length} policy pack(s)`, "accent");
+    } catch (error) {
+      console.error(error);
+      push("policy import failed", "danger");
+    }
+  };
+
+  const runBatch = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setIsBatching(true);
+    try {
+      const batchInputs = await Promise.all(
+        Array.from(files).map(async (file) => ({
+          name: file.name,
+          text: await file.text(),
+        })),
+      );
+      const outputs = runBatchSanitize(batchInputs, { rulesState, jsonAware, customRules });
+      setBatchResults(outputs);
+      push(`batch processed: ${outputs.length} file(s)`, "accent");
+    } catch (error) {
+      console.error(error);
+      push("batch processing failed", "danger");
+    } finally {
+      setIsBatching(false);
+    }
+  };
+
+  const downloadBatchOutputs = () => {
+    if (batchResults.length === 0) return;
+    batchResults.forEach((item, index) => {
+      const name = `${sanitizeFileStem(item.name)}-sanitized.log`;
+      window.setTimeout(() => {
+        downloadBlob(new Blob([item.output], { type: "text/plain" }), name);
+      }, index * 100);
+    });
+    push("batch downloads started", "accent");
+  };
+
+  const exportBatchReport = () => {
+    if (batchResults.length === 0) return;
+    const report = {
+      schemaVersion: 1,
+      kind: "sanitize-batch-report",
+      generatedAt: new Date().toISOString(),
+      policy: { rulesState, jsonAware, customRules },
+      files: batchResults.map((item) => ({
+        name: item.name,
+        inputChars: item.inputChars,
+        outputChars: item.outputChars,
+        linesAffected: item.linesAffected,
+        appliedRules: item.applied,
+        report: item.report,
+      })),
+    };
+    downloadBlob(new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }), "nullid-sanitize-batch-report.json");
+    push("batch report exported", "accent");
+  };
+
+  const exportShareBundle = async () => {
+    setIsExportingBundle(true);
+    try {
+      const [inputHash, outputHash] = await Promise.all([hashText(log, "SHA-256"), hashText(result.output, "SHA-256")]);
+      const bundle = {
+        schemaVersion: 1,
+        kind: "nullid-safe-share",
+        tool: "sanitize",
+        createdAt: new Date().toISOString(),
+        policy: {
+          rulesState,
+          jsonAware,
+          customRules,
+        },
+        input: {
+          bytes: new TextEncoder().encode(log).byteLength,
+          sha256: inputHash.hex,
+        },
+        output: {
+          bytes: new TextEncoder().encode(result.output).byteLength,
+          sha256: outputHash.hex,
+          text: result.output,
+        },
+        summary: {
+          linesAffected: result.linesAffected,
+          appliedRules: result.applied,
+          report: result.report,
+        },
+      };
+      const json = JSON.stringify(bundle, null, 2);
+      if (bundlePassphrase.trim()) {
+        const envelope = await encryptText(bundlePassphrase.trim(), json);
+        downloadBlob(new Blob([envelope], { type: "text/plain;charset=utf-8" }), "nullid-safe-share-bundle.nullid");
+        push("encrypted safe-share bundle exported", "accent");
+        return;
+      }
+      downloadBlob(new Blob([json], { type: "application/json" }), "nullid-safe-share-bundle.json");
+      push("safe-share bundle exported", "accent");
+    } catch (error) {
+      console.error(error);
+      push("safe-share export failed", "danger");
+    } finally {
+      setIsExportingBundle(false);
+    }
+  };
 
   return (
     <div className="workspace-scroll">
@@ -225,9 +295,9 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
           <div className="controls-row">
             <span className="section-title">Presets</span>
             <div className="pill-buttons" role="group" aria-label="Log presets">
-              {(Object.keys(presets) as PresetKey[]).map((key) => (
+              {presetKeys.map((key) => (
                 <button key={key} type="button" className={preset === key ? "active" : ""} onClick={() => applyPreset(key)}>
-                  {presets[key].label}
+                  {sanitizePresets[key].label}
                 </button>
               ))}
             </div>
@@ -269,15 +339,7 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
             <button
               className="button"
               type="button"
-              onClick={() => {
-                const blob = new Blob([result.output], { type: "text/plain" });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement("a");
-                link.href = url;
-                link.download = "nullid-sanitized.log";
-                link.click();
-                URL.revokeObjectURL(url);
-              }}
+              onClick={() => downloadBlob(new Blob([result.output], { type: "text/plain" }), "nullid-sanitized.log")}
               disabled={!result.output}
             >
               download sanitized
@@ -308,21 +370,21 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
           </div>
         </div>
       </div>
-        <div className="panel" aria-label="Rule toggles">
-          <div className="panel-heading">
-            <span>Rules</span>
-            <span className="panel-subtext">toggle</span>
-          </div>
+      <div className="panel" aria-label="Rule toggles">
+        <div className="panel-heading">
+          <span>Rules</span>
+          <span className="panel-subtext">toggle</span>
+        </div>
         <div className="rule-grid">
-          {rules.map((rule) => (
-            <label key={rule.key} className="rule-tile">
+          {ruleKeys.map((ruleKey) => (
+            <label key={ruleKey} className="rule-tile">
               <input
                 type="checkbox"
-                checked={rulesState[rule.key]}
-                onChange={(event) => setRulesState((prev) => ({ ...prev, [rule.key]: event.target.checked }))}
-                aria-label={rule.label}
+                checked={rulesState[ruleKey]}
+                onChange={(event) => setRulesState((prev) => ({ ...prev, [ruleKey]: event.target.checked }))}
+                aria-label={getRuleLabel(ruleKey)}
               />
-              <span>{rule.label}</span>
+              <span>{getRuleLabel(ruleKey)}</span>
             </label>
           ))}
         </div>
@@ -410,145 +472,203 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
           )}
         </div>
       </div>
+
+      <div className="grid-two">
+        <div className="panel" aria-label="Policy packs">
+          <div className="panel-heading">
+            <span>Policy packs</span>
+            <span className="panel-subtext">local-only reusable configs</span>
+          </div>
+          <div className="controls-row">
+            <input
+              className="input"
+              placeholder="policy name"
+              value={policyName}
+              onChange={(event) => setPolicyName(event.target.value)}
+              aria-label="Policy name"
+            />
+            <button className="button" type="button" onClick={savePolicyPack}>
+              save
+            </button>
+          </div>
+          <div className="controls-row">
+            <select
+              className="select"
+              aria-label="Saved policy packs"
+              value={selectedPolicyId}
+              onChange={(event) => setSelectedPolicyId(event.target.value)}
+            >
+              <option value="">select policy...</option>
+              {policyPacks.map((pack) => (
+                <option key={pack.id} value={pack.id}>
+                  {pack.name}
+                </option>
+              ))}
+            </select>
+            <button className="button" type="button" onClick={() => selectedPolicy && applyPolicyPack(selectedPolicy)} disabled={!selectedPolicy}>
+              apply
+            </button>
+            <button className="button" type="button" onClick={deletePolicyPack} disabled={!selectedPolicy}>
+              delete
+            </button>
+          </div>
+          <div className="controls-row">
+            <button className="button" type="button" onClick={() => exportPolicyPack(selectedPolicy)} disabled={!selectedPolicy}>
+              export selected
+            </button>
+            <button className="button" type="button" onClick={() => exportPolicyPack(null)} disabled={policyPacks.length === 0}>
+              export all
+            </button>
+            <button className="button" type="button" onClick={() => policyImportRef.current?.click()}>
+              import
+            </button>
+            <input
+              ref={policyImportRef}
+              type="file"
+              accept="application/json"
+              style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }}
+              tabIndex={-1}
+              onChange={(event) => {
+                void importPolicyPack(event.target.files?.[0] ?? null);
+                event.target.value = "";
+              }}
+            />
+          </div>
+          <div className="microcopy">
+            Policy packs store enabled rules, JSON mode, and custom regexes on this device only.
+          </div>
+        </div>
+
+        <div className="panel" aria-label="Batch sanitize">
+          <div className="panel-heading">
+            <span>Batch sanitize</span>
+            <span className="panel-subtext">free local processing</span>
+          </div>
+          <div className="controls-row">
+            <button className="button" type="button" onClick={() => batchFileInputRef.current?.click()} disabled={isBatching}>
+              {isBatching ? "processing..." : "select files"}
+            </button>
+            <input
+              ref={batchFileInputRef}
+              type="file"
+              multiple
+              accept=".txt,.log,.json,text/*,application/json"
+              style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }}
+              tabIndex={-1}
+              onChange={(event) => {
+                void runBatch(event.target.files);
+                event.target.value = "";
+              }}
+            />
+            <button className="button" type="button" onClick={downloadBatchOutputs} disabled={batchResults.length === 0}>
+              download outputs
+            </button>
+            <button className="button" type="button" onClick={exportBatchReport} disabled={batchResults.length === 0}>
+              export report
+            </button>
+          </div>
+          <div className="status-line">
+            <span>files processed</span>
+            <span className="tag tag-accent">{batchResults.length}</span>
+          </div>
+          {batchResults.length > 0 && (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>file</th>
+                  <th>lines changed</th>
+                  <th>size delta</th>
+                </tr>
+              </thead>
+              <tbody>
+                {batchResults.slice(0, 8).map((item) => (
+                  <tr key={item.name}>
+                    <td>{item.name}</td>
+                    <td>{item.linesAffected}</td>
+                    <td>{item.outputChars - item.inputChars}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      <div className="panel" aria-label="Safe share bundle">
+        <div className="panel-heading">
+          <span>Safe share bundle</span>
+          <span className="panel-subtext">manifest + hash + sanitized output</span>
+        </div>
+        <p className="microcopy">
+          Generates a portable local bundle containing sanitized output, policy snapshot, and SHA-256 integrity hashes.
+        </p>
+        <div className="controls-row">
+          <input
+            className="input"
+            type="password"
+            placeholder="optional passphrase to encrypt bundle"
+            value={bundlePassphrase}
+            onChange={(event) => setBundlePassphrase(event.target.value)}
+            aria-label="Bundle encryption passphrase"
+          />
+          <button className="button" type="button" onClick={() => void exportShareBundle()} disabled={isExportingBundle || !result.output}>
+            {isExportingBundle ? "exporting..." : bundlePassphrase ? "export encrypted bundle" : "export bundle"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
-function replaceWithCount(input: string, regex: RegExp, replacement: string) {
-  let count = 0;
-  const output = input.replace(regex, () => {
-    count += 1;
-    return replacement;
-  });
-  return { output, count };
+function parsePolicyImportPayload(input: unknown): PolicyPack[] {
+  if (!isRecord(input) || input.kind !== "sanitize-policy-pack") return [];
+  const source = Array.isArray(input.packs) ? input.packs : input.pack ? [input.pack] : [];
+  return source
+    .map((entry) => normalizeImportedPack(entry))
+    .filter((entry): entry is PolicyPack => Boolean(entry));
 }
 
-function replaceCardNumbers(input: string) {
-  const regex = /\b(?:\d[ -]?){12,19}\b/g;
-  let count = 0;
-  const output = input.replace(regex, (match) => {
-    if (passesLuhn(match)) {
-      count += 1;
-      return "[card]";
-    }
-    return match;
-  });
-  return { output, count };
-}
-
-function replaceIban(input: string) {
-  const regex = /\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/gi;
-  let count = 0;
-  const output = input.replace(regex, (match) => {
-    if (isValidIban(match)) {
-      count += 1;
-      return "[iban]";
-    }
-    return match;
-  });
-  return { output, count };
-}
-
-function passesLuhn(value: string) {
-  const digits = value.replace(/[^0-9]/g, "");
-  if (digits.length < 12 || digits.length > 19) return false;
-  let sum = 0;
-  let doubleDigit = false;
-  for (let i = digits.length - 1; i >= 0; i -= 1) {
-    let digit = Number(digits[i]);
-    if (doubleDigit) {
-      digit *= 2;
-      if (digit > 9) digit -= 9;
-    }
-    sum += digit;
-    doubleDigit = !doubleDigit;
-  }
-  return sum % 10 === 0;
-}
-
-function isValidIban(value: string) {
-  const trimmed = value.replace(/\s+/g, "").toUpperCase();
-  if (trimmed.length < 15 || trimmed.length > 34) return false;
-  const rearranged = `${trimmed.slice(4)}${trimmed.slice(0, 4)}`;
-  const converted = rearranged.replace(/[A-Z]/g, (ch) => `${ch.charCodeAt(0) - 55}`);
-  let remainder = 0;
-  for (let i = 0; i < converted.length; i += 1) {
-    remainder = (remainder * 10 + Number(converted[i])) % 97;
-  }
-  return remainder === 1;
-}
-
-function applyRules(input: string, rulesState: Record<RuleKey, boolean>, customRules: CustomRule[], jsonAware: boolean) {
-  let output = input;
-  const applied: RuleKey[] = [];
-  const report: string[] = [];
-  let linesAffected = 0;
-
-  const applyCustom = (value: string, scope: CustomRuleScope) => {
-    let current = value;
-    customRules.forEach((rule) => {
-      if (rule.scope !== "both" && rule.scope !== scope) return;
-      try {
-        const regex = new RegExp(rule.pattern, rule.flags);
-        let count = 0;
-        current = current.replace(regex, () => {
-          count += 1;
-          return rule.replacement;
-        });
-        if (count > 0) {
-          report.push(`Custom /${rule.pattern}/${rule.flags}: ${count}`);
-        }
-      } catch {
-        // Skip invalid custom rules at runtime
-      }
-    });
-    return current;
+function normalizeImportedPack(entry: unknown): PolicyPack | null {
+  if (!isRecord(entry)) return null;
+  const name = typeof entry.name === "string" ? entry.name.trim() : "";
+  if (!name) return null;
+  const config = normalizePolicyConfig(entry.config);
+  if (!config) return null;
+  return {
+    id: crypto.randomUUID(),
+    name,
+    createdAt: typeof entry.createdAt === "string" ? entry.createdAt : new Date().toISOString(),
+    config,
   };
+}
 
-  rules.forEach((rule) => {
-    if (!rulesState[rule.key]) return;
-    const { output: next, count } = rule.apply(output);
-    if (count > 0) {
-      applied.push(rule.key);
-      report.push(`${rule.label}: ${count}`);
-      output = next;
-    }
+function mergePolicyPacks(existing: PolicyPack[], incoming: PolicyPack[]): PolicyPack[] {
+  const byName = new Map(existing.map((pack) => [pack.name.toLowerCase(), pack]));
+  incoming.forEach((pack) => {
+    byName.set(pack.name.toLowerCase(), pack);
   });
+  return Array.from(byName.values())
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 30);
+}
 
-  const redactKeys = ["token", "authorization", "password", "secret", "apikey", "session", "cookie"];
-  const jsonClean = (value: unknown): unknown => {
-    if (Array.isArray(value)) return value.map(jsonClean);
-    if (value && typeof value === "object") {
-      const entries = Object.entries(value as Record<string, unknown>).map(([key, val]) => {
-        if (redactKeys.includes(key.toLowerCase())) return [key, "[redacted]"];
-        return [key, jsonClean(val)];
-      });
-      return Object.fromEntries(entries);
-    }
-    return value;
-  };
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.rel = "noopener";
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1200);
+}
 
-  let jsonApplied = false;
-  if (jsonAware) {
-    try {
-      const parsed = JSON.parse(output);
-      const cleaned = jsonClean(parsed);
-      output = JSON.stringify(cleaned, null, 2);
-      jsonApplied = true;
-      report.push("JSON secrets redacted");
-    } catch {
-      jsonApplied = false;
-    }
-  }
+function sanitizeFileStem(value: string) {
+  const base = value.replace(/\.[^.]+$/, "").trim();
+  return (base || "nullid").replace(/[^a-z0-9_-]+/gi, "-").replace(/-+/g, "-");
+}
 
-  output = applyCustom(output, jsonApplied ? "json" : "text");
-
-  const inputLines = input.split("\n");
-  const outputLines = output.split("\n");
-  linesAffected = Math.max(inputLines.length, outputLines.length);
-  linesAffected = inputLines.reduce((acc, line, idx) => (line === outputLines[idx] ? acc : acc + 1), 0);
-
-  return { output, applied, report, linesAffected };
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function highlightDiff(before: string, after: string) {

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "cli": "node scripts/nullid-local.mjs",
     "build": "tsc -b && vite build && node scripts/generate-build-manifest.mjs",
     "verify:build": "node scripts/verify-build-manifest.mjs",
     "build:repro": "npm run build && npm run verify:build",

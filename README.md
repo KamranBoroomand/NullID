@@ -30,7 +30,7 @@ The app is organized into focused modules:
 ## Core Features
 - Hash & Verify: SHA-256, SHA-512, and SHA-1 (legacy) for text and files, plus digest comparison and multiple output formats.
 - Text Redaction: detector-based masking for common PII/secrets with custom regex rules and overlap-safe resolution.
-- Log Sanitizer: preset-driven log cleanup with rule toggles, diff preview, JSON-aware masking, and downloadable output.
+- Log Sanitizer: preset-driven cleanup with rule toggles, reusable local policy packs (import/export), JSON-aware masking, batch file processing, and safe-share bundle export.
 - Metadata Inspector: local metadata parsing (JPEG/TIFF EXIF, PNG/WebP/GIF metadata hints), compatibility diagnostics, and clean image re-encoding with before/after preview and resize options.
 - Encrypt / Decrypt: versioned `NULLID:ENC:1` envelope using PBKDF2 + AES-GCM with text/file support.
 - Password & Passphrase: random generators with entropy estimates, presets, and copy hygiene support.
@@ -92,6 +92,12 @@ Validation run:
 npm run validate
 ```
 
+Local CLI (no server/services):
+
+```bash
+npm run cli -- help
+```
+
 ## Configuration
 Environment variables:
 
@@ -110,6 +116,7 @@ Available npm scripts:
 | Script | Command | Description |
 | --- | --- | --- |
 | `npm run dev` | `vite` | Start local dev server. |
+| `npm run cli` | `node scripts/nullid-local.mjs` | Run local CLI workflows (`hash`, `sanitize`, `bundle`) without external services. |
 | `npm run build` | `tsc -b && vite build && node scripts/generate-build-manifest.mjs` | Type-check, build production assets, and generate deterministic `deploy-manifest.json` + `SHA256SUMS`. |
 | `npm run verify:build` | `node scripts/verify-build-manifest.mjs` | Verify all built file hashes/sizes against the manifest. |
 | `npm run build:repro` | `npm run build && npm run verify:build` | Build and immediately verify reproducible static artifact integrity. |
@@ -150,6 +157,7 @@ Reproducibility guidance:
 - Encryption envelope format is explicit and versioned (`NULLID:ENC:1`) with authenticated encryption (AES-GCM + AAD).
 - Vault keys are derived from passphrases using PBKDF2; vault operations include canary verification and lock/wipe flows.
 - Clipboard copy helpers include best-effort auto-clear behavior to reduce residue after copying sensitive outputs.
+- Sanitizer policy packs, batch runs, and safe-share bundles are fully local and do not require paid infrastructure.
 - Quality gates include unit tests (`cryptoEnvelope`, hash behavior, profile integrity, vault snapshot integrity, redaction overlap, theme contrast) and Playwright e2e coverage.
 - This project is not represented as an externally audited cryptography product; validate threat model and controls before high-risk production use.
 

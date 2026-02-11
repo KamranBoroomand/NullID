@@ -77,6 +77,27 @@ test("metadata module flags HEIC inputs as unsupported with remediation text", a
   await expect(page.getByLabel("unsupported")).toBeVisible();
 });
 
+test("sanitize module exports local safe-share bundle", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /Log Sanitizer/i }).click();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: /^export bundle$/i }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toContain("nullid-safe-share-bundle");
+});
+
+test("sanitize module batch-processes local files", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /Log Sanitizer/i }).click();
+  const batchInput = page.locator('input[type="file"][multiple]');
+  await batchInput.setInputFiles([
+    { name: "batch-a.log", mimeType: "text/plain", buffer: Buffer.from("alice@example.com from 203.0.113.10") },
+    { name: "batch-b.log", mimeType: "text/plain", buffer: Buffer.from("user=bob token=abcdefghijklmnopqrstuvwxyz12345") },
+  ]);
+  await expect(page.getByText("batch-a.log")).toBeVisible();
+  await expect(page.getByText("batch-b.log")).toBeVisible();
+});
+
 test("mobile navigation scrolls and allows selection", async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
