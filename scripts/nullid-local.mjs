@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { execFileSync } from "node:child_process";
 
 const ENVELOPE_PREFIX = "NULLID:ENC:1";
 const ENVELOPE_AAD = Buffer.from("nullid:enc:v1", "utf8");
@@ -59,6 +60,12 @@ function main() {
       case "meta":
         runMeta(args);
         break;
+      case "precommit":
+        runPrecommit(args);
+        break;
+      case "policy-init":
+        runPolicyInit(args);
+        break;
       default:
         throw new Error(`Unknown command: ${command}`);
     }
@@ -85,7 +92,7 @@ function runSanitize(argv) {
   const outputPath = argv[1];
   if (!inputPath || !outputPath) {
     throw new Error(
-      "Usage: sanitize <input-file> <output-file> [--preset nginx|apache|auth|json] [--policy <policy-json>] [--json-aware true|false] [--format auto|text|json|ndjson|csv|xml|yaml]",
+      "Usage: sanitize <input-file> <output-file> [--preset nginx|apache|auth|json] [--policy <policy-json>] [--baseline <nullid.policy.json>] [--merge-mode strict-override|prefer-stricter] [--json-aware true|false] [--format auto|text|json|ndjson|csv|xml|yaml]",
     );
   }
 
@@ -114,7 +121,7 @@ function runSanitizeDir(argv) {
   const outputDir = argv[1];
   if (!inputDir || !outputDir) {
     throw new Error(
-      "Usage: sanitize-dir <input-dir> <output-dir> [--preset nginx|apache|auth|json] [--policy <policy-json>] [--json-aware true|false] [--format auto|text|json|ndjson|csv|xml|yaml] [--ext .log,.txt,.json]",
+      "Usage: sanitize-dir <input-dir> <output-dir> [--preset nginx|apache|auth|json] [--policy <policy-json>] [--baseline <nullid.policy.json>] [--merge-mode strict-override|prefer-stricter] [--json-aware true|false] [--format auto|text|json|ndjson|csv|xml|yaml] [--ext .log,.txt,.json]",
     );
   }
 
@@ -197,7 +204,7 @@ function runBundle(argv) {
   const outputPath = argv[1];
   if (!inputPath || !outputPath) {
     throw new Error(
-      "Usage: bundle <input-file> <output-json> [--preset nginx|apache|auth|json] [--policy <policy-json>] [--json-aware true|false] [--format auto|text|json|ndjson|csv|xml|yaml]",
+      "Usage: bundle <input-file> <output-json> [--preset nginx|apache|auth|json] [--policy <policy-json>] [--baseline <nullid.policy.json>] [--merge-mode strict-override|prefer-stricter] [--json-aware true|false] [--format auto|text|json|ndjson|csv|xml|yaml]",
     );
   }
   const input = fs.readFileSync(path.resolve(inputPath), "utf8");
@@ -482,6 +489,128 @@ function runMeta(argv) {
   console.log(JSON.stringify(summary, null, 2));
 }
 
+function runPolicyInit(argv) {
+  const outputPath = path.resolve(argv[0] || "nullid.policy.json");
+  if (fs.existsSync(outputPath) && !hasFlag(argv, "--force")) {
+    throw new Error(`Policy file already exists: ${outputPath} (use --force to overwrite)`);
+  }
+  const preset = getOption(argv, "--preset") || "nginx";
+  const mergeMode = normalizeMergeMode(getOption(argv, "--merge-mode") || "strict-override");
+  const config = buildPolicyFromPreset(preset, true);
+
+  const payload = {
+    schemaVersion: 1,
+    kind: "nullid-policy-baseline",
+    sanitize: {
+      mergeMode,
+      defaultConfig: config,
+      packs: [
+        {
+          name: "workspace-default",
+          createdAt: new Date().toISOString(),
+          config,
+        },
+      ],
+    },
+  };
+  fs.writeFileSync(outputPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+  console.log(
+    JSON.stringify(
+      {
+        output: path.relative(process.cwd(), outputPath),
+        preset,
+        mergeMode,
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+function runPrecommit(argv) {
+  const options = parseSanitizeOptions(argv);
+  const applySanitize = hasFlag(argv, "--apply-sanitize");
+  const threshold = normalizeSeverity(getOption(argv, "--threshold") || "high");
+  const files = resolvePrecommitFiles(argv);
+  const extFilter = parseExtFilter(getOption(argv, "--ext"));
+
+  const violations = [];
+  const sanitized = [];
+  const skipped = [];
+
+  files.forEach((file) => {
+    const fullPath = path.resolve(file);
+    if (!fs.existsSync(fullPath) || !fs.statSync(fullPath).isFile()) {
+      skipped.push({ file, reason: "missing" });
+      return;
+    }
+    const ext = path.extname(file).toLowerCase();
+    if (extFilter && !extFilter.has(ext)) {
+      skipped.push({ file, reason: "extension-filter" });
+      return;
+    }
+
+    const buffer = fs.readFileSync(fullPath);
+    if (looksBinary(buffer)) {
+      skipped.push({ file, reason: "binary" });
+      return;
+    }
+
+    const text = buffer.toString("utf8");
+    let findings = scanRedaction(text, buildRedactDetectors());
+    let triggered = findings.matches.filter((match) => severityRank(match.severity) >= severityRank(threshold));
+    if (triggered.length === 0) return;
+
+    let changed = false;
+    if (applySanitize) {
+      const result = sanitizeWithOptions(text, options);
+      if (result.output !== text) {
+        fs.writeFileSync(fullPath, result.output, "utf8");
+        changed = true;
+        sanitized.push(file);
+        findings = scanRedaction(result.output, buildRedactDetectors());
+        triggered = findings.matches.filter((match) => severityRank(match.severity) >= severityRank(threshold));
+        if (triggered.length === 0) {
+          return;
+        }
+      }
+    }
+
+    const byType = triggered.reduce((acc, match) => {
+      acc[match.label] = (acc[match.label] || 0) + 1;
+      return acc;
+    }, {});
+
+    violations.push({
+      file,
+      total: triggered.length,
+      highest: triggered
+        .map((match) => match.severity)
+        .sort((a, b) => severityRank(b) - severityRank(a))[0],
+      byType,
+      sanitized: changed,
+    });
+  });
+
+  if (applySanitize && sanitized.length > 0 && hasFlag(argv, "--staged")) {
+    runGit(["add", ...sanitized]);
+  }
+
+  const summary = {
+    threshold,
+    scanned: files.length,
+    violations: violations.length,
+    sanitized: sanitized.length,
+    skipped,
+    files: violations,
+  };
+  console.log(JSON.stringify(summary, null, 2));
+
+  if (violations.length > 0) {
+    throw new Error("precommit enforcement failed");
+  }
+}
+
 function printUsage() {
   console.log(
     `
@@ -489,20 +618,24 @@ NullID local CLI (offline, no servers)
 
 Commands:
   hash <input-file> [--algo sha256|sha512|sha1]
-  sanitize <input-file> <output-file> [--preset nginx|apache|auth|json] [--policy <policy-json>] [--json-aware true|false] [--format auto|text|json|ndjson|csv|xml|yaml]
-  sanitize-dir <input-dir> <output-dir> [--preset ...|--policy ...] [--format auto|text|json|ndjson|csv|xml|yaml] [--ext .log,.txt,.json] [--report <json-file>]
-  bundle <input-file> <output-json> [--preset ...|--policy ...] [--format auto|text|json|ndjson|csv|xml|yaml]
+  sanitize <input-file> <output-file> [--preset nginx|apache|auth|json] [--policy <policy-json>] [--baseline <nullid.policy.json>] [--merge-mode strict-override|prefer-stricter] [--json-aware true|false] [--format auto|text|json|ndjson|csv|xml|yaml]
+  sanitize-dir <input-dir> <output-dir> [--preset ...|--policy ...|--baseline ...] [--format auto|text|json|ndjson|csv|xml|yaml] [--ext .log,.txt,.json] [--report <json-file>]
+  bundle <input-file> <output-json> [--preset ...|--policy ...|--baseline ...] [--format auto|text|json|ndjson|csv|xml|yaml]
   redact <input-file> <output-file> [--mode full|partial] [--detectors email,phone,token,ip,id,iban,card,ipv6,awskey,awssecret]
   enc <input-file> <output-envelope-file> [--pass <passphrase>|--pass-env <VAR>] [--profile compat|strong|paranoid] [--iterations <n>] [--kdf-hash sha256|sha512]
   dec <input-envelope-file> <output-file> [--pass <passphrase>|--pass-env <VAR>]
   pwgen [--kind password|passphrase] [...options]
   meta <input-file>
+  precommit [--staged|--git-range <range>|--files a,b] [--threshold high|medium|low] [--baseline <nullid.policy.json>] [--apply-sanitize]
+  policy-init [output-file] [--preset nginx|apache|auth|json] [--merge-mode strict-override|prefer-stricter] [--force]
 
 Examples:
   node scripts/nullid-local.mjs hash ./server.log --algo sha512
   node scripts/nullid-local.mjs sanitize ./raw.ndjson ./clean.ndjson --format ndjson --preset json
   node scripts/nullid-local.mjs sanitize-dir ./logs ./logs-clean --ext .log,.json --report ./sanitize-report.json
   node scripts/nullid-local.mjs redact ./incident.txt ./incident.redacted.txt --mode partial
+  node scripts/nullid-local.mjs precommit --staged --baseline ./nullid.policy.json --threshold high
+  node scripts/nullid-local.mjs policy-init ./nullid.policy.json --preset nginx
   NULLID_PASSPHRASE='dev-secret' node scripts/nullid-local.mjs enc ./backup.tar ./backup.tar.nullid --profile strong
   NULLID_PASSPHRASE='dev-secret' node scripts/nullid-local.mjs dec ./backup.tar.nullid ./backup.tar
   node scripts/nullid-local.mjs pwgen --kind passphrase --words 6 --separator _
@@ -514,13 +647,22 @@ Examples:
 function parseSanitizeOptions(argv) {
   const preset = getOption(argv, "--preset") || "nginx";
   const policyPath = getOption(argv, "--policy");
+  const baselinePath = resolveBaselinePath(getOption(argv, "--baseline"));
+  const mergeMode = normalizeMergeMode(getOption(argv, "--merge-mode") || "strict-override");
   const jsonAware = parseBoolean(getOption(argv, "--json-aware"), true);
   const format = (getOption(argv, "--format") || "auto").toLowerCase();
   if (!sanitizeFormats.has(format)) {
     throw new Error(`Unsupported sanitize format: ${format}`);
   }
-  const policy = policyPath ? loadPolicy(path.resolve(policyPath)) : buildPolicyFromPreset(preset, jsonAware);
-  return { preset, policy, jsonAware, format };
+
+  let policy = policyPath ? loadPolicy(path.resolve(policyPath)) : buildPolicyFromPreset(preset, jsonAware);
+  if (baselinePath) {
+    const baseline = loadBaselineConfig(baselinePath);
+    if (baseline) {
+      policy = mergePolicyConfigs(policy, baseline, mergeMode);
+    }
+  }
+  return { preset, policy, jsonAware: policy.jsonAware, format, mergeMode, baselinePath };
 }
 
 function sanitizeWithOptions(input, options) {
@@ -564,26 +706,89 @@ function buildPolicyFromPreset(preset, jsonAware) {
 function loadPolicy(policyPath) {
   const text = fs.readFileSync(policyPath, "utf8");
   const parsed = JSON.parse(text);
-  const packEntry = Array.isArray(parsed?.packs) ? parsed.packs[0] : parsed?.pack;
-  const config = packEntry?.config;
+  const config = parsePolicyConfigPayload(parsed);
+  if (!config) throw new Error("Invalid policy file: expected sanitize-policy-pack payload or direct policy config");
+  return config;
+}
 
-  if (config && typeof config === "object") {
-    return {
-      rulesState: normalizeRulesState(config.rulesState),
-      jsonAware: Boolean(config.jsonAware),
-      customRules: normalizeCustomRules(config.customRules),
-    };
+function loadBaselineConfig(baselinePath) {
+  const text = fs.readFileSync(path.resolve(baselinePath), "utf8");
+  const parsed = JSON.parse(text);
+  if (!parsed || typeof parsed !== "object" || parsed.kind !== "nullid-policy-baseline") {
+    throw new Error("Invalid baseline file kind");
+  }
+  if (Number(parsed.schemaVersion) !== 1) {
+    throw new Error(`Unsupported baseline schema: ${String(parsed.schemaVersion ?? "unknown")}`);
+  }
+  const sanitize = parsed.sanitize;
+  if (!sanitize || typeof sanitize !== "object") {
+    throw new Error("Baseline sanitize section missing");
+  }
+  const config = parsePolicyConfigPayload(sanitize.defaultConfig);
+  if (!config) {
+    throw new Error("Baseline defaultConfig invalid");
+  }
+  return config;
+}
+
+function parsePolicyConfigPayload(input) {
+  const parsed = input && typeof input === "object" ? input : null;
+  if (!parsed) return null;
+
+  const packEntry = Array.isArray(parsed.packs) ? parsed.packs[0] : parsed.pack;
+  if (packEntry && typeof packEntry === "object") {
+    const config = normalizePolicyConfig(packEntry.config);
+    if (config) return config;
   }
 
-  if (parsed && typeof parsed === "object") {
-    return {
-      rulesState: normalizeRulesState(parsed.rulesState),
-      jsonAware: Boolean(parsed.jsonAware),
-      customRules: normalizeCustomRules(parsed.customRules),
-    };
+  if (parsed.kind === "nullid-policy-baseline" && parsed.sanitize && typeof parsed.sanitize === "object") {
+    const baselineConfig = normalizePolicyConfig(parsed.sanitize.defaultConfig);
+    if (baselineConfig) return baselineConfig;
   }
 
-  throw new Error("Invalid policy file: expected sanitize-policy-pack payload or direct policy config");
+  return normalizePolicyConfig(parsed);
+}
+
+function normalizePolicyConfig(input) {
+  if (!input || typeof input !== "object") return null;
+  return {
+    rulesState: normalizeRulesState(input.rulesState),
+    jsonAware: Boolean(input.jsonAware),
+    customRules: normalizeCustomRules(input.customRules),
+  };
+}
+
+function mergePolicyConfigs(base, override, mode) {
+  const rulesState = Object.fromEntries(
+    allRuleKeys.map((key) => [key, mode === "prefer-stricter" ? Boolean(base.rulesState[key]) || Boolean(override.rulesState[key]) : Boolean(override.rulesState[key])]),
+  );
+  const customRules = mergeCustomRules(base.customRules, override.customRules);
+  return {
+    rulesState,
+    jsonAware: mode === "prefer-stricter" ? Boolean(base.jsonAware) || Boolean(override.jsonAware) : Boolean(override.jsonAware),
+    customRules,
+  };
+}
+
+function mergeCustomRules(base, override) {
+  const map = new Map();
+  [...base, ...override].forEach((rule) => {
+    const identity = `${rule.scope}::${rule.flags}::${rule.pattern}::${rule.replacement}`;
+    map.set(identity, { ...rule, id: rule.id || crypto.randomUUID() });
+  });
+  return Array.from(map.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, rule]) => rule);
+}
+
+function resolveBaselinePath(explicitPath) {
+  if (explicitPath) return path.resolve(explicitPath);
+  const defaultPath = path.resolve("nullid.policy.json");
+  return fs.existsSync(defaultPath) ? defaultPath : undefined;
+}
+
+function normalizeMergeMode(value) {
+  return value === "prefer-stricter" ? "prefer-stricter" : "strict-override";
 }
 
 function normalizeRulesState(input) {
@@ -1303,6 +1508,57 @@ function getOption(argv, flag) {
   const index = argv.findIndex((arg) => arg === flag);
   if (index < 0) return undefined;
   return argv[index + 1];
+}
+
+function hasFlag(argv, flag) {
+  return argv.includes(flag);
+}
+
+function resolvePrecommitFiles(argv) {
+  const filesArg = getOption(argv, "--files");
+  if (filesArg) {
+    return filesArg
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+  }
+  if (hasFlag(argv, "--staged")) {
+    return runGit(["diff", "--cached", "--name-only", "--diff-filter=ACM"]);
+  }
+  const gitRange = getOption(argv, "--git-range");
+  if (gitRange) {
+    return runGit(["diff", "--name-only", gitRange]);
+  }
+  return runGit(["ls-files"]);
+}
+
+function parseExtFilter(extOption) {
+  if (!extOption) return new Set([".log", ".txt", ".json", ".ndjson", ".csv", ".xml", ".yaml", ".yml"]);
+  return new Set(
+    extOption
+      .split(",")
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean),
+  );
+}
+
+function normalizeSeverity(value) {
+  const normalized = String(value || "high").toLowerCase();
+  if (normalized === "medium" || normalized === "low" || normalized === "high") return normalized;
+  throw new Error(`Unsupported severity threshold: ${value}`);
+}
+
+function runGit(args) {
+  try {
+    const output = execFileSync("git", args, { encoding: "utf8" });
+    return output
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`git command failed: git ${args.join(" ")} (${detail})`);
+  }
 }
 
 function parseBoolean(value, fallback) {

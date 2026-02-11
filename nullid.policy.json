@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "kind": "nullid-policy-baseline",
+  "sanitize": {
+    "mergeMode": "strict-override",
+    "defaultConfig": {
+      "rulesState": {
+        "maskIp": true,
+        "maskIpv6": true,
+        "maskEmail": false,
+        "scrubJwt": true,
+        "maskBearer": true,
+        "maskCard": true,
+        "maskIban": true,
+        "maskAwsKey": true,
+        "maskAwsSecret": true,
+        "stripCookies": true,
+        "dropUA": true,
+        "normalizeTs": true,
+        "maskUser": true,
+        "stripJsonSecrets": false
+      },
+      "jsonAware": true,
+      "customRules": [
+        {
+          "id": "baseline-auth-header",
+          "pattern": "(authorization[:=]\\s*)(basic\\s+[^\\s]+)",
+          "replacement": "$1[redacted-basic-auth]",
+          "flags": "gi",
+          "scope": "text"
+        }
+      ]
+    },
+    "packs": [
+      {
+        "name": "workspace-default",
+        "createdAt": "2026-02-11T00:00:00.000Z",
+        "config": {
+          "rulesState": {
+            "maskIp": true,
+            "maskIpv6": true,
+            "maskEmail": true,
+            "scrubJwt": true,
+            "maskBearer": true,
+            "maskCard": true,
+            "maskIban": true,
+            "maskAwsKey": true,
+            "maskAwsSecret": true,
+            "stripCookies": true,
+            "dropUA": true,
+            "normalizeTs": true,
+            "maskUser": true,
+            "stripJsonSecrets": true
+          },
+          "jsonAware": true,
+          "customRules": [
+            {
+              "id": "workspace-api-key",
+              "pattern": "(x-api-key\\s*[:=]\\s*)[A-Za-z0-9._-]+",
+              "replacement": "$1[redacted]",
+              "flags": "gi",
+              "scope": "text"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

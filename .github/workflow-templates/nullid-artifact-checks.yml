@@ -1,0 +1,35 @@
+name: NullID Artifact Checks
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  artifacts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and verify reproducible artifacts
+        env:
+          SOURCE_DATE_EPOCH: 1735689600
+        run: npm run build:repro
+
+      - name: Assert guide assets
+        run: node scripts/assert-guide.mjs
+
+      - name: Ensure SBOM exists
+        run: test -f dist/sbom.json

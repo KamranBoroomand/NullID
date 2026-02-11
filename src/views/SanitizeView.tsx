@@ -5,20 +5,22 @@ import { useToast } from "../components/ToastHost";
 import { useClipboardPrefs, writeClipboard } from "../utils/clipboard";
 import { hashText } from "../utils/hash";
 import { encryptText } from "../utils/cryptoEnvelope";
+import { mergeSanitizePolicyConfig, normalizeWorkspacePolicyBaseline } from "../utils/policyBaseline";
+import { createPolicyPackSnapshot, describePolicyPackPayload, importPolicyPackPayload, mergePolicyPacks } from "../utils/policyPack";
 import {
   applySanitizeRules,
   buildRulesState,
   getRuleKeys,
   getRuleLabel,
-  normalizePolicyConfig,
   runBatchSanitize,
   sanitizePresets,
   type BatchOutput,
   type CustomRule,
   type CustomRuleScope,
-  type PolicyPack,
   type PresetKey,
   type RulesState,
+  type PolicyPack,
+  type SanitizePolicyConfig,
 } from "../utils/sanitizeEngine";
 import type { ModuleKey } from "../components/ModuleList";
 
@@ -30,6 +32,15 @@ const ruleKeys = getRuleKeys();
 const presetKeys = Object.keys(sanitizePresets) as PresetKey[];
 const defaultRules = Object.fromEntries(ruleKeys.map((key) => [key, true])) as RulesState;
 
+type KeyHintProfile = {
+  id: string;
+  name: string;
+  keyHint: string;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
   const { push } = useToast();
   const [clipboardPrefs] = useClipboardPrefs();
@@ -40,8 +51,12 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
   const [jsonAware, setJsonAware] = usePersistentState<boolean>("nullid:sanitize:json", true);
   const [customRules, setCustomRules] = usePersistentState<CustomRule[]>("nullid:sanitize:custom", []);
   const [policyPacks, setPolicyPacks] = usePersistentState<PolicyPack[]>("nullid:sanitize:policy-packs", []);
+  const [keyHintProfiles, setKeyHintProfiles] = usePersistentState<KeyHintProfile[]>("nullid:sanitize:key-hints", []);
+  const [selectedKeyHintProfileId, setSelectedKeyHintProfileId] = usePersistentState<string>("nullid:sanitize:key-hint-selected", "");
   const [selectedPolicyId, setSelectedPolicyId] = useState("");
   const [policyName, setPolicyName] = useState("");
+  const [keyProfileName, setKeyProfileName] = useState("");
+  const [keyProfileHint, setKeyProfileHint] = useState("");
   const [customRuleDraft, setCustomRuleDraft] = useState<CustomRule>({
     id: "",
     pattern: "",
@@ -56,6 +71,7 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
   const [isExportingBundle, setIsExportingBundle] = useState(false);
   const batchFileInputRef = useRef<HTMLInputElement>(null);
   const policyImportRef = useRef<HTMLInputElement>(null);
+  const baselineImportRef = useRef<HTMLInputElement>(null);
 
   const result = useMemo(
     () => applySanitizeRules(log, rulesState, customRules, jsonAware),
@@ -63,6 +79,10 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
   );
 
   const selectedPolicy = useMemo(() => policyPacks.find((pack) => pack.id === selectedPolicyId) ?? null, [policyPacks, selectedPolicyId]);
+  const selectedKeyHintProfile = useMemo(
+    () => keyHintProfiles.find((profile) => profile.id === selectedKeyHintProfileId) ?? null,
+    [keyHintProfiles, selectedKeyHintProfileId],
+  );
 
   const applyPreset = (key: PresetKey) => {
     setPreset(key);
@@ -140,20 +160,48 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
     push("policy pack removed", "neutral");
   };
 
-  const exportPolicyPack = (pack?: PolicyPack | null) => {
-    const payload = {
-      schemaVersion: 1,
-      kind: "sanitize-policy-pack",
-      exportedAt: new Date().toISOString(),
-      packs: (pack ? [pack] : policyPacks).map((entry) => ({
-        name: entry.name,
-        createdAt: entry.createdAt,
-        config: entry.config,
-      })),
-    };
-    const safe = sanitizeFileStem(pack?.name ?? "sanitize-policy-packs");
-    downloadBlob(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }), `${safe}.json`);
-    push(pack ? "policy exported" : "all policies exported", "accent");
+  const currentPolicyConfig: SanitizePolicyConfig = useMemo(
+    () => ({
+      rulesState,
+      jsonAware,
+      customRules,
+    }),
+    [customRules, jsonAware, rulesState],
+  );
+
+  const exportPolicyPack = async (pack?: PolicyPack | null, forceSigned = false) => {
+    const sourcePacks = pack ? [pack] : policyPacks;
+    if (sourcePacks.length === 0) {
+      push("no policy packs to export", "danger");
+      return;
+    }
+
+    try {
+      let signingPassphrase: string | undefined;
+      let keyHint: string | undefined;
+      if (forceSigned || confirm("Sign policy pack metadata with a passphrase?")) {
+        const pass = prompt("Signing passphrase:");
+        if (!pass) {
+          push("policy export cancelled", "neutral");
+          return;
+        }
+        signingPassphrase = pass;
+        const suggestedHint = selectedKeyHintProfile?.keyHint ?? "";
+        const hintPrompt = selectedKeyHintProfile
+          ? `Optional key hint (${selectedKeyHintProfile.name}):`
+          : "Optional key hint (for verification):";
+        keyHint = sanitizeKeyHint(prompt(hintPrompt, suggestedHint) ?? undefined);
+      }
+
+      const payload = await createPolicyPackSnapshot(sourcePacks, { signingPassphrase, keyHint });
+      const safe = sanitizeFileStem(pack?.name ?? "sanitize-policy-packs");
+      const suffix = payload.signature ? "-signed" : "";
+      downloadBlob(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }), `${safe}${suffix}.json`);
+      push(pack ? `policy exported${payload.signature ? " (signed)" : ""}` : `all policies exported${payload.signature ? " (signed)" : ""}`, "accent");
+    } catch (error) {
+      console.error(error);
+      push("policy export failed", "danger");
+    }
   };
 
   const importPolicyPack = async (file?: File | null) => {
@@ -161,18 +209,141 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
     try {
       const text = await file.text();
       const parsed = JSON.parse(text) as unknown;
-      const imported = parsePolicyImportPayload(parsed);
-      if (imported.length === 0) {
+      const descriptor = describePolicyPackPayload(parsed);
+      if (descriptor.kind !== "sanitize-policy-pack" || descriptor.packCount === 0) {
         throw new Error("No valid policy packs found");
       }
-      setPolicyPacks((prev) => mergePolicyPacks(prev, imported));
-      setSelectedPolicyId(imported[0].id);
-      setPolicyName(imported[0].name);
-      push(`imported ${imported.length} policy pack(s)`, "accent");
+
+      let verificationPassphrase: string | undefined;
+      if (descriptor.signed) {
+        const proceed = confirm(
+          `Policy pack is signed${descriptor.keyHint ? ` (hint: ${descriptor.keyHint})` : ""}. Verify before import?`,
+        );
+        if (!proceed) {
+          push("policy import cancelled", "neutral");
+          return;
+        }
+        verificationPassphrase = prompt("Verification passphrase:") ?? undefined;
+        if (!verificationPassphrase) {
+          push("policy import cancelled", "neutral");
+          return;
+        }
+      } else {
+        const proceedUnsigned = confirm("Policy pack is unsigned. Import anyway?");
+        if (!proceedUnsigned) {
+          push("policy import cancelled", "neutral");
+          return;
+        }
+      }
+
+      const imported = await importPolicyPackPayload(parsed, {
+        verificationPassphrase,
+        requireVerified: descriptor.signed,
+      });
+      setPolicyPacks((prev) => mergePolicyPacks(prev, imported.packs));
+      setSelectedPolicyId(imported.packs[0].id);
+      setPolicyName(imported.packs[0].name);
+      const suffix = imported.legacy ? "legacy" : imported.signed ? imported.verified ? "signed+verified" : "signed" : "unsigned";
+      push(`imported ${imported.packs.length} policy pack(s) :: ${suffix}`, "accent");
     } catch (error) {
       console.error(error);
       push("policy import failed", "danger");
     }
+  };
+
+  const importWorkspaceBaseline = async (file?: File | null) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as unknown;
+      const baseline = normalizeWorkspacePolicyBaseline(parsed);
+      if (!baseline) {
+        throw new Error("Invalid nullid.policy.json baseline file");
+      }
+
+      const merged = mergeSanitizePolicyConfig(currentPolicyConfig, baseline.sanitize.defaultConfig, baseline.sanitize.mergeMode);
+      setRulesState(merged.rulesState);
+      setJsonAware(merged.jsonAware);
+      setCustomRules(merged.customRules);
+      setPolicyPacks((prev) => mergePolicyPacks(prev, baseline.sanitize.packs));
+      if (baseline.sanitize.packs.length > 0) {
+        setSelectedPolicyId(baseline.sanitize.packs[0].id);
+        setPolicyName(baseline.sanitize.packs[0].name);
+      }
+      push(
+        `baseline merged (${baseline.sanitize.mergeMode})${baseline.sanitize.packs.length ? ` + ${baseline.sanitize.packs.length} pack(s)` : ""}`,
+        "accent",
+      );
+    } catch (error) {
+      console.error(error);
+      push("baseline import failed", "danger");
+    }
+  };
+
+  const saveKeyHintProfile = () => {
+    const name = keyProfileName.trim();
+    const keyHint = sanitizeKeyHint(keyProfileHint);
+    if (!name || !keyHint) {
+      push("profile name + key hint required", "danger");
+      return;
+    }
+    const now = new Date().toISOString();
+    let nextSelected = "";
+    setKeyHintProfiles((prev) => {
+      const existing = prev.find((profile) => profile.name.toLowerCase() === name.toLowerCase());
+      if (existing) {
+        nextSelected = existing.id;
+        return prev.map((profile) =>
+          profile.id === existing.id
+            ? {
+                ...profile,
+                name,
+                keyHint,
+                updatedAt: now,
+              }
+            : profile,
+        );
+      }
+      const created: KeyHintProfile = {
+        id: crypto.randomUUID(),
+        name,
+        keyHint,
+        version: 1,
+        createdAt: now,
+        updatedAt: now,
+      };
+      nextSelected = created.id;
+      return [created, ...prev].slice(0, 20);
+    });
+    setSelectedKeyHintProfileId(nextSelected);
+    push("key hint profile saved", "accent");
+  };
+
+  const rotateSelectedKeyHintProfile = () => {
+    if (!selectedKeyHintProfile) return;
+    const now = new Date().toISOString();
+    const nextVersion = selectedKeyHintProfile.version + 1;
+    const nextHint = rotateKeyHint(selectedKeyHintProfile.keyHint, nextVersion);
+    setKeyHintProfiles((prev) =>
+      prev.map((profile) =>
+        profile.id === selectedKeyHintProfile.id
+          ? {
+              ...profile,
+              version: nextVersion,
+              keyHint: nextHint,
+              updatedAt: now,
+            }
+          : profile,
+      ),
+    );
+    push(`key hint rotated → ${nextHint}`, "accent");
+  };
+
+  const deleteSelectedKeyHintProfile = () => {
+    if (!selectedKeyHintProfile) return;
+    setKeyHintProfiles((prev) => prev.filter((profile) => profile.id !== selectedKeyHintProfile.id));
+    setSelectedKeyHintProfileId("");
+    push("key hint profile removed", "neutral");
   };
 
   const runBatch = async (files: FileList | null) => {
@@ -513,14 +684,20 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
             </button>
           </div>
           <div className="controls-row">
-            <button className="button" type="button" onClick={() => exportPolicyPack(selectedPolicy)} disabled={!selectedPolicy}>
+            <button className="button" type="button" onClick={() => void exportPolicyPack(selectedPolicy)} disabled={!selectedPolicy}>
               export selected
             </button>
-            <button className="button" type="button" onClick={() => exportPolicyPack(null)} disabled={policyPacks.length === 0}>
+            <button className="button" type="button" onClick={() => void exportPolicyPack(selectedPolicy, true)} disabled={!selectedPolicy}>
+              export signed
+            </button>
+            <button className="button" type="button" onClick={() => void exportPolicyPack(null)} disabled={policyPacks.length === 0}>
               export all
             </button>
             <button className="button" type="button" onClick={() => policyImportRef.current?.click()}>
               import
+            </button>
+            <button className="button" type="button" onClick={() => baselineImportRef.current?.click()}>
+              import baseline
             </button>
             <input
               ref={policyImportRef}
@@ -533,9 +710,67 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
                 event.target.value = "";
               }}
             />
+            <input
+              ref={baselineImportRef}
+              type="file"
+              accept="application/json"
+              style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }}
+              tabIndex={-1}
+              onChange={(event) => {
+                void importWorkspaceBaseline(event.target.files?.[0] ?? null);
+                event.target.value = "";
+              }}
+            />
           </div>
           <div className="microcopy">
-            Policy packs store enabled rules, JSON mode, and custom regexes on this device only.
+            Signed packs require verify-before-import. Baseline import accepts `nullid.policy.json` and merges with deterministic rules.
+          </div>
+          <div className="note-box">
+            <div className="section-title">Signing key hints</div>
+            <div className="controls-row">
+              <input
+                className="input"
+                placeholder="profile name"
+                value={keyProfileName}
+                onChange={(event) => setKeyProfileName(event.target.value)}
+                aria-label="Key hint profile name"
+              />
+              <input
+                className="input"
+                placeholder="key hint (public label)"
+                value={keyProfileHint}
+                onChange={(event) => setKeyProfileHint(event.target.value)}
+                aria-label="Key hint value"
+              />
+              <button className="button" type="button" onClick={saveKeyHintProfile}>
+                save hint
+              </button>
+            </div>
+            <div className="controls-row">
+              <select
+                className="select"
+                aria-label="Saved key hint profiles"
+                value={selectedKeyHintProfileId}
+                onChange={(event) => setSelectedKeyHintProfileId(event.target.value)}
+              >
+                <option value="">select key hint profile...</option>
+                {keyHintProfiles.map((profile) => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.name} · {profile.keyHint}
+                  </option>
+                ))}
+              </select>
+              <button className="button" type="button" onClick={rotateSelectedKeyHintProfile} disabled={!selectedKeyHintProfile}>
+                rotate hint
+              </button>
+              <button className="button" type="button" onClick={deleteSelectedKeyHintProfile} disabled={!selectedKeyHintProfile}>
+                delete hint
+              </button>
+            </div>
+            <div className="microcopy">
+              Hints are local labels only; signing/verification passphrases are never stored.
+              {selectedKeyHintProfile ? ` Active: ${selectedKeyHintProfile.name} (v${selectedKeyHintProfile.version})` : ""}
+            </div>
           </div>
         </div>
 
@@ -620,36 +855,14 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
   );
 }
 
-function parsePolicyImportPayload(input: unknown): PolicyPack[] {
-  if (!isRecord(input) || input.kind !== "sanitize-policy-pack") return [];
-  const source = Array.isArray(input.packs) ? input.packs : input.pack ? [input.pack] : [];
-  return source
-    .map((entry) => normalizeImportedPack(entry))
-    .filter((entry): entry is PolicyPack => Boolean(entry));
+function sanitizeKeyHint(value?: string) {
+  const normalized = (value ?? "").trim();
+  return normalized ? normalized.slice(0, 64) : "";
 }
 
-function normalizeImportedPack(entry: unknown): PolicyPack | null {
-  if (!isRecord(entry)) return null;
-  const name = typeof entry.name === "string" ? entry.name.trim() : "";
-  if (!name) return null;
-  const config = normalizePolicyConfig(entry.config);
-  if (!config) return null;
-  return {
-    id: crypto.randomUUID(),
-    name,
-    createdAt: typeof entry.createdAt === "string" ? entry.createdAt : new Date().toISOString(),
-    config,
-  };
-}
-
-function mergePolicyPacks(existing: PolicyPack[], incoming: PolicyPack[]): PolicyPack[] {
-  const byName = new Map(existing.map((pack) => [pack.name.toLowerCase(), pack]));
-  incoming.forEach((pack) => {
-    byName.set(pack.name.toLowerCase(), pack);
-  });
-  return Array.from(byName.values())
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .slice(0, 30);
+function rotateKeyHint(current: string, nextVersion: number) {
+  const base = current.replace(/-v\d+$/i, "");
+  return `${base}-v${nextVersion}`;
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -665,10 +878,6 @@ function downloadBlob(blob: Blob, filename: string) {
 function sanitizeFileStem(value: string) {
   const base = value.replace(/\.[^.]+$/, "").trim();
   return (base || "nullid").replace(/[^a-z0-9_-]+/gi, "-").replace(/-+/g, "-");
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function highlightDiff(before: string, after: string) {

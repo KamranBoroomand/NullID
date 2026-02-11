@@ -10,11 +10,11 @@ This roadmap tracks the major expansion areas required to make NullID a complete
 - [x] Add stronger encryption profiles while preserving `NULLID:ENC:1` compatibility.
 
 ## Phase 2: Team and Pipeline Readiness
-- [ ] Signed policy packs with explicit verify-before-import workflow.
-- [ ] Saved key-hint profiles and key rotation UX.
-- [ ] Pre-commit helper command for sanitize/redact enforcement.
-- [ ] CI templates for PR log sanitization + artifact checks.
-- [ ] Workspace policy baseline files (`nullid.policy.json`) with deterministic merge rules.
+- [x] Signed policy packs with explicit verify-before-import workflow.
+- [x] Saved key-hint profiles and key rotation UX.
+- [x] Pre-commit helper command for sanitize/redact enforcement.
+- [x] CI templates for PR log sanitization + artifact checks.
+- [x] Workspace policy baseline files (`nullid.policy.json`) with deterministic merge rules.
 
 ## Phase 3: Platform Breadth
 - [ ] PDF metadata stripping workflow.

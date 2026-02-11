@@ -48,11 +48,13 @@ export const guideTools: GuideToolContent[] = [
     key: "sanitize",
     title: "Log Sanitizer",
     whatItDoes:
-      "Rule-based scrubbing for logs with diff preview, local policy packs, batch file sanitization, and safe-share bundle export.",
+      "Rule-based scrubbing for logs with diff preview, signed local policy packs, batch file sanitization, baseline policy merge, and safe-share bundle export.",
     whatWhen: ["Share log snippets in tickets", "Normalize noisy logs for demos/docs", "Generate portable sanitized bundles with integrity metadata"],
     howSteps: [
       "Paste logs or load a preset, toggle rules, and enable JSON-aware cleaning if applicable.",
       "Save/import policy packs to reuse rule sets and custom regexes locally.",
+      "Use signed exports for policy packs and verify signatures before import.",
+      "Import `nullid.policy.json` workspace baseline files to apply deterministic merge rules.",
       "Review the before/after diff; enable wrap for narrow screens.",
       "Run batch mode for multiple files, then export outputs/report.",
       "Export a safe-share bundle (optionally encrypted) with policy + SHA-256 hashes.",
@@ -61,6 +63,7 @@ export const guideTools: GuideToolContent[] = [
       "Regex operates per line; extremely unstructured logs may need custom rules.",
       "Bearer/token detection avoids short strings but still may miss exotic formats.",
       "JSON parsing is best-effort; invalid JSON falls back to plain text rules.",
+      "Signing key hints are labels only; passphrases are never stored and must be re-entered.",
     ],
   },
   {

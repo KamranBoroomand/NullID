@@ -31,14 +31,14 @@ The app is organized into focused modules:
 ## Core Features
 - Hash & Verify: SHA-256, SHA-512, and SHA-1 (legacy) for text and files, plus digest comparison and multiple output formats.
 - Text Redaction: detector-based masking for common PII/secrets with custom regex rules and overlap-safe resolution.
-- Log Sanitizer: preset-driven cleanup with rule toggles, reusable local policy packs (import/export), JSON-aware masking, batch file processing, safe-share bundle export, and broader format handling in CLI (`text/json/ndjson/csv/xml/yaml`).
+- Log Sanitizer: preset-driven cleanup with rule toggles, reusable local policy packs (import/export), signed policy pack verification, JSON-aware masking, batch file processing, safe-share bundle export, and broader format handling in CLI (`text/json/ndjson/csv/xml/yaml`).
 - Metadata Inspector: local metadata parsing (JPEG/TIFF EXIF, PNG/WebP/GIF metadata hints), compatibility diagnostics, and clean image re-encoding with before/after preview and resize options.
 - Encrypt / Decrypt: versioned `NULLID:ENC:1` envelope using PBKDF2 + AES-GCM with text/file support and selectable KDF profiles (`compat`, `strong`, `paranoid`).
 - Password & Passphrase: random generators with entropy estimates, presets, and copy hygiene support.
 - Secure Notes Vault: encrypted notes, auto-lock, panic lock (`Ctrl+Shift+L`), and import/export (plain + encrypted) with integrity metadata and optional signing.
 - Self-test: operational checks plus browser capability probes (secure context, WebCrypto, IndexedDB, clipboard, service worker, codec support) with remediation hints.
 - Installable PWA: install on desktop and mobile (including iOS) with offline app-shell caching and standalone launch.
-- Local CLI parity: `hash`, `sanitize`, `sanitize-dir`, `bundle`, `redact`, `enc`, `dec`, `pwgen`, and `meta`.
+- Local CLI parity: `hash`, `sanitize`, `sanitize-dir`, `bundle`, `redact`, `enc`, `dec`, `pwgen`, `meta`, `precommit`, and `policy-init`.
 
 ## Tech Stack
 - Frontend: React 18, TypeScript 5, Vite 5
@@ -118,11 +118,12 @@ Available npm scripts:
 | Script | Command | Description |
 | --- | --- | --- |
 | `npm run dev` | `vite` | Start local dev server. |
-| `npm run cli` | `node scripts/nullid-local.mjs` | Run local CLI workflows (`hash`, `sanitize`, `sanitize-dir`, `bundle`, `redact`, `enc`, `dec`, `pwgen`, `meta`) without external services. |
+| `npm run cli` | `node scripts/nullid-local.mjs` | Run local CLI workflows (`hash`, `sanitize`, `sanitize-dir`, `bundle`, `redact`, `enc`, `dec`, `pwgen`, `meta`, `precommit`, `policy-init`) without external services. |
 | `npm run build` | `tsc -b && vite build && node scripts/generate-sbom.mjs dist/sbom.json && node scripts/generate-build-manifest.mjs` | Type-check, build production assets, generate deterministic SBOM (`dist/sbom.json`), and generate deterministic `deploy-manifest.json` + `SHA256SUMS`. |
 | `npm run verify:build` | `node scripts/verify-build-manifest.mjs` | Verify all built file hashes/sizes against the manifest. |
 | `npm run build:repro` | `npm run build && npm run verify:build` | Build and immediately verify reproducible static artifact integrity. |
 | `npm run sbom` | `node scripts/generate-sbom.mjs` | Generate lockfile-based SBOM JSON for dependency inventory. |
+| `npm run setup:precommit` | `node scripts/install-precommit.mjs` | Install `.git/hooks/pre-commit` helper for local NullID sanitize/redact enforcement. |
 | `npm run assets:brand` | `node scripts/generate-brand-assets.mjs` | Regenerate social preview and app icon assets from the shared brand template. |
 | `npm run preview` | `vite preview` | Preview the production build locally. |
 | `npm run typecheck` | `tsc -b` | Run TypeScript project checks. |
@@ -130,6 +131,11 @@ Available npm scripts:
 | `npm run test` | `tsc -p tsconfig.test.json && node --test build-test/__tests__/*.js` | Compile and run utility unit tests. |
 | `npm run e2e` | `playwright test` | Execute browser end-to-end tests. |
 | `npm run validate` | `npm run typecheck && npm run lint && npm run test && npm run e2e && npm run build && npm run verify:build` | Full validation pipeline. |
+
+Team enforcement helpers:
+- Commit `nullid.policy.json` as the workspace baseline used by CLI merge rules.
+- Install local enforcement with `npm run setup:precommit`.
+- Reuse CI templates from `.github/workflow-templates/nullid-pr-sanitize.yml` and `.github/workflow-templates/nullid-artifact-checks.yml`.
 
 ## Deployment
 NullID is a static frontend deployment:
@@ -154,13 +160,14 @@ Reproducibility guidance:
 - Use `npm ci` (lockfile install) and a pinned Node runtime across environments.
 - Keep `SOURCE_DATE_EPOCH` fixed for byte-for-byte comparable manifests.
 - Compare `dist/SHA256SUMS` across CI/local builds to confirm parity.
+- Commit and maintain `nullid.policy.json` for deterministic workspace sanitize baseline merges (`strict-override` or `prefer-stricter`).
 
 ## Security/Quality Notes
 - Offline-first by design: there is no runtime API integration, and lint checks scan `src/` for disallowed `fetch`/HTTP usage.
 - Encryption envelope format is explicit and versioned (`NULLID:ENC:1`) with authenticated encryption (AES-GCM + AAD) and configurable PBKDF2 strength profiles for encryption.
 - Vault keys are derived from passphrases using PBKDF2; vault operations include canary verification and lock/wipe flows.
 - Clipboard copy helpers include best-effort auto-clear behavior to reduce residue after copying sensitive outputs.
-- Sanitizer policy packs, batch runs, and safe-share bundles are fully local and do not require paid infrastructure.
+- Sanitizer policy packs, batch runs, and safe-share bundles are fully local and do not require paid infrastructure; signed packs support explicit verify-before-import.
 - Build outputs now include `dist/sbom.json`; reproducibility checks still validate full artifact integrity via `SHA256SUMS`.
 - Quality gates include unit tests (`cryptoEnvelope`, hash behavior, profile integrity, vault snapshot integrity, redaction overlap, theme contrast) and Playwright e2e coverage.
 - This project is not represented as an externally audited cryptography product; validate threat model and controls before high-risk production use.

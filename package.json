@@ -10,6 +10,7 @@
     "verify:build": "node scripts/verify-build-manifest.mjs",
     "build:repro": "npm run build && npm run verify:build",
     "sbom": "node scripts/generate-sbom.mjs",
+    "setup:precommit": "node scripts/install-precommit.mjs",
     "assets:brand": "node scripts/generate-brand-assets.mjs",
     "preview": "vite preview",
     "typecheck": "tsc -b",
