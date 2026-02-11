@@ -25,9 +25,9 @@ This roadmap tracks the major expansion areas required to make NullID a complete
 ## Phase 4: Trust Hardening
 - [x] Deterministic SBOM generation in build outputs.
 - [x] Reproducibility validation hooks in CI matrix workflow.
-- [ ] Signed releases and provenance attestations.
-- [ ] Expanded adversarial test corpus (malformed metadata, hostile regex payloads, envelope tamper cases).
-- [ ] Formal security review checklist for release candidates.
+- [x] Signed releases and provenance attestations.
+- [x] Expanded adversarial test corpus (malformed metadata, hostile regex payloads, envelope tamper cases).
+- [x] Formal security review checklist for release candidates.
 
 ## Delivery Notes
 - Each phase is designed to remain fully offline-first.

@@ -169,6 +169,8 @@ export const sanitizePresets: Record<PresetKey, { label: string; description: st
 };
 
 const ruleKeys = rules.map((rule) => rule.key);
+const MAX_CUSTOM_PATTERN_LENGTH = 240;
+const MAX_CUSTOM_REPLACEMENT_LENGTH = 2000;
 
 export function getRuleKeys(): RuleKey[] {
   return [...ruleKeys];
@@ -225,6 +227,7 @@ export function applySanitizeRules(input: string, rulesState: RulesState, custom
     let current = value;
     customRules.forEach((rule) => {
       if (rule.scope !== "both" && rule.scope !== scope) return;
+      if (isUnsafeCustomRegexPattern(rule.pattern)) return;
       try {
         const regex = new RegExp(rule.pattern, rule.flags);
         let count = 0;
@@ -304,10 +307,12 @@ function normalizeCustomRule(value: unknown): CustomRule | null {
   if (!isRecord(value)) return null;
   const id = typeof value.id === "string" && value.id.trim() ? value.id : crypto.randomUUID();
   const pattern = typeof value.pattern === "string" ? value.pattern : "";
-  const replacement = typeof value.replacement === "string" ? value.replacement : "";
+  const replacement = typeof value.replacement === "string" ? value.replacement.slice(0, MAX_CUSTOM_REPLACEMENT_LENGTH) : "";
   const flags = typeof value.flags === "string" ? value.flags : "gi";
   const scope = value.scope === "text" || value.scope === "json" || value.scope === "both" ? value.scope : "both";
   if (!pattern.trim()) return null;
+  if (pattern.length > MAX_CUSTOM_PATTERN_LENGTH) return null;
+  if (isUnsafeCustomRegexPattern(pattern)) return null;
   try {
     // Validate regex
     // eslint-disable-next-line no-new
@@ -316,6 +321,15 @@ function normalizeCustomRule(value: unknown): CustomRule | null {
     return null;
   }
   return { id, pattern, replacement, flags, scope };
+}
+
+function isUnsafeCustomRegexPattern(pattern: string) {
+  const cleaned = pattern.replace(/\\./g, "_");
+  if (cleaned.length > MAX_CUSTOM_PATTERN_LENGTH) return true;
+  if (/(^|[^\\])\\[1-9]/.test(pattern)) return true;
+  if (/\((?:\?:)?[^()]{0,120}(?:\+|\*|\{[0-9,\s]+\})[^()]{0,120}\)\s*(?:\+|\*)/.test(cleaned)) return true;
+  if (/(?:\.\*|\.\+)\s*(?:\+|\*)/.test(cleaned)) return true;
+  return false;
 }
 
 function replaceWithCount(input: string, regex: RegExp, replacement: string) {

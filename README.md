@@ -124,6 +124,8 @@ Available npm scripts:
 | `npm run build:repro` | `npm run build && npm run verify:build` | Build and immediately verify reproducible static artifact integrity. |
 | `npm run sbom` | `node scripts/generate-sbom.mjs` | Generate lockfile-based SBOM JSON for dependency inventory. |
 | `npm run setup:precommit` | `node scripts/install-precommit.mjs` | Install `.git/hooks/pre-commit` helper for local NullID sanitize/redact enforcement. |
+| `npm run release:bundle` | `node scripts/package-release.mjs` | Package signed-release inputs in `release/` (dist tarball + checksum/manifest/SBOM assets). |
+| `npm run release:verify` | `node scripts/verify-release-bundle.mjs` | Verify bundled release artifacts against generated release checksums. |
 | `npm run desktop:init` | `node scripts/tauri-init.mjs` | Bootstrap `desktop/tauri` packaging path (Tauri v2 scaffold). |
 | `npm run assets:brand` | `node scripts/generate-brand-assets.mjs` | Regenerate social preview and app icon assets from the shared brand template. |
 | `npm run preview` | `vite preview` | Preview the production build locally. |
@@ -138,6 +140,8 @@ Team enforcement helpers:
 - Install local enforcement with `npm run setup:precommit`.
 - Reuse CI templates from `.github/workflow-templates/nullid-pr-sanitize.yml` and `.github/workflow-templates/nullid-artifact-checks.yml`.
 - Platform-breadth workflow reference: `docs/phase3-workflows.md`.
+- Signed release + provenance workflow: `.github/workflows/release-signed.yml`.
+- Release-candidate security checklist: `docs/release-security-checklist.md`.
 
 ## Deployment
 NullID is a static frontend deployment:
@@ -171,6 +175,7 @@ Reproducibility guidance:
 - Clipboard copy helpers include best-effort auto-clear behavior to reduce residue after copying sensitive outputs.
 - Sanitizer policy packs, batch runs, and safe-share bundles are fully local and do not require paid infrastructure; signed packs support explicit verify-before-import.
 - Build outputs now include `dist/sbom.json`; reproducibility checks still validate full artifact integrity via `SHA256SUMS`.
+- Release workflow includes keyless Sigstore signatures and GitHub provenance attestations for packaged release artifacts.
 - Quality gates include unit tests (`cryptoEnvelope`, hash behavior, profile integrity, vault snapshot integrity, redaction overlap, theme contrast) and Playwright e2e coverage.
 - This project is not represented as an externally audited cryptography product; validate threat model and controls before high-risk production use.
 

@@ -97,6 +97,8 @@ export const sanitizePresets = {
     },
 };
 const ruleKeys = rules.map((rule) => rule.key);
+const MAX_CUSTOM_PATTERN_LENGTH = 240;
+const MAX_CUSTOM_REPLACEMENT_LENGTH = 2000;
 export function getRuleKeys() {
     return [...ruleKeys];
 }
@@ -147,6 +149,8 @@ export function applySanitizeRules(input, rulesState, customRules, jsonAware) {
         let current = value;
         customRules.forEach((rule) => {
             if (rule.scope !== "both" && rule.scope !== scope)
+                return;
+            if (isUnsafeCustomRegexPattern(rule.pattern))
                 return;
             try {
                 const regex = new RegExp(rule.pattern, rule.flags);
@@ -225,10 +229,14 @@ function normalizeCustomRule(value) {
         return null;
     const id = typeof value.id === "string" && value.id.trim() ? value.id : crypto.randomUUID();
     const pattern = typeof value.pattern === "string" ? value.pattern : "";
-    const replacement = typeof value.replacement === "string" ? value.replacement : "";
+    const replacement = typeof value.replacement === "string" ? value.replacement.slice(0, MAX_CUSTOM_REPLACEMENT_LENGTH) : "";
     const flags = typeof value.flags === "string" ? value.flags : "gi";
     const scope = value.scope === "text" || value.scope === "json" || value.scope === "both" ? value.scope : "both";
     if (!pattern.trim())
+        return null;
+    if (pattern.length > MAX_CUSTOM_PATTERN_LENGTH)
+        return null;
+    if (isUnsafeCustomRegexPattern(pattern))
         return null;
     try {
         // Validate regex
@@ -239,6 +247,18 @@ function normalizeCustomRule(value) {
         return null;
     }
     return { id, pattern, replacement, flags, scope };
+}
+function isUnsafeCustomRegexPattern(pattern) {
+    const cleaned = pattern.replace(/\\./g, "_");
+    if (cleaned.length > MAX_CUSTOM_PATTERN_LENGTH)
+        return true;
+    if (/(^|[^\\])\\[1-9]/.test(pattern))
+        return true;
+    if (/\((?:\?:)?[^()]{0,120}(?:\+|\*|\{[0-9,\s]+\})[^()]{0,120}\)\s*(?:\+|\*)/.test(cleaned))
+        return true;
+    if (/(?:\.\*|\.\+)\s*(?:\+|\*)/.test(cleaned))
+        return true;
+    return false;
 }
 function replaceWithCount(input, regex, replacement) {
     let count = 0;

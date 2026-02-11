@@ -1,0 +1,124 @@
+name: Signed Release + Provenance
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Tag label used in release artifact names"
+        required: false
+        default: "manual"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      SOURCE_DATE_EPOCH: 1735689600
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Build reproducible artifacts
+        run: npm run build:repro
+
+      - name: Resolve release tag
+        id: release_tag
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ] && [ -n "${GITHUB_REF_NAME:-}" ]; then
+            tag="$GITHUB_REF_NAME"
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            tag="${{ github.event.inputs.release_tag }}"
+          else
+            tag="manual-${GITHUB_SHA::12}"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Package release bundle
+        run: npm run release:bundle -- --tag "${{ steps.release_tag.outputs.tag }}"
+
+      - name: Verify release checksums
+        run: npm run release:verify
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign release artifacts (keyless)
+        env:
+          COSIGN_YES: "true"
+        run: |
+          set -euo pipefail
+          for artifact in release/*; do
+            case "$artifact" in
+              *.sig|*.pem) continue ;;
+            esac
+            cosign sign-blob --yes \
+              --output-signature "${artifact}.sig" \
+              --output-certificate "${artifact}.pem" \
+              "$artifact"
+          done
+
+      - name: Verify release signatures
+        run: |
+          set -euo pipefail
+          identity_regex="https://github.com/${{ github.repository }}/.github/workflows/release-signed.yml@.*"
+          for artifact in release/*; do
+            case "$artifact" in
+              *.sig|*.pem) continue ;;
+            esac
+            cosign verify-blob \
+              --certificate "${artifact}.pem" \
+              --signature "${artifact}.sig" \
+              --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+              --certificate-identity-regexp "$identity_regex" \
+              "$artifact" >/dev/null
+          done
+
+      - name: Generate provenance attestation
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: |
+            release/*.tar.gz
+            release/*SHA256SUMS.txt
+            release/*deploy-manifest.json
+            release/*sbom.json
+            release/*release-manifest.json
+            release/*release-checksums.txt
+
+      - name: Upload signed bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-release-${{ steps.release_tag.outputs.tag }}
+          path: release/*
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true

@@ -54,6 +54,6 @@
 - Browser codec/parser behavior varies by platform and may reject or transform edge media.
 
 ## Next Hardening Steps
-- Add signed release artifacts and provenance attestations.
-- Add regression corpus for hostile/malformed metadata and sanitizer bypass patterns.
-- Add explicit security checklist gate for release tagging.
+- Keep release signing + provenance workflow healthy (`.github/workflows/release-signed.yml`).
+- Maintain adversarial regression corpus coverage as formats/rules expand.
+- Require `docs/release-security-checklist.md` completion before release tag publication.

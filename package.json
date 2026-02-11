@@ -11,6 +11,8 @@
     "build:repro": "npm run build && npm run verify:build",
     "sbom": "node scripts/generate-sbom.mjs",
     "setup:precommit": "node scripts/install-precommit.mjs",
+    "release:bundle": "node scripts/package-release.mjs",
+    "release:verify": "node scripts/verify-release-bundle.mjs",
     "desktop:init": "node scripts/tauri-init.mjs",
     "assets:brand": "node scripts/generate-brand-assets.mjs",
     "preview": "vite preview",
