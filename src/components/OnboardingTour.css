@@ -1,0 +1,54 @@
+.tour-overlay {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--surface-3) 22%, transparent);
+  backdrop-filter: blur(2px);
+  z-index: 45;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.tour-panel {
+  width: min(560px, 100%);
+  border: 1px solid var(--border-strong);
+  border-radius: 0.85rem;
+  background: linear-gradient(180deg, var(--surface-0), color-mix(in srgb, var(--surface-1) 90%, transparent));
+  box-shadow: var(--shadow-soft);
+  padding: 1rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.tour-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tour-step {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+
+.tour-title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 1.15rem;
+}
+
+.tour-body {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  line-height: 1.45;
+}
+
+.tour-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}

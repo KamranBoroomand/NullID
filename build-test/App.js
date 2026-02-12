@@ -1,18 +1,9 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CommandPalette } from "./components/CommandPalette";
 import { Frame } from "./components/Frame";
 import { GlobalHeader } from "./components/GlobalHeader";
 import { ModuleList } from "./components/ModuleList";
-import { EncView } from "./views/EncView";
-import { HashView } from "./views/HashView";
-import { MetaView } from "./views/MetaView";
-import { PwView } from "./views/PwView";
-import { GuideView } from "./views/GuideView";
-import { RedactView } from "./views/RedactView";
-import { SanitizeView } from "./views/SanitizeView";
-import { VaultView } from "./views/VaultView";
-import { SelfTestView } from "./views/SelfTestView";
 import "./App.css";
 import { ToastProvider, useToast } from "./components/ToastHost";
 import { usePersistentState } from "./hooks/usePersistentState";
@@ -20,6 +11,17 @@ import { wipeVault } from "./utils/storage";
 import { applyTheme } from "./theme";
 import { downloadProfile, importProfileFile } from "./utils/profile";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { FeedbackWidget } from "./components/FeedbackWidget";
+import { OnboardingTour } from "./components/OnboardingTour";
+const HashView = lazy(() => import("./views/HashView").then((module) => ({ default: module.HashView })));
+const RedactView = lazy(() => import("./views/RedactView").then((module) => ({ default: module.RedactView })));
+const SanitizeView = lazy(() => import("./views/SanitizeView").then((module) => ({ default: module.SanitizeView })));
+const MetaView = lazy(() => import("./views/MetaView").then((module) => ({ default: module.MetaView })));
+const EncView = lazy(() => import("./views/EncView").then((module) => ({ default: module.EncView })));
+const PwView = lazy(() => import("./views/PwView").then((module) => ({ default: module.PwView })));
+const VaultView = lazy(() => import("./views/VaultView").then((module) => ({ default: module.VaultView })));
+const SelfTestView = lazy(() => import("./views/SelfTestView").then((module) => ({ default: module.SelfTestView })));
+const GuideView = lazy(() => import("./views/GuideView").then((module) => ({ default: module.GuideView })));
 const modules = [
     { key: "hash", title: "Hash & Verify", subtitle: "digests" },
     { key: "redact", title: "Text Redaction", subtitle: "pii scrubbing" },
@@ -32,28 +34,7 @@ const modules = [
     { key: "guide", title: "Guide", subtitle: "how-to" },
 ];
 function WorkspaceView({ active, onRegisterHashActions, onStatus, onOpenGuide }) {
-    switch (active) {
-        case "hash":
-            return _jsx(HashView, { onRegisterActions: onRegisterHashActions, onStatus: onStatus, onOpenGuide: onOpenGuide });
-        case "redact":
-            return _jsx(RedactView, { onOpenGuide: onOpenGuide });
-        case "sanitize":
-            return _jsx(SanitizeView, { onOpenGuide: onOpenGuide });
-        case "meta":
-            return _jsx(MetaView, { onOpenGuide: onOpenGuide });
-        case "enc":
-            return _jsx(EncView, { onOpenGuide: onOpenGuide });
-        case "pw":
-            return _jsx(PwView, { onOpenGuide: onOpenGuide });
-        case "vault":
-            return _jsx(VaultView, { onOpenGuide: onOpenGuide });
-        case "selftest":
-            return _jsx(SelfTestView, { onOpenGuide: onOpenGuide });
-        case "guide":
-            return _jsx(GuideView, {});
-        default:
-            return null;
-    }
+    return (_jsxs(Suspense, { fallback: _jsx("div", { className: "workspace-loading", children: "loading module..." }), children: [active === "hash" ? _jsx(HashView, { onRegisterActions: onRegisterHashActions, onStatus: onStatus, onOpenGuide: onOpenGuide }) : null, active === "redact" ? _jsx(RedactView, { onOpenGuide: onOpenGuide }) : null, active === "sanitize" ? _jsx(SanitizeView, { onOpenGuide: onOpenGuide }) : null, active === "meta" ? _jsx(MetaView, { onOpenGuide: onOpenGuide }) : null, active === "enc" ? _jsx(EncView, { onOpenGuide: onOpenGuide }) : null, active === "pw" ? _jsx(PwView, { onOpenGuide: onOpenGuide }) : null, active === "vault" ? _jsx(VaultView, { onOpenGuide: onOpenGuide }) : null, active === "selftest" ? _jsx(SelfTestView, { onOpenGuide: onOpenGuide }) : null, active === "guide" ? _jsx(GuideView, {}) : null] }));
 }
 function AppShell() {
     const { push } = useToast();
@@ -61,6 +42,9 @@ function AppShell() {
     const [status, setStatus] = useState({ message: "ready", tone: "neutral" });
     const [theme, setTheme] = usePersistentState("nullid:theme", "light");
     const [paletteOpen, setPaletteOpen] = useState(false);
+    const [onboardingComplete, setOnboardingComplete] = usePersistentState("nullid:onboarding-complete", false);
+    const [tourStepIndex, setTourStepIndex] = usePersistentState("nullid:onboarding-step", 0);
+    const [tourOpen, setTourOpen] = useState(!onboardingComplete);
     const [hashActions, setHashActions] = useState(null);
     const [viewport, setViewport] = useState({ width: window.innerWidth, height: window.innerHeight });
     const importProfileInputRef = useRef(null);
@@ -71,6 +55,11 @@ function AppShell() {
             setActiveModule("guide");
         }
     }, [activeModule, resolvedActiveModule, setActiveModule]);
+    useEffect(() => {
+        if (!onboardingComplete) {
+            setTourOpen(true);
+        }
+    }, [onboardingComplete]);
     const handleStatus = useCallback((message, tone = "neutral") => {
         setStatus({ message, tone });
     }, []);
@@ -107,6 +96,12 @@ function AppShell() {
         push(`module :: ${key}`, "accent");
         setPaletteOpen(false);
     }, [push, setActiveModule]);
+    const startOnboarding = useCallback(() => {
+        setOnboardingComplete(false);
+        setTourStepIndex(0);
+        setTourOpen(true);
+        setStatus({ message: "onboarding", tone: "accent" });
+    }, [setOnboardingComplete, setTourStepIndex]);
     const navigationCommands = useMemo(() => modules.map((module) => ({
         id: `:${module.key}`,
         label: module.title,
@@ -174,6 +169,13 @@ function AppShell() {
                     importProfileInputRef.current?.click();
                 },
             },
+            {
+                id: "onboarding",
+                label: "Run onboarding",
+                description: "Replay quick setup tour",
+                group: "System",
+                action: startOnboarding,
+            },
         ];
         if (activeModule === "hash") {
             base.unshift({
@@ -202,7 +204,7 @@ function AppShell() {
             });
         }
         return base;
-    }, [activeModule, hashActions, toggleTheme]);
+    }, [activeModule, hashActions, startOnboarding, toggleTheme]);
     const commandList = useMemo(() => [...navigationCommands, ...contextualCommands], [contextualCommands, navigationCommands]);
     const openPalette = useCallback(() => setPaletteOpen(true), []);
     const closePalette = useCallback(() => setPaletteOpen(false), []);
@@ -265,6 +267,54 @@ function AppShell() {
             window.location.hash = `#${key}`;
         }
     }, [setActiveModule]);
+    const finishOnboarding = useCallback(() => {
+        setOnboardingComplete(true);
+        setTourStepIndex(0);
+        setTourOpen(false);
+        push("onboarding complete", "accent");
+        setStatus({ message: "onboarding complete", tone: "accent" });
+    }, [push, setOnboardingComplete, setTourStepIndex]);
+    const skipOnboarding = useCallback(() => {
+        setOnboardingComplete(true);
+        setTourStepIndex(0);
+        setTourOpen(false);
+        setStatus({ message: "onboarding skipped", tone: "neutral" });
+    }, [setOnboardingComplete, setTourStepIndex]);
+    const onboardingSteps = useMemo(() => [
+        {
+            id: "guide",
+            title: "Start with the Guide",
+            body: "Every tool has limits and safe defaults. The guide gives the shortest path to avoid common mistakes.",
+            actionLabel: "open guide",
+            onAction: () => goToGuide(),
+        },
+        {
+            id: "password",
+            title: "Use the Strength Lab",
+            body: "The Password & Passphrase module now includes a larger dictionary, hardening toggles, and secret auditing.",
+            actionLabel: "open :pw",
+            onAction: () => handleSelectModule("pw"),
+        },
+        {
+            id: "sanitize",
+            title: "Sanitize before sharing",
+            body: "Use the Log Sanitizer for policy packs, diff preview, and bundle exports when sharing logs externally.",
+            actionLabel: "open :sanitize",
+            onAction: () => handleSelectModule("sanitize"),
+        },
+        {
+            id: "commands",
+            title: "Drive the app from commands",
+            body: "Press / or Cmd/Ctrl+K for fast navigation, profile export/import, and system actions.",
+            actionLabel: "open commands",
+            onAction: openPalette,
+        },
+        {
+            id: "feedback",
+            title: "Track feedback locally",
+            body: "Use the feedback button at the bottom-right to save issues and ideas locally, then export as JSON.",
+        },
+    ], [goToGuide, handleSelectModule, openPalette]);
     return (_jsxs("div", { className: `app-surface ${isCompact ? "is-compact" : ""}`, children: [_jsx("input", { ref: importProfileInputRef, type: "file", accept: "application/json", style: { position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }, tabIndex: -1, onChange: async (event) => {
                     const file = event.target.files?.[0];
                     if (!file)
@@ -288,7 +338,7 @@ function AppShell() {
                         localStorage.clear();
                         void wipeVault();
                         push("local data wiped", "danger");
-                    } }), workspace: _jsx("div", { className: "workspace", children: _jsx(WorkspaceView, { active: resolvedActiveModule, onRegisterHashActions: setHashActions, onStatus: handleStatus, onOpenGuide: goToGuide }) }) }), _jsx(CommandPalette, { open: paletteOpen, commands: commandList, completions: modules.map((module) => module.key), historyKey: "command-bar", onClose: closePalette, onSelect: handleCommandSelect })] }));
+                    } }), workspace: _jsx("div", { className: "workspace", children: _jsx(WorkspaceView, { active: resolvedActiveModule, onRegisterHashActions: setHashActions, onStatus: handleStatus, onOpenGuide: goToGuide }) }) }), _jsx(CommandPalette, { open: paletteOpen, commands: commandList, completions: modules.map((module) => module.key), historyKey: "command-bar", onClose: closePalette, onSelect: handleCommandSelect }), _jsx(FeedbackWidget, { activeModule: resolvedActiveModule }), _jsx(OnboardingTour, { open: tourOpen, stepIndex: tourStepIndex, steps: onboardingSteps, onStepIndexChange: setTourStepIndex, onSkip: skipOnboarding, onFinish: finishOnboarding })] }));
 }
 export default function App() {
     return (_jsx(ToastProvider, { children: _jsx(ErrorBoundary, { children: _jsx(AppShell, {}) }) }));

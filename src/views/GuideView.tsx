@@ -3,6 +3,40 @@ import { useClipboardPrefs } from "../utils/clipboard";
 import { guideExtras, guideTools } from "../content/guideContent";
 import "./GuideView.css";
 
+const trustSignals = [
+  {
+    title: "Local-only execution",
+    detail: "No analytics, no network requests, and no cloud dependency for core tools.",
+  },
+  {
+    title: "Signed export verification",
+    detail: "Profiles, policy packs, and vault snapshots support optional signature verification.",
+  },
+  {
+    title: "Deterministic crypto envelope",
+    detail: "Documented NULLID envelope format (PBKDF2 + AES-GCM with AAD binding).",
+  },
+  {
+    title: "Hygiene defaults",
+    detail: "Clipboard auto-clear, lock timers, and panic lock support reduce local residue.",
+  },
+];
+
+const operatorNotes = [
+  {
+    role: "Incident response",
+    quote: "Batch sanitization and signed policy packs made evidence sharing repeatable across teams.",
+  },
+  {
+    role: "Security engineering",
+    quote: "Local-only hashing and envelope tooling let us verify artifacts in restricted environments.",
+  },
+  {
+    role: "Privacy review",
+    quote: "Metadata stripping plus preview diagnostics reduced accidental EXIF leaks before publishing.",
+  },
+];
+
 export function GuideView() {
   const [clipboardPrefs, setClipboardPrefs] = useClipboardPrefs();
   const buildId = (import.meta.env.VITE_BUILD_ID as string | undefined) ?? "dev";
@@ -18,6 +52,46 @@ export function GuideView() {
         <div className="microcopy">
           Offline-first tooling; no network calls, no analytics. All processing and clipboard actions are local and best-effort cleared.
         </div>
+      </div>
+      <div className="guide-grid">
+        <article className="panel guide-card" aria-label="Trust signals">
+          <div className="guide-card-header">
+            <div className="guide-card-title">
+              <span className="guide-key">:trust</span>
+              <div className="guide-title-wrap">
+                <span className="guide-name">Trust Signals</span>
+                <span className="guide-summary">Security posture at a glance</span>
+              </div>
+            </div>
+          </div>
+          <ul className="microcopy guide-list">
+            {trustSignals.map((signal) => (
+              <li key={signal.title}>
+                <span className="note-title">{signal.title}</span>
+                <span className="note-body"> {signal.detail}</span>
+              </li>
+            ))}
+          </ul>
+        </article>
+        <article className="panel guide-card" aria-label="Operator testimonials">
+          <div className="guide-card-header">
+            <div className="guide-card-title">
+              <span className="guide-key">:proof</span>
+              <div className="guide-title-wrap">
+                <span className="guide-name">Operator Notes</span>
+                <span className="guide-summary">Field feedback from common workflows</span>
+              </div>
+            </div>
+          </div>
+          <ul className="microcopy guide-list">
+            {operatorNotes.map((note) => (
+              <li key={note.role}>
+                <span className="note-title">{note.role}</span>
+                <span className="note-body"> {note.quote}</span>
+              </li>
+            ))}
+          </ul>
+        </article>
       </div>
       <div className="guide-grid">
         {guideTools.map((tool) => (

@@ -1,17 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CommandPalette, CommandItem } from "./components/CommandPalette";
 import { Frame } from "./components/Frame";
 import { GlobalHeader } from "./components/GlobalHeader";
 import { ModuleDefinition, ModuleKey, ModuleList } from "./components/ModuleList";
-import { EncView } from "./views/EncView";
-import { HashView, HashViewActions } from "./views/HashView";
-import { MetaView } from "./views/MetaView";
-import { PwView } from "./views/PwView";
-import { GuideView } from "./views/GuideView";
-import { RedactView } from "./views/RedactView";
-import { SanitizeView } from "./views/SanitizeView";
-import { VaultView } from "./views/VaultView";
-import { SelfTestView } from "./views/SelfTestView";
 import "./App.css";
 import { ToastProvider, useToast } from "./components/ToastHost";
 import { usePersistentState } from "./hooks/usePersistentState";
@@ -20,6 +11,19 @@ import { applyTheme } from "./theme";
 import type { ThemeMode } from "./theme/tokens";
 import { downloadProfile, importProfileFile } from "./utils/profile";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { FeedbackWidget } from "./components/FeedbackWidget";
+import { OnboardingStep, OnboardingTour } from "./components/OnboardingTour";
+import type { HashViewActions } from "./views/HashView";
+
+const HashView = lazy(() => import("./views/HashView").then((module) => ({ default: module.HashView })));
+const RedactView = lazy(() => import("./views/RedactView").then((module) => ({ default: module.RedactView })));
+const SanitizeView = lazy(() => import("./views/SanitizeView").then((module) => ({ default: module.SanitizeView })));
+const MetaView = lazy(() => import("./views/MetaView").then((module) => ({ default: module.MetaView })));
+const EncView = lazy(() => import("./views/EncView").then((module) => ({ default: module.EncView })));
+const PwView = lazy(() => import("./views/PwView").then((module) => ({ default: module.PwView })));
+const VaultView = lazy(() => import("./views/VaultView").then((module) => ({ default: module.VaultView })));
+const SelfTestView = lazy(() => import("./views/SelfTestView").then((module) => ({ default: module.SelfTestView })));
+const GuideView = lazy(() => import("./views/GuideView").then((module) => ({ default: module.GuideView })));
 
 type StatusTone = "neutral" | "accent" | "danger";
 const modules: ModuleDefinition[] = [
@@ -42,28 +46,19 @@ interface WorkspaceViewProps {
 }
 
 function WorkspaceView({ active, onRegisterHashActions, onStatus, onOpenGuide }: WorkspaceViewProps) {
-  switch (active) {
-    case "hash":
-      return <HashView onRegisterActions={onRegisterHashActions} onStatus={onStatus} onOpenGuide={onOpenGuide} />;
-    case "redact":
-      return <RedactView onOpenGuide={onOpenGuide} />;
-    case "sanitize":
-      return <SanitizeView onOpenGuide={onOpenGuide} />;
-    case "meta":
-      return <MetaView onOpenGuide={onOpenGuide} />;
-    case "enc":
-      return <EncView onOpenGuide={onOpenGuide} />;
-    case "pw":
-      return <PwView onOpenGuide={onOpenGuide} />;
-    case "vault":
-      return <VaultView onOpenGuide={onOpenGuide} />;
-    case "selftest":
-      return <SelfTestView onOpenGuide={onOpenGuide} />;
-    case "guide":
-      return <GuideView />;
-    default:
-      return null;
-  }
+  return (
+    <Suspense fallback={<div className="workspace-loading">loading module...</div>}>
+      {active === "hash" ? <HashView onRegisterActions={onRegisterHashActions} onStatus={onStatus} onOpenGuide={onOpenGuide} /> : null}
+      {active === "redact" ? <RedactView onOpenGuide={onOpenGuide} /> : null}
+      {active === "sanitize" ? <SanitizeView onOpenGuide={onOpenGuide} /> : null}
+      {active === "meta" ? <MetaView onOpenGuide={onOpenGuide} /> : null}
+      {active === "enc" ? <EncView onOpenGuide={onOpenGuide} /> : null}
+      {active === "pw" ? <PwView onOpenGuide={onOpenGuide} /> : null}
+      {active === "vault" ? <VaultView onOpenGuide={onOpenGuide} /> : null}
+      {active === "selftest" ? <SelfTestView onOpenGuide={onOpenGuide} /> : null}
+      {active === "guide" ? <GuideView /> : null}
+    </Suspense>
+  );
 }
 
 function AppShell() {
@@ -72,6 +67,9 @@ function AppShell() {
   const [status, setStatus] = useState({ message: "ready", tone: "neutral" as StatusTone });
   const [theme, setTheme] = usePersistentState<ThemeMode>("nullid:theme", "light");
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [onboardingComplete, setOnboardingComplete] = usePersistentState<boolean>("nullid:onboarding-complete", false);
+  const [tourStepIndex, setTourStepIndex] = usePersistentState<number>("nullid:onboarding-step", 0);
+  const [tourOpen, setTourOpen] = useState(!onboardingComplete);
   const [hashActions, setHashActions] = useState<HashViewActions | null>(null);
   const [viewport, setViewport] = useState({ width: window.innerWidth, height: window.innerHeight });
   const importProfileInputRef = useRef<HTMLInputElement>(null);
@@ -90,6 +88,12 @@ function AppShell() {
       setActiveModule("guide");
     }
   }, [activeModule, resolvedActiveModule, setActiveModule]);
+
+  useEffect(() => {
+    if (!onboardingComplete) {
+      setTourOpen(true);
+    }
+  }, [onboardingComplete]);
 
   const handleStatus = useCallback((message: string, tone: StatusTone = "neutral") => {
     setStatus({ message, tone });
@@ -134,6 +138,13 @@ function AppShell() {
     },
     [push, setActiveModule],
   );
+
+  const startOnboarding = useCallback(() => {
+    setOnboardingComplete(false);
+    setTourStepIndex(0);
+    setTourOpen(true);
+    setStatus({ message: "onboarding", tone: "accent" });
+  }, [setOnboardingComplete, setTourStepIndex]);
 
   const navigationCommands: CommandItem[] = useMemo(
     () =>
@@ -207,6 +218,13 @@ function AppShell() {
           importProfileInputRef.current?.click();
         },
       },
+      {
+        id: "onboarding",
+        label: "Run onboarding",
+        description: "Replay quick setup tour",
+        group: "System",
+        action: startOnboarding,
+      },
     ];
 
     if (activeModule === "hash") {
@@ -241,7 +259,7 @@ function AppShell() {
     }
 
     return base;
-  }, [activeModule, hashActions, toggleTheme]);
+  }, [activeModule, hashActions, startOnboarding, toggleTheme]);
 
   const commandList = useMemo(() => [...navigationCommands, ...contextualCommands], [contextualCommands, navigationCommands]);
 
@@ -321,6 +339,60 @@ function AppShell() {
     [setActiveModule],
   );
 
+  const finishOnboarding = useCallback(() => {
+    setOnboardingComplete(true);
+    setTourStepIndex(0);
+    setTourOpen(false);
+    push("onboarding complete", "accent");
+    setStatus({ message: "onboarding complete", tone: "accent" });
+  }, [push, setOnboardingComplete, setTourStepIndex]);
+
+  const skipOnboarding = useCallback(() => {
+    setOnboardingComplete(true);
+    setTourStepIndex(0);
+    setTourOpen(false);
+    setStatus({ message: "onboarding skipped", tone: "neutral" });
+  }, [setOnboardingComplete, setTourStepIndex]);
+
+  const onboardingSteps = useMemo<OnboardingStep[]>(
+    () => [
+      {
+        id: "guide",
+        title: "Start with the Guide",
+        body: "Every tool has limits and safe defaults. The guide gives the shortest path to avoid common mistakes.",
+        actionLabel: "open guide",
+        onAction: () => goToGuide(),
+      },
+      {
+        id: "password",
+        title: "Use the Strength Lab",
+        body: "The Password & Passphrase module now includes a larger dictionary, hardening toggles, and secret auditing.",
+        actionLabel: "open :pw",
+        onAction: () => handleSelectModule("pw"),
+      },
+      {
+        id: "sanitize",
+        title: "Sanitize before sharing",
+        body: "Use the Log Sanitizer for policy packs, diff preview, and bundle exports when sharing logs externally.",
+        actionLabel: "open :sanitize",
+        onAction: () => handleSelectModule("sanitize"),
+      },
+      {
+        id: "commands",
+        title: "Drive the app from commands",
+        body: "Press / or Cmd/Ctrl+K for fast navigation, profile export/import, and system actions.",
+        actionLabel: "open commands",
+        onAction: openPalette,
+      },
+      {
+        id: "feedback",
+        title: "Track feedback locally",
+        body: "Use the feedback button at the bottom-right to save issues and ideas locally, then export as JSON.",
+      },
+    ],
+    [goToGuide, handleSelectModule, openPalette],
+  );
+
   return (
     <div className={`app-surface ${isCompact ? "is-compact" : ""}`}>
       <input
@@ -387,6 +459,15 @@ function AppShell() {
         historyKey="command-bar"
         onClose={closePalette}
         onSelect={handleCommandSelect}
+      />
+      <FeedbackWidget activeModule={resolvedActiveModule} />
+      <OnboardingTour
+        open={tourOpen}
+        stepIndex={tourStepIndex}
+        steps={onboardingSteps}
+        onStepIndexChange={setTourStepIndex}
+        onSkip={skipOnboarding}
+        onFinish={finishOnboarding}
       />
     </div>
   );

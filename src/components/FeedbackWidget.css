@@ -1,0 +1,40 @@
+.feedback-widget {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 40;
+}
+
+.feedback-launcher {
+  box-shadow: var(--shadow-soft);
+}
+
+.feedback-panel {
+  width: min(440px, calc(100vw - 2rem));
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.75rem;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-0) 88%, transparent), var(--surface-1));
+  padding: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  box-shadow: var(--shadow-soft);
+}
+
+.feedback-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+@media (max-width: 820px) {
+  .feedback-widget {
+    right: 0.65rem;
+    left: 0.65rem;
+    bottom: 0.65rem;
+  }
+
+  .feedback-panel {
+    width: 100%;
+  }
+}

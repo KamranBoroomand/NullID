@@ -104,18 +104,19 @@ export const guideTools: GuideToolContent[] = [
   {
     key: "pw",
     title: "Password & Passphrase",
-    whatItDoes: "Local generator with entropy estimates, presets, and diceware-style passphrases.",
-    whatWhen: ["Create strong passwords without cloud services", "Generate memorable passphrases with separators"],
+    whatItDoes:
+      "Local generator with advanced constraints, large virtual passphrase dictionaries, strength lab auditing, and batch candidate generation.",
+    whatWhen: ["Create high-entropy secrets without cloud services", "Audit existing passwords/passphrases before adoption"],
     howSteps: [
-      "Adjust length/character sets; use presets for common policies.",
-      "Toggle ambiguity avoidance and required character mix.",
-      "Generate passphrases with casing/number/symbol options and choose separators.",
-      "Copy outputs with clipboard hygiene enabled.",
+      "Adjust length/character sets and hardening toggles (sequence/repeat blocking, min unique chars).",
+      "Use passphrase dictionary profiles (balanced/extended/maximal) plus casing/number/symbol modes.",
+      "Run Strength Lab to audit any secret and review effective entropy plus crack-time estimates.",
+      "Generate a batch shortlist, then copy the candidate that fits your policy.",
     ],
     limits: [
       "Do not reuse generated passwords; store them in a secure manager.",
       "Clipboard auto-clear reduces exposure but is not foolproof.",
-      "Entropy estimates assume uniform randomness; avoid altering outputs manually.",
+      "Entropy estimates are model-based; treat them as guidance rather than a formal guarantee.",
     ],
   },
   {

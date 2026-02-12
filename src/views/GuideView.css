@@ -83,6 +83,15 @@
   word-break: break-word;
 }
 
+.guide-list li {
+  margin: 0.18rem 0;
+}
+
+.guide-list .note-body {
+  display: block;
+  margin-top: 0.15rem;
+}
+
 ol.guide-list {
   list-style: decimal;
   padding-inline-start: 1.2rem;

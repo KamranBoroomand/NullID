@@ -4,27 +4,21 @@ import { useToast } from "../components/ToastHost";
 import { usePersistentState } from "../hooks/usePersistentState";
 import { useClipboardPrefs, writeClipboard } from "../utils/clipboard";
 import type { ModuleKey } from "../components/ModuleList";
-
-type PasswordSettings = {
-  length: number;
-  upper: boolean;
-  lower: boolean;
-  digits: boolean;
-  symbols: boolean;
-  avoidAmbiguity: boolean;
-  enforceMix: boolean;
-};
-
-type PassphraseSettings = {
-  words: number;
-  separator: "space" | "-" | "." | "_";
-  randomCase: boolean;
-  appendNumber: boolean;
-  appendSymbol: boolean;
-};
-
-const symbols = "!@#$%^&*()-_=+[]{}<>?/|~";
-const ambiguous = new Set(["l", "1", "I", "O", "0", "o"]);
+import {
+  analyzeSecret,
+  estimatePassphraseEntropy,
+  estimatePasswordEntropy,
+  generatePassphrase,
+  generatePassphraseBatch,
+  generatePassword,
+  generatePasswordBatch,
+  getPassphraseDictionaryStats,
+  gradeLabel,
+  type CandidateRow,
+  type PassphraseSettings,
+  type PasswordSettings,
+  type SecretGrade,
+} from "../utils/passwordToolkit";
 
 interface PwViewProps {
   onOpenGuide?: (key?: ModuleKey) => void;
@@ -34,48 +28,141 @@ export function PwView({ onOpenGuide }: PwViewProps) {
   const { push } = useToast();
   const [clipboardPrefs] = useClipboardPrefs();
   const [passwordSettings, setPasswordSettings] = usePersistentState<PasswordSettings>("nullid:pw-settings", {
-    length: 20,
+    length: 22,
     upper: true,
     lower: true,
     digits: true,
     symbols: true,
     avoidAmbiguity: true,
     enforceMix: true,
+    blockSequential: true,
+    blockRepeats: true,
+    minUniqueChars: 12,
   });
   const [passphraseSettings, setPassphraseSettings] = usePersistentState<PassphraseSettings>("nullid:pp-settings", {
-    words: 5,
+    words: 6,
     separator: "-",
-    randomCase: true,
-    appendNumber: true,
-    appendSymbol: true,
+    dictionaryProfile: "extended",
+    caseStyle: "random",
+    numberMode: "append-2",
+    symbolMode: "append",
+    ensureUniqueWords: true,
   });
   const [password, setPassword] = useState("");
   const [phrase, setPhrase] = useState("");
-  const [wordlist] = useState<string[]>(() => buildWordlist());
+  const [batchMode, setBatchMode] = usePersistentState<"password" | "passphrase">("nullid:pw-batch-mode", "password");
+  const [batchCount, setBatchCount] = usePersistentState<number>("nullid:pw-batch-count", 6);
+  const [batchRows, setBatchRows] = useState<CandidateRow[]>([]);
+  const [labInput, setLabInput] = usePersistentState<string>("nullid:pw-lab-input", "");
+  const passwordToggleKeys: Array<"upper" | "lower" | "digits" | "symbols"> = ["upper", "lower", "digits", "symbols"];
 
   useEffect(() => {
     setPassword(generatePassword(passwordSettings));
   }, [passwordSettings]);
 
   useEffect(() => {
-    setPhrase(generatePassphrase(passphraseSettings, wordlist));
-  }, [passphraseSettings, wordlist]);
+    setPhrase(generatePassphrase(passphraseSettings));
+  }, [passphraseSettings]);
 
   const passwordEntropy = useMemo(() => estimatePasswordEntropy(passwordSettings), [passwordSettings]);
-  const passphraseEntropy = useMemo(
-    () => estimatePassphraseEntropy(passphraseSettings, wordlist?.length ?? 0),
-    [passphraseSettings, wordlist],
+  const passphraseEntropy = useMemo(() => estimatePassphraseEntropy(passphraseSettings), [passphraseSettings]);
+  const passwordAssessment = useMemo(() => analyzeSecret(password, passwordEntropy), [password, passwordEntropy]);
+  const passphraseAssessment = useMemo(() => analyzeSecret(phrase, passphraseEntropy), [phrase, passphraseEntropy]);
+  const labAssessment = useMemo(() => analyzeSecret(labInput), [labInput]);
+  const dictionary = useMemo(
+    () => getPassphraseDictionaryStats(passphraseSettings.dictionaryProfile),
+    [passphraseSettings.dictionaryProfile],
   );
 
-  const applyPreset = (preset: "high" | "nosym" | "pin") => {
+  const applyPasswordPreset = (preset: "high" | "nosym" | "pin") => {
     if (preset === "high") {
-      setPasswordSettings({ length: 24, upper: true, lower: true, digits: true, symbols: true, avoidAmbiguity: true, enforceMix: true });
+      setPasswordSettings({
+        length: 28,
+        upper: true,
+        lower: true,
+        digits: true,
+        symbols: true,
+        avoidAmbiguity: true,
+        enforceMix: true,
+        blockSequential: true,
+        blockRepeats: true,
+        minUniqueChars: 14,
+      });
     } else if (preset === "nosym") {
-      setPasswordSettings({ length: 18, upper: true, lower: true, digits: true, symbols: false, avoidAmbiguity: true, enforceMix: true });
+      setPasswordSettings({
+        length: 20,
+        upper: true,
+        lower: true,
+        digits: true,
+        symbols: false,
+        avoidAmbiguity: true,
+        enforceMix: true,
+        blockSequential: true,
+        blockRepeats: true,
+        minUniqueChars: 12,
+      });
     } else {
-      setPasswordSettings({ length: 8, upper: false, lower: false, digits: true, symbols: false, avoidAmbiguity: false, enforceMix: true });
+      setPasswordSettings({
+        length: 10,
+        upper: false,
+        lower: false,
+        digits: true,
+        symbols: false,
+        avoidAmbiguity: false,
+        enforceMix: true,
+        blockSequential: true,
+        blockRepeats: true,
+        minUniqueChars: 6,
+      });
     }
   };
+
+  const applyPassphrasePreset = (preset: "memorable" | "balanced" | "max") => {
+    if (preset === "memorable") {
+      setPassphraseSettings({
+        words: 5,
+        separator: "-",
+        dictionaryProfile: "balanced",
+        caseStyle: "title",
+        numberMode: "none",
+        symbolMode: "none",
+        ensureUniqueWords: true,
+      });
+    } else if (preset === "balanced") {
+      setPassphraseSettings({
+        words: 6,
+        separator: "-",
+        dictionaryProfile: "extended",
+        caseStyle: "random",
+        numberMode: "append-2",
+        symbolMode: "append",
+        ensureUniqueWords: true,
+      });
+    } else {
+      setPassphraseSettings({
+        words: 8,
+        separator: "_",
+        dictionaryProfile: "maximal",
+        caseStyle: "random",
+        numberMode: "append-4",
+        symbolMode: "wrap",
+        ensureUniqueWords: true,
+      });
+    }
+  };
+
+  useEffect(() => {
+    const count = clamp(batchCount, 3, 16);
+    setBatchRows(batchMode === "password" ? generatePasswordBatch(passwordSettings, count) : generatePassphraseBatch(passphraseSettings, count));
+  }, [batchCount, batchMode, passphraseSettings, passwordSettings]);
+
+  const copySecret = (value: string, successMessage: string) =>
+    writeClipboard(
+      value,
+      clipboardPrefs,
+      (message, tone) => push(message, tone === "danger" ? "danger" : tone === "accent" ? "accent" : "neutral"),
+      successMessage,
+    );
 
   return (
     <div className="workspace-scroll">
@@ -88,25 +175,14 @@ export function PwView({ onOpenGuide }: PwViewProps) {
         <div className="panel" aria-label="Password generator">
           <div className="panel-heading">
             <span>Password</span>
-            <span className="panel-subtext">entropy-forward</span>
+            <span className="panel-subtext">constraint-driven</span>
           </div>
           <div className="controls-row">
             <input className="input" value={password} readOnly aria-label="Password output" />
             <button className="button" type="button" onClick={() => setPassword(generatePassword(passwordSettings))}>
               regenerate
             </button>
-            <button
-              className="button"
-              type="button"
-              onClick={() =>
-                writeClipboard(
-                  password,
-                  clipboardPrefs,
-                  (message, tone) => push(message, tone === "danger" ? "danger" : tone === "accent" ? "accent" : "neutral"),
-                  "password copied",
-                )
-              }
-            >
+            <button className="button" type="button" onClick={() => copySecret(password, "password copied")}>
               copy
             </button>
           </div>
@@ -119,18 +195,18 @@ export function PwView({ onOpenGuide }: PwViewProps) {
               className="input"
               type="number"
               min={8}
-              max={64}
+              max={96}
               value={passwordSettings.length}
               onChange={(event) =>
                 setPasswordSettings((prev) => ({
                   ...prev,
-                  length: clamp(Number(event.target.value) || 0, 8, 64),
+                  length: clamp(Number(event.target.value) || 0, 8, 96),
                 }))
               }
               aria-label="Password length"
             />
             <div className="pill-buttons" role="group" aria-label="Character sets">
-              {(["upper", "lower", "digits", "symbols"] as (keyof PasswordSettings)[]).map((key) => (
+              {passwordToggleKeys.map((key) => (
                 <button
                   key={key}
                   type="button"
@@ -149,12 +225,12 @@ export function PwView({ onOpenGuide }: PwViewProps) {
             </div>
           </div>
           <div className="controls-row">
-            <label className="section-title" htmlFor="avoid-ambiguous">
+            <label className="section-title" htmlFor="pw-hardening">
               Hardening
             </label>
             <div className="pill-buttons" role="group" aria-label="Hardening options">
               <button
-                id="avoid-ambiguous"
+                id="pw-hardening"
                 type="button"
                 className={passwordSettings.avoidAmbiguity ? "active" : ""}
                 onClick={() => setPasswordSettings((prev) => ({ ...prev, avoidAmbiguity: !prev.avoidAmbiguity }))}
@@ -170,18 +246,54 @@ export function PwView({ onOpenGuide }: PwViewProps) {
               >
                 require all sets
               </button>
+              <button
+                type="button"
+                className={passwordSettings.blockSequential ? "active" : ""}
+                onClick={() => setPasswordSettings((prev) => ({ ...prev, blockSequential: !prev.blockSequential }))}
+                aria-label="Block sequential patterns"
+              >
+                block sequences
+              </button>
+              <button
+                type="button"
+                className={passwordSettings.blockRepeats ? "active" : ""}
+                onClick={() => setPasswordSettings((prev) => ({ ...prev, blockRepeats: !prev.blockRepeats }))}
+                aria-label="Block repeated runs"
+              >
+                block repeats
+              </button>
             </div>
+          </div>
+          <div className="controls-row">
+            <label className="section-title" htmlFor="pw-min-unique">
+              Min unique
+            </label>
+            <input
+              id="pw-min-unique"
+              className="input"
+              type="number"
+              min={1}
+              max={passwordSettings.length}
+              value={passwordSettings.minUniqueChars}
+              onChange={(event) =>
+                setPasswordSettings((prev) => ({
+                  ...prev,
+                  minUniqueChars: clamp(Number(event.target.value) || 0, 1, prev.length),
+                }))
+              }
+              aria-label="Minimum unique characters"
+            />
           </div>
           <div className="controls-row">
             <span className="section-title">Presets</span>
             <div className="pill-buttons" role="group" aria-label="Password presets">
-              <button type="button" onClick={() => applyPreset("high")}>
+              <button type="button" onClick={() => applyPasswordPreset("high")}>
                 high security
               </button>
-              <button type="button" onClick={() => applyPreset("nosym")}>
+              <button type="button" onClick={() => applyPasswordPreset("nosym")}>
                 no symbols
               </button>
-              <button type="button" onClick={() => applyPreset("pin")}>
+              <button type="button" onClick={() => applyPasswordPreset("pin")}>
                 pin (digits)
               </button>
             </div>
@@ -189,34 +301,38 @@ export function PwView({ onOpenGuide }: PwViewProps) {
           <div className="status-line">
             <span>length {passwordSettings.length}</span>
             <span className="tag tag-accent">entropy ≈ {passwordEntropy} bits</span>
+            <span className={gradeTagClass(passwordAssessment.grade)}>{gradeLabel(passwordAssessment.grade)}</span>
+          </div>
+          <div className="note-box">
+            <div className="microcopy">
+              effective entropy ≈ {passwordAssessment.effectiveEntropyBits} bits · online crack: {passwordAssessment.crackTime.online}
+            </div>
+            {passwordAssessment.warnings.length > 0 ? (
+              <ul className="note-list">
+                {passwordAssessment.warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            ) : (
+              <div className="microcopy">No obvious pattern weaknesses detected.</div>
+            )}
           </div>
         </div>
         <div className="panel" aria-label="Passphrase generator">
           <div className="panel-heading">
             <span>Passphrase</span>
-            <span className="panel-subtext">human-readable</span>
+            <span className="panel-subtext">mega dictionary</span>
           </div>
           <div className="controls-row">
             <input className="input" value={phrase} readOnly aria-label="Passphrase output" />
             <button
               className="button"
               type="button"
-              onClick={() => setPhrase(generatePassphrase(passphraseSettings, wordlist))}
+              onClick={() => setPhrase(generatePassphrase(passphraseSettings))}
             >
               regenerate
             </button>
-            <button
-              className="button"
-              type="button"
-              onClick={() =>
-                writeClipboard(
-                  phrase,
-                  clipboardPrefs,
-                  (message, tone) => push(message, tone === "danger" ? "danger" : tone === "accent" ? "accent" : "neutral"),
-                  "passphrase copied",
-                )
-              }
-            >
+            <button className="button" type="button" onClick={() => copySecret(phrase, "passphrase copied")}>
               copy
             </button>
           </div>
@@ -229,12 +345,12 @@ export function PwView({ onOpenGuide }: PwViewProps) {
               className="input"
               type="number"
               min={3}
-              max={10}
+              max={12}
               value={passphraseSettings.words}
               onChange={(event) =>
                 setPassphraseSettings((prev) => ({
                   ...prev,
-                  words: clamp(Number(event.target.value) || 0, 3, 10),
+                  words: clamp(Number(event.target.value) || 0, 3, 12),
                 }))
               }
               aria-label="Passphrase word count"
@@ -254,190 +370,249 @@ export function PwView({ onOpenGuide }: PwViewProps) {
               <option value="-">-</option>
               <option value=".">.</option>
               <option value="_">_</option>
+              <option value="/">/</option>
+              <option value=":">:</option>
+            </select>
+            <select
+              className="select"
+              value={passphraseSettings.dictionaryProfile}
+              onChange={(event) =>
+                setPassphraseSettings((prev) => ({
+                  ...prev,
+                  dictionaryProfile: event.target.value as PassphraseSettings["dictionaryProfile"],
+                }))
+              }
+              aria-label="Dictionary profile"
+            >
+              <option value="balanced">balanced</option>
+              <option value="extended">extended</option>
+              <option value="maximal">maximal</option>
             </select>
           </div>
           <div className="controls-row">
             <label className="section-title" htmlFor="phrase-hardening">
-              Hardening
+              Styling
             </label>
-            <div className="pill-buttons" role="group" aria-label="Passphrase options">
+            <select
+              id="phrase-hardening"
+              className="select"
+              value={passphraseSettings.caseStyle}
+              onChange={(event) =>
+                setPassphraseSettings((prev) => ({
+                  ...prev,
+                  caseStyle: event.target.value as PassphraseSettings["caseStyle"],
+                }))
+              }
+              aria-label="Passphrase case style"
+            >
+              <option value="lower">lower</option>
+              <option value="title">title</option>
+              <option value="random">random</option>
+              <option value="upper">upper</option>
+            </select>
+            <select
+              className="select"
+              value={passphraseSettings.numberMode}
+              onChange={(event) =>
+                setPassphraseSettings((prev) => ({
+                  ...prev,
+                  numberMode: event.target.value as PassphraseSettings["numberMode"],
+                }))
+              }
+              aria-label="Passphrase number mode"
+            >
+              <option value="none">no number</option>
+              <option value="append-2">append 2 digits</option>
+              <option value="append-4">append 4 digits</option>
+            </select>
+            <select
+              className="select"
+              value={passphraseSettings.symbolMode}
+              onChange={(event) =>
+                setPassphraseSettings((prev) => ({
+                  ...prev,
+                  symbolMode: event.target.value as PassphraseSettings["symbolMode"],
+                }))
+              }
+              aria-label="Passphrase symbol mode"
+            >
+              <option value="none">no symbol</option>
+              <option value="append">append symbol</option>
+              <option value="wrap">wrap with symbols</option>
+            </select>
+          </div>
+          <div className="controls-row">
+            <label className="section-title">Hardening</label>
+            <div className="pill-buttons" role="group" aria-label="Passphrase hardening options">
               <button
-                id="phrase-hardening"
                 type="button"
-                className={passphraseSettings.randomCase ? "active" : ""}
-                onClick={() => setPassphraseSettings((prev) => ({ ...prev, randomCase: !prev.randomCase }))}
-                aria-label="Randomly vary word casing"
+                className={passphraseSettings.ensureUniqueWords ? "active" : ""}
+                onClick={() => setPassphraseSettings((prev) => ({ ...prev, ensureUniqueWords: !prev.ensureUniqueWords }))}
+                aria-label="Enforce unique words"
               >
-                random case
+                unique words
               </button>
-              <button
-                type="button"
-                className={passphraseSettings.appendNumber ? "active" : ""}
-                onClick={() => setPassphraseSettings((prev) => ({ ...prev, appendNumber: !prev.appendNumber }))}
-                aria-label="Append number"
-              >
-                append number
+            </div>
+            <span className="microcopy">dictionary: {dictionary.label}</span>
+          </div>
+          <div className="controls-row">
+            <span className="section-title">Presets</span>
+            <div className="pill-buttons" role="group" aria-label="Passphrase presets">
+              <button type="button" onClick={() => applyPassphrasePreset("memorable")}>
+                memorable
               </button>
-              <button
-                type="button"
-                className={passphraseSettings.appendSymbol ? "active" : ""}
-                onClick={() => setPassphraseSettings((prev) => ({ ...prev, appendSymbol: !prev.appendSymbol }))}
-                aria-label="Append symbol"
-              >
-                append symbol
+              <button type="button" onClick={() => applyPassphrasePreset("balanced")}>
+                balanced
+              </button>
+              <button type="button" onClick={() => applyPassphrasePreset("max")}>
+                max entropy
               </button>
             </div>
           </div>
           <div className="status-line">
             <span>words {passphraseSettings.words}</span>
-            <span className="tag tag-accent">
-              entropy ≈ {passphraseEntropy} bits
-            </span>
+            <span className="tag">{dictionary.size.toLocaleString()} words</span>
+            <span className="tag tag-accent">entropy ≈ {passphraseEntropy} bits</span>
+            <span className={gradeTagClass(passphraseAssessment.grade)}>{gradeLabel(passphraseAssessment.grade)}</span>
+          </div>
+          <div className="note-box">
+            <div className="microcopy">
+              bits/word ≈ {dictionary.bitsPerWord.toFixed(2)} · offline crack: {passphraseAssessment.crackTime.offline}
+            </div>
+            {passphraseAssessment.warnings.length > 0 ? (
+              <ul className="note-list">
+                {passphraseAssessment.warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            ) : (
+              <div className="microcopy">No obvious passphrase weaknesses detected.</div>
+            )}
           </div>
         </div>
       </div>
-      <div className="panel" aria-label="Config line">
-        <div className="panel-heading">
-          <span>Config</span>
-          <span className="panel-subtext">status</span>
+      <div className="grid-two">
+        <div className="panel" aria-label="Secret strength lab">
+          <div className="panel-heading">
+            <span>Strength Lab</span>
+            <span className="panel-subtext">audit any secret</span>
+          </div>
+          <textarea
+            className="textarea"
+            value={labInput}
+            onChange={(event) => setLabInput(event.target.value)}
+            placeholder="Paste a password or passphrase to audit locally"
+            aria-label="Secret strength lab input"
+          />
+          <div className="status-line">
+            <span>entropy ≈ {labAssessment.entropyBits} bits</span>
+            <span className="tag">effective ≈ {labAssessment.effectiveEntropyBits} bits</span>
+            <span className={gradeTagClass(labAssessment.grade)}>{gradeLabel(labAssessment.grade)}</span>
+          </div>
+          <div className="note-box">
+            <div className="microcopy">
+              online: {labAssessment.crackTime.online} · offline: {labAssessment.crackTime.offline}
+            </div>
+            <ul className="note-list">
+              {labAssessment.warnings.length > 0 ? (
+                labAssessment.warnings.map((warning) => <li key={warning}>{warning}</li>)
+              ) : (
+                <li>no direct warning patterns detected</li>
+              )}
+              {labAssessment.strengths.map((strength) => (
+                <li key={strength}>{strength}</li>
+              ))}
+            </ul>
+          </div>
         </div>
-        <div className="status-line">
-          <span>charset</span>
-          <span className="tag tag-accent">
-            {[
-              passwordSettings.upper && "upper",
-              passwordSettings.lower && "lower",
-              passwordSettings.digits && "digits",
-              passwordSettings.symbols && "symbols",
-            ]
-              .filter(Boolean)
-              .join(" / ")}
-          </span>
-          <span className="tag">entropy budget: {passwordEntropy}b</span>
+        <div className="panel" aria-label="Batch generator">
+          <div className="panel-heading">
+            <span>Batch Generator</span>
+            <span className="panel-subtext">shortlist candidates</span>
+          </div>
+          <div className="controls-row">
+            <div className="pill-buttons" role="group" aria-label="Batch mode">
+              <button
+                type="button"
+                className={batchMode === "password" ? "active" : ""}
+                onClick={() => setBatchMode("password")}
+              >
+                passwords
+              </button>
+              <button
+                type="button"
+                className={batchMode === "passphrase" ? "active" : ""}
+                onClick={() => setBatchMode("passphrase")}
+              >
+                passphrases
+              </button>
+            </div>
+            <input
+              className="input"
+              type="number"
+              min={3}
+              max={16}
+              value={batchCount}
+              onChange={(event) => setBatchCount(clamp(Number(event.target.value) || 0, 3, 16))}
+              aria-label="Batch candidate count"
+            />
+            <button
+              className="button"
+              type="button"
+              onClick={() =>
+                setBatchRows(
+                  batchMode === "password"
+                    ? generatePasswordBatch(passwordSettings, clamp(batchCount, 3, 16))
+                    : generatePassphraseBatch(passphraseSettings, clamp(batchCount, 3, 16)),
+                )
+              }
+            >
+              regenerate batch
+            </button>
+          </div>
+          <table className="table" aria-label="Batch candidates table">
+            <thead>
+              <tr>
+                <th>candidate</th>
+                <th>entropy</th>
+                <th>grade</th>
+                <th>copy</th>
+              </tr>
+            </thead>
+            <tbody>
+              {batchRows.map((row, index) => (
+                <tr key={`${row.value}-${index}`}>
+                  <td className="microcopy">{row.value}</td>
+                  <td>{row.entropyBits}b</td>
+                  <td>
+                    <span className={gradeTagClass(row.assessment.grade)}>{gradeLabel(row.assessment.grade)}</span>
+                  </td>
+                  <td>
+                    <button
+                      className="button"
+                      type="button"
+                      onClick={() => copySecret(row.value, `${batchMode} copied`)}
+                      aria-label={`Copy candidate ${index + 1}`}
+                    >
+                      copy
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
   );
 }
 
-function generatePassword(settings: PasswordSettings) {
-  const pools: string[] = [];
-  if (settings.upper) pools.push("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
-  if (settings.lower) pools.push("abcdefghijklmnopqrstuvwxyz");
-  if (settings.digits) pools.push("0123456789");
-  if (settings.symbols) pools.push(symbols);
-
-  if (pools.length === 0) {
-    pools.push("abcdefghijklmnopqrstuvwxyz", "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
-  }
-
-  const filteredPools = settings.avoidAmbiguity ? pools.map((pool) => [...pool].filter((c) => !ambiguous.has(c)).join("")) : pools;
-  const alphabet = filteredPools.join("");
-
-  const baseline: string[] = [];
-  if (settings.enforceMix) {
-    filteredPools.forEach((pool) => {
-      if (pool.length > 0) baseline.push(pool[randomIndex(pool.length)]);
-    });
-  }
-
-  const remaining = Math.max(settings.length - baseline.length, 0);
-  for (let i = 0; i < remaining; i += 1) {
-    baseline.push(alphabet[randomIndex(alphabet.length)]);
-  }
-
-  return shuffle(baseline).join("");
-}
-
-function generatePassphrase(settings: PassphraseSettings, wordlist: string[]) {
-  if (!wordlist.length) return "loading wordlist…";
-  const sep = settings.separator === "space" ? " " : settings.separator;
-  const picks: string[] = [];
-
-  for (let i = 0; i < settings.words; i += 1) {
-    let word = wordlist[randomIndex(wordlist.length)];
-    if (settings.randomCase) {
-      word = maybeCapitalize(word);
-    }
-    picks.push(word);
-  }
-
-  if (settings.appendNumber) {
-    picks.push(String(randomIndex(10)));
-  }
-  if (settings.appendSymbol) {
-    picks.push(symbols[randomIndex(symbols.length)]);
-  }
-
-  return picks.join(sep);
-}
-
-function maybeCapitalize(value: string) {
-  if (value.length === 0) return value;
-  const mode = randomIndex(3);
-  if (mode === 0) return value.toUpperCase();
-  if (mode === 1) return value[0].toUpperCase() + value.slice(1);
-  return value;
-}
-
-function estimatePasswordEntropy(settings: PasswordSettings) {
-  const pools: string[] = [];
-  if (settings.upper) pools.push("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
-  if (settings.lower) pools.push("abcdefghijklmnopqrstuvwxyz");
-  if (settings.digits) pools.push("0123456789");
-  if (settings.symbols) pools.push(symbols);
-  const alphabet = (settings.avoidAmbiguity ? pools.map((pool) => [...pool].filter((c) => !ambiguous.has(c)).join("")) : pools).join("");
-  const size = alphabet.length || 1;
-  return Math.round(settings.length * Math.log2(size));
-}
-
-function estimatePassphraseEntropy(settings: PassphraseSettings, wordlistSize: number) {
-  const base = wordlistSize > 0 ? wordlistSize : 1;
-  const wordEntropy = settings.words * Math.log2(base);
-  const numberEntropy = settings.appendNumber ? Math.log2(10) : 0;
-  const symbolEntropy = settings.appendSymbol ? Math.log2(symbols.length) : 0;
-  const caseEntropy = settings.randomCase ? settings.words * Math.log2(3) : 0;
-  return Math.round(wordEntropy + numberEntropy + symbolEntropy + caseEntropy);
-}
-
-function randomIndex(max: number) {
-  if (max <= 0) throw new Error("max must be positive");
-  const maxUint = 0xffffffff;
-  const limit = Math.floor((maxUint + 1) / max) * max;
-  let value = 0;
-  do {
-    value = crypto.getRandomValues(new Uint32Array(1))[0];
-  } while (value >= limit);
-  return value % max;
-}
-
-function shuffle(input: string[]) {
-  const arr = [...input];
-  for (let i = arr.length - 1; i > 0; i -= 1) {
-    const j = randomIndex(i + 1);
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
+function gradeTagClass(grade: SecretGrade): string {
+  if (grade === "critical" || grade === "weak") return "tag tag-danger";
+  if (grade === "fair") return "tag";
+  return "tag tag-accent";
 }
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
-}
-
-function buildWordlist(): string[] {
-  const syllables = ["amber", "bison", "cinder", "delta", "ember", "fable"];
-  const list: string[] = [];
-  for (let a = 0; a < 6; a += 1) {
-    for (let b = 0; b < 6; b += 1) {
-      for (let c = 0; c < 6; c += 1) {
-        for (let d = 0; d < 6; d += 1) {
-          for (let e = 0; e < 6; e += 1) {
-            const word = `${syllables[a]}${syllables[b].slice(0, 2)}${syllables[c].slice(-2)}${syllables[d][0]}${syllables[e].slice(1, 3)}`;
-            list.push(word);
-          }
-        }
-      }
-    }
-  }
-  return list;
 }

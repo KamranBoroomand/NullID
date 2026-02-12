@@ -4,186 +4,172 @@ import "./styles.css";
 import { useToast } from "../components/ToastHost";
 import { usePersistentState } from "../hooks/usePersistentState";
 import { useClipboardPrefs, writeClipboard } from "../utils/clipboard";
-const symbols = "!@#$%^&*()-_=+[]{}<>?/|~";
-const ambiguous = new Set(["l", "1", "I", "O", "0", "o"]);
+import { analyzeSecret, estimatePassphraseEntropy, estimatePasswordEntropy, generatePassphrase, generatePassphraseBatch, generatePassword, generatePasswordBatch, getPassphraseDictionaryStats, gradeLabel, } from "../utils/passwordToolkit";
 export function PwView({ onOpenGuide }) {
     const { push } = useToast();
     const [clipboardPrefs] = useClipboardPrefs();
     const [passwordSettings, setPasswordSettings] = usePersistentState("nullid:pw-settings", {
-        length: 20,
+        length: 22,
         upper: true,
         lower: true,
         digits: true,
         symbols: true,
         avoidAmbiguity: true,
         enforceMix: true,
+        blockSequential: true,
+        blockRepeats: true,
+        minUniqueChars: 12,
     });
     const [passphraseSettings, setPassphraseSettings] = usePersistentState("nullid:pp-settings", {
-        words: 5,
+        words: 6,
         separator: "-",
-        randomCase: true,
-        appendNumber: true,
-        appendSymbol: true,
+        dictionaryProfile: "extended",
+        caseStyle: "random",
+        numberMode: "append-2",
+        symbolMode: "append",
+        ensureUniqueWords: true,
     });
     const [password, setPassword] = useState("");
     const [phrase, setPhrase] = useState("");
-    const [wordlist] = useState(() => buildWordlist());
+    const [batchMode, setBatchMode] = usePersistentState("nullid:pw-batch-mode", "password");
+    const [batchCount, setBatchCount] = usePersistentState("nullid:pw-batch-count", 6);
+    const [batchRows, setBatchRows] = useState([]);
+    const [labInput, setLabInput] = usePersistentState("nullid:pw-lab-input", "");
+    const passwordToggleKeys = ["upper", "lower", "digits", "symbols"];
     useEffect(() => {
         setPassword(generatePassword(passwordSettings));
     }, [passwordSettings]);
     useEffect(() => {
-        setPhrase(generatePassphrase(passphraseSettings, wordlist));
-    }, [passphraseSettings, wordlist]);
+        setPhrase(generatePassphrase(passphraseSettings));
+    }, [passphraseSettings]);
     const passwordEntropy = useMemo(() => estimatePasswordEntropy(passwordSettings), [passwordSettings]);
-    const passphraseEntropy = useMemo(() => estimatePassphraseEntropy(passphraseSettings, wordlist?.length ?? 0), [passphraseSettings, wordlist]);
-    const applyPreset = (preset) => {
+    const passphraseEntropy = useMemo(() => estimatePassphraseEntropy(passphraseSettings), [passphraseSettings]);
+    const passwordAssessment = useMemo(() => analyzeSecret(password, passwordEntropy), [password, passwordEntropy]);
+    const passphraseAssessment = useMemo(() => analyzeSecret(phrase, passphraseEntropy), [phrase, passphraseEntropy]);
+    const labAssessment = useMemo(() => analyzeSecret(labInput), [labInput]);
+    const dictionary = useMemo(() => getPassphraseDictionaryStats(passphraseSettings.dictionaryProfile), [passphraseSettings.dictionaryProfile]);
+    const applyPasswordPreset = (preset) => {
         if (preset === "high") {
-            setPasswordSettings({ length: 24, upper: true, lower: true, digits: true, symbols: true, avoidAmbiguity: true, enforceMix: true });
+            setPasswordSettings({
+                length: 28,
+                upper: true,
+                lower: true,
+                digits: true,
+                symbols: true,
+                avoidAmbiguity: true,
+                enforceMix: true,
+                blockSequential: true,
+                blockRepeats: true,
+                minUniqueChars: 14,
+            });
         }
         else if (preset === "nosym") {
-            setPasswordSettings({ length: 18, upper: true, lower: true, digits: true, symbols: false, avoidAmbiguity: true, enforceMix: true });
+            setPasswordSettings({
+                length: 20,
+                upper: true,
+                lower: true,
+                digits: true,
+                symbols: false,
+                avoidAmbiguity: true,
+                enforceMix: true,
+                blockSequential: true,
+                blockRepeats: true,
+                minUniqueChars: 12,
+            });
         }
         else {
-            setPasswordSettings({ length: 8, upper: false, lower: false, digits: true, symbols: false, avoidAmbiguity: false, enforceMix: true });
+            setPasswordSettings({
+                length: 10,
+                upper: false,
+                lower: false,
+                digits: true,
+                symbols: false,
+                avoidAmbiguity: false,
+                enforceMix: true,
+                blockSequential: true,
+                blockRepeats: true,
+                minUniqueChars: 6,
+            });
         }
     };
-    return (_jsxs("div", { className: "workspace-scroll", children: [_jsx("div", { className: "guide-link", children: _jsx("button", { type: "button", className: "guide-link-button", onClick: () => onOpenGuide?.("pw"), children: "? guide" }) }), _jsxs("div", { className: "grid-two", children: [_jsxs("div", { className: "panel", "aria-label": "Password generator", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Password" }), _jsx("span", { className: "panel-subtext", children: "entropy-forward" })] }), _jsxs("div", { className: "controls-row", children: [_jsx("input", { className: "input", value: password, readOnly: true, "aria-label": "Password output" }), _jsx("button", { className: "button", type: "button", onClick: () => setPassword(generatePassword(passwordSettings)), children: "regenerate" }), _jsx("button", { className: "button", type: "button", onClick: () => writeClipboard(password, clipboardPrefs, (message, tone) => push(message, tone === "danger" ? "danger" : tone === "accent" ? "accent" : "neutral"), "password copied"), children: "copy" })] }), _jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", htmlFor: "password-length", children: "Length" }), _jsx("input", { id: "password-length", className: "input", type: "number", min: 8, max: 64, value: passwordSettings.length, onChange: (event) => setPasswordSettings((prev) => ({
+    const applyPassphrasePreset = (preset) => {
+        if (preset === "memorable") {
+            setPassphraseSettings({
+                words: 5,
+                separator: "-",
+                dictionaryProfile: "balanced",
+                caseStyle: "title",
+                numberMode: "none",
+                symbolMode: "none",
+                ensureUniqueWords: true,
+            });
+        }
+        else if (preset === "balanced") {
+            setPassphraseSettings({
+                words: 6,
+                separator: "-",
+                dictionaryProfile: "extended",
+                caseStyle: "random",
+                numberMode: "append-2",
+                symbolMode: "append",
+                ensureUniqueWords: true,
+            });
+        }
+        else {
+            setPassphraseSettings({
+                words: 8,
+                separator: "_",
+                dictionaryProfile: "maximal",
+                caseStyle: "random",
+                numberMode: "append-4",
+                symbolMode: "wrap",
+                ensureUniqueWords: true,
+            });
+        }
+    };
+    useEffect(() => {
+        const count = clamp(batchCount, 3, 16);
+        setBatchRows(batchMode === "password" ? generatePasswordBatch(passwordSettings, count) : generatePassphraseBatch(passphraseSettings, count));
+    }, [batchCount, batchMode, passphraseSettings, passwordSettings]);
+    const copySecret = (value, successMessage) => writeClipboard(value, clipboardPrefs, (message, tone) => push(message, tone === "danger" ? "danger" : tone === "accent" ? "accent" : "neutral"), successMessage);
+    return (_jsxs("div", { className: "workspace-scroll", children: [_jsx("div", { className: "guide-link", children: _jsx("button", { type: "button", className: "guide-link-button", onClick: () => onOpenGuide?.("pw"), children: "? guide" }) }), _jsxs("div", { className: "grid-two", children: [_jsxs("div", { className: "panel", "aria-label": "Password generator", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Password" }), _jsx("span", { className: "panel-subtext", children: "constraint-driven" })] }), _jsxs("div", { className: "controls-row", children: [_jsx("input", { className: "input", value: password, readOnly: true, "aria-label": "Password output" }), _jsx("button", { className: "button", type: "button", onClick: () => setPassword(generatePassword(passwordSettings)), children: "regenerate" }), _jsx("button", { className: "button", type: "button", onClick: () => copySecret(password, "password copied"), children: "copy" })] }), _jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", htmlFor: "password-length", children: "Length" }), _jsx("input", { id: "password-length", className: "input", type: "number", min: 8, max: 96, value: passwordSettings.length, onChange: (event) => setPasswordSettings((prev) => ({
                                             ...prev,
-                                            length: clamp(Number(event.target.value) || 0, 8, 64),
-                                        })), "aria-label": "Password length" }), _jsx("div", { className: "pill-buttons", role: "group", "aria-label": "Character sets", children: ["upper", "lower", "digits", "symbols"].map((key) => (_jsx("button", { type: "button", className: passwordSettings[key] ? "active" : "", onClick: () => setPasswordSettings((prev) => ({
+                                            length: clamp(Number(event.target.value) || 0, 8, 96),
+                                        })), "aria-label": "Password length" }), _jsx("div", { className: "pill-buttons", role: "group", "aria-label": "Character sets", children: passwordToggleKeys.map((key) => (_jsx("button", { type: "button", className: passwordSettings[key] ? "active" : "", onClick: () => setPasswordSettings((prev) => ({
                                                 ...prev,
                                                 [key]: !prev[key],
-                                            })), "aria-label": `Toggle ${key} characters`, children: key }, key))) })] }), _jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", htmlFor: "avoid-ambiguous", children: "Hardening" }), _jsxs("div", { className: "pill-buttons", role: "group", "aria-label": "Hardening options", children: [_jsx("button", { id: "avoid-ambiguous", type: "button", className: passwordSettings.avoidAmbiguity ? "active" : "", onClick: () => setPasswordSettings((prev) => ({ ...prev, avoidAmbiguity: !prev.avoidAmbiguity })), "aria-label": "Avoid ambiguous characters", children: "avoid ambiguous" }), _jsx("button", { type: "button", className: passwordSettings.enforceMix ? "active" : "", onClick: () => setPasswordSettings((prev) => ({ ...prev, enforceMix: !prev.enforceMix })), "aria-label": "Require all selected character types", children: "require all sets" })] })] }), _jsxs("div", { className: "controls-row", children: [_jsx("span", { className: "section-title", children: "Presets" }), _jsxs("div", { className: "pill-buttons", role: "group", "aria-label": "Password presets", children: [_jsx("button", { type: "button", onClick: () => applyPreset("high"), children: "high security" }), _jsx("button", { type: "button", onClick: () => applyPreset("nosym"), children: "no symbols" }), _jsx("button", { type: "button", onClick: () => applyPreset("pin"), children: "pin (digits)" })] })] }), _jsxs("div", { className: "status-line", children: [_jsxs("span", { children: ["length ", passwordSettings.length] }), _jsxs("span", { className: "tag tag-accent", children: ["entropy \u2248 ", passwordEntropy, " bits"] })] })] }), _jsxs("div", { className: "panel", "aria-label": "Passphrase generator", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Passphrase" }), _jsx("span", { className: "panel-subtext", children: "human-readable" })] }), _jsxs("div", { className: "controls-row", children: [_jsx("input", { className: "input", value: phrase, readOnly: true, "aria-label": "Passphrase output" }), _jsx("button", { className: "button", type: "button", onClick: () => setPhrase(generatePassphrase(passphraseSettings, wordlist)), children: "regenerate" }), _jsx("button", { className: "button", type: "button", onClick: () => writeClipboard(phrase, clipboardPrefs, (message, tone) => push(message, tone === "danger" ? "danger" : tone === "accent" ? "accent" : "neutral"), "passphrase copied"), children: "copy" })] }), _jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", htmlFor: "word-count", children: "Words" }), _jsx("input", { id: "word-count", className: "input", type: "number", min: 3, max: 10, value: passphraseSettings.words, onChange: (event) => setPassphraseSettings((prev) => ({
+                                            })), "aria-label": `Toggle ${key} characters`, children: key }, key))) })] }), _jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", htmlFor: "pw-hardening", children: "Hardening" }), _jsxs("div", { className: "pill-buttons", role: "group", "aria-label": "Hardening options", children: [_jsx("button", { id: "pw-hardening", type: "button", className: passwordSettings.avoidAmbiguity ? "active" : "", onClick: () => setPasswordSettings((prev) => ({ ...prev, avoidAmbiguity: !prev.avoidAmbiguity })), "aria-label": "Avoid ambiguous characters", children: "avoid ambiguous" }), _jsx("button", { type: "button", className: passwordSettings.enforceMix ? "active" : "", onClick: () => setPasswordSettings((prev) => ({ ...prev, enforceMix: !prev.enforceMix })), "aria-label": "Require all selected character types", children: "require all sets" }), _jsx("button", { type: "button", className: passwordSettings.blockSequential ? "active" : "", onClick: () => setPasswordSettings((prev) => ({ ...prev, blockSequential: !prev.blockSequential })), "aria-label": "Block sequential patterns", children: "block sequences" }), _jsx("button", { type: "button", className: passwordSettings.blockRepeats ? "active" : "", onClick: () => setPasswordSettings((prev) => ({ ...prev, blockRepeats: !prev.blockRepeats })), "aria-label": "Block repeated runs", children: "block repeats" })] })] }), _jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", htmlFor: "pw-min-unique", children: "Min unique" }), _jsx("input", { id: "pw-min-unique", className: "input", type: "number", min: 1, max: passwordSettings.length, value: passwordSettings.minUniqueChars, onChange: (event) => setPasswordSettings((prev) => ({
                                             ...prev,
-                                            words: clamp(Number(event.target.value) || 0, 3, 10),
+                                            minUniqueChars: clamp(Number(event.target.value) || 0, 1, prev.length),
+                                        })), "aria-label": "Minimum unique characters" })] }), _jsxs("div", { className: "controls-row", children: [_jsx("span", { className: "section-title", children: "Presets" }), _jsxs("div", { className: "pill-buttons", role: "group", "aria-label": "Password presets", children: [_jsx("button", { type: "button", onClick: () => applyPasswordPreset("high"), children: "high security" }), _jsx("button", { type: "button", onClick: () => applyPasswordPreset("nosym"), children: "no symbols" }), _jsx("button", { type: "button", onClick: () => applyPasswordPreset("pin"), children: "pin (digits)" })] })] }), _jsxs("div", { className: "status-line", children: [_jsxs("span", { children: ["length ", passwordSettings.length] }), _jsxs("span", { className: "tag tag-accent", children: ["entropy \u2248 ", passwordEntropy, " bits"] }), _jsx("span", { className: gradeTagClass(passwordAssessment.grade), children: gradeLabel(passwordAssessment.grade) })] }), _jsxs("div", { className: "note-box", children: [_jsxs("div", { className: "microcopy", children: ["effective entropy \u2248 ", passwordAssessment.effectiveEntropyBits, " bits \u00B7 online crack: ", passwordAssessment.crackTime.online] }), passwordAssessment.warnings.length > 0 ? (_jsx("ul", { className: "note-list", children: passwordAssessment.warnings.map((warning) => (_jsx("li", { children: warning }, warning))) })) : (_jsx("div", { className: "microcopy", children: "No obvious pattern weaknesses detected." }))] })] }), _jsxs("div", { className: "panel", "aria-label": "Passphrase generator", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Passphrase" }), _jsx("span", { className: "panel-subtext", children: "mega dictionary" })] }), _jsxs("div", { className: "controls-row", children: [_jsx("input", { className: "input", value: phrase, readOnly: true, "aria-label": "Passphrase output" }), _jsx("button", { className: "button", type: "button", onClick: () => setPhrase(generatePassphrase(passphraseSettings)), children: "regenerate" }), _jsx("button", { className: "button", type: "button", onClick: () => copySecret(phrase, "passphrase copied"), children: "copy" })] }), _jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", htmlFor: "word-count", children: "Words" }), _jsx("input", { id: "word-count", className: "input", type: "number", min: 3, max: 12, value: passphraseSettings.words, onChange: (event) => setPassphraseSettings((prev) => ({
+                                            ...prev,
+                                            words: clamp(Number(event.target.value) || 0, 3, 12),
                                         })), "aria-label": "Passphrase word count" }), _jsxs("select", { className: "select", value: passphraseSettings.separator, onChange: (event) => setPassphraseSettings((prev) => ({
                                             ...prev,
                                             separator: event.target.value,
-                                        })), "aria-label": "Word separator", children: [_jsx("option", { value: "space", children: "space" }), _jsx("option", { value: "-", children: "-" }), _jsx("option", { value: ".", children: "." }), _jsx("option", { value: "_", children: "_" })] })] }), _jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", htmlFor: "phrase-hardening", children: "Hardening" }), _jsxs("div", { className: "pill-buttons", role: "group", "aria-label": "Passphrase options", children: [_jsx("button", { id: "phrase-hardening", type: "button", className: passphraseSettings.randomCase ? "active" : "", onClick: () => setPassphraseSettings((prev) => ({ ...prev, randomCase: !prev.randomCase })), "aria-label": "Randomly vary word casing", children: "random case" }), _jsx("button", { type: "button", className: passphraseSettings.appendNumber ? "active" : "", onClick: () => setPassphraseSettings((prev) => ({ ...prev, appendNumber: !prev.appendNumber })), "aria-label": "Append number", children: "append number" }), _jsx("button", { type: "button", className: passphraseSettings.appendSymbol ? "active" : "", onClick: () => setPassphraseSettings((prev) => ({ ...prev, appendSymbol: !prev.appendSymbol })), "aria-label": "Append symbol", children: "append symbol" })] })] }), _jsxs("div", { className: "status-line", children: [_jsxs("span", { children: ["words ", passphraseSettings.words] }), _jsxs("span", { className: "tag tag-accent", children: ["entropy \u2248 ", passphraseEntropy, " bits"] })] })] })] }), _jsxs("div", { className: "panel", "aria-label": "Config line", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Config" }), _jsx("span", { className: "panel-subtext", children: "status" })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: "charset" }), _jsx("span", { className: "tag tag-accent", children: [
-                                    passwordSettings.upper && "upper",
-                                    passwordSettings.lower && "lower",
-                                    passwordSettings.digits && "digits",
-                                    passwordSettings.symbols && "symbols",
-                                ]
-                                    .filter(Boolean)
-                                    .join(" / ") }), _jsxs("span", { className: "tag", children: ["entropy budget: ", passwordEntropy, "b"] })] })] })] }));
+                                        })), "aria-label": "Word separator", children: [_jsx("option", { value: "space", children: "space" }), _jsx("option", { value: "-", children: "-" }), _jsx("option", { value: ".", children: "." }), _jsx("option", { value: "_", children: "_" }), _jsx("option", { value: "/", children: "/" }), _jsx("option", { value: ":", children: ":" })] }), _jsxs("select", { className: "select", value: passphraseSettings.dictionaryProfile, onChange: (event) => setPassphraseSettings((prev) => ({
+                                            ...prev,
+                                            dictionaryProfile: event.target.value,
+                                        })), "aria-label": "Dictionary profile", children: [_jsx("option", { value: "balanced", children: "balanced" }), _jsx("option", { value: "extended", children: "extended" }), _jsx("option", { value: "maximal", children: "maximal" })] })] }), _jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", htmlFor: "phrase-hardening", children: "Styling" }), _jsxs("select", { id: "phrase-hardening", className: "select", value: passphraseSettings.caseStyle, onChange: (event) => setPassphraseSettings((prev) => ({
+                                            ...prev,
+                                            caseStyle: event.target.value,
+                                        })), "aria-label": "Passphrase case style", children: [_jsx("option", { value: "lower", children: "lower" }), _jsx("option", { value: "title", children: "title" }), _jsx("option", { value: "random", children: "random" }), _jsx("option", { value: "upper", children: "upper" })] }), _jsxs("select", { className: "select", value: passphraseSettings.numberMode, onChange: (event) => setPassphraseSettings((prev) => ({
+                                            ...prev,
+                                            numberMode: event.target.value,
+                                        })), "aria-label": "Passphrase number mode", children: [_jsx("option", { value: "none", children: "no number" }), _jsx("option", { value: "append-2", children: "append 2 digits" }), _jsx("option", { value: "append-4", children: "append 4 digits" })] }), _jsxs("select", { className: "select", value: passphraseSettings.symbolMode, onChange: (event) => setPassphraseSettings((prev) => ({
+                                            ...prev,
+                                            symbolMode: event.target.value,
+                                        })), "aria-label": "Passphrase symbol mode", children: [_jsx("option", { value: "none", children: "no symbol" }), _jsx("option", { value: "append", children: "append symbol" }), _jsx("option", { value: "wrap", children: "wrap with symbols" })] })] }), _jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", children: "Hardening" }), _jsx("div", { className: "pill-buttons", role: "group", "aria-label": "Passphrase hardening options", children: _jsx("button", { type: "button", className: passphraseSettings.ensureUniqueWords ? "active" : "", onClick: () => setPassphraseSettings((prev) => ({ ...prev, ensureUniqueWords: !prev.ensureUniqueWords })), "aria-label": "Enforce unique words", children: "unique words" }) }), _jsxs("span", { className: "microcopy", children: ["dictionary: ", dictionary.label] })] }), _jsxs("div", { className: "controls-row", children: [_jsx("span", { className: "section-title", children: "Presets" }), _jsxs("div", { className: "pill-buttons", role: "group", "aria-label": "Passphrase presets", children: [_jsx("button", { type: "button", onClick: () => applyPassphrasePreset("memorable"), children: "memorable" }), _jsx("button", { type: "button", onClick: () => applyPassphrasePreset("balanced"), children: "balanced" }), _jsx("button", { type: "button", onClick: () => applyPassphrasePreset("max"), children: "max entropy" })] })] }), _jsxs("div", { className: "status-line", children: [_jsxs("span", { children: ["words ", passphraseSettings.words] }), _jsxs("span", { className: "tag", children: [dictionary.size.toLocaleString(), " words"] }), _jsxs("span", { className: "tag tag-accent", children: ["entropy \u2248 ", passphraseEntropy, " bits"] }), _jsx("span", { className: gradeTagClass(passphraseAssessment.grade), children: gradeLabel(passphraseAssessment.grade) })] }), _jsxs("div", { className: "note-box", children: [_jsxs("div", { className: "microcopy", children: ["bits/word \u2248 ", dictionary.bitsPerWord.toFixed(2), " \u00B7 offline crack: ", passphraseAssessment.crackTime.offline] }), passphraseAssessment.warnings.length > 0 ? (_jsx("ul", { className: "note-list", children: passphraseAssessment.warnings.map((warning) => (_jsx("li", { children: warning }, warning))) })) : (_jsx("div", { className: "microcopy", children: "No obvious passphrase weaknesses detected." }))] })] })] }), _jsxs("div", { className: "grid-two", children: [_jsxs("div", { className: "panel", "aria-label": "Secret strength lab", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Strength Lab" }), _jsx("span", { className: "panel-subtext", children: "audit any secret" })] }), _jsx("textarea", { className: "textarea", value: labInput, onChange: (event) => setLabInput(event.target.value), placeholder: "Paste a password or passphrase to audit locally", "aria-label": "Secret strength lab input" }), _jsxs("div", { className: "status-line", children: [_jsxs("span", { children: ["entropy \u2248 ", labAssessment.entropyBits, " bits"] }), _jsxs("span", { className: "tag", children: ["effective \u2248 ", labAssessment.effectiveEntropyBits, " bits"] }), _jsx("span", { className: gradeTagClass(labAssessment.grade), children: gradeLabel(labAssessment.grade) })] }), _jsxs("div", { className: "note-box", children: [_jsxs("div", { className: "microcopy", children: ["online: ", labAssessment.crackTime.online, " \u00B7 offline: ", labAssessment.crackTime.offline] }), _jsxs("ul", { className: "note-list", children: [labAssessment.warnings.length > 0 ? (labAssessment.warnings.map((warning) => _jsx("li", { children: warning }, warning))) : (_jsx("li", { children: "no direct warning patterns detected" })), labAssessment.strengths.map((strength) => (_jsx("li", { children: strength }, strength)))] })] })] }), _jsxs("div", { className: "panel", "aria-label": "Batch generator", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Batch Generator" }), _jsx("span", { className: "panel-subtext", children: "shortlist candidates" })] }), _jsxs("div", { className: "controls-row", children: [_jsxs("div", { className: "pill-buttons", role: "group", "aria-label": "Batch mode", children: [_jsx("button", { type: "button", className: batchMode === "password" ? "active" : "", onClick: () => setBatchMode("password"), children: "passwords" }), _jsx("button", { type: "button", className: batchMode === "passphrase" ? "active" : "", onClick: () => setBatchMode("passphrase"), children: "passphrases" })] }), _jsx("input", { className: "input", type: "number", min: 3, max: 16, value: batchCount, onChange: (event) => setBatchCount(clamp(Number(event.target.value) || 0, 3, 16)), "aria-label": "Batch candidate count" }), _jsx("button", { className: "button", type: "button", onClick: () => setBatchRows(batchMode === "password"
+                                            ? generatePasswordBatch(passwordSettings, clamp(batchCount, 3, 16))
+                                            : generatePassphraseBatch(passphraseSettings, clamp(batchCount, 3, 16))), children: "regenerate batch" })] }), _jsxs("table", { className: "table", "aria-label": "Batch candidates table", children: [_jsx("thead", { children: _jsxs("tr", { children: [_jsx("th", { children: "candidate" }), _jsx("th", { children: "entropy" }), _jsx("th", { children: "grade" }), _jsx("th", { children: "copy" })] }) }), _jsx("tbody", { children: batchRows.map((row, index) => (_jsxs("tr", { children: [_jsx("td", { className: "microcopy", children: row.value }), _jsxs("td", { children: [row.entropyBits, "b"] }), _jsx("td", { children: _jsx("span", { className: gradeTagClass(row.assessment.grade), children: gradeLabel(row.assessment.grade) }) }), _jsx("td", { children: _jsx("button", { className: "button", type: "button", onClick: () => copySecret(row.value, `${batchMode} copied`), "aria-label": `Copy candidate ${index + 1}`, children: "copy" }) })] }, `${row.value}-${index}`))) })] })] })] })] }));
 }
-function generatePassword(settings) {
-    const pools = [];
-    if (settings.upper)
-        pools.push("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
-    if (settings.lower)
-        pools.push("abcdefghijklmnopqrstuvwxyz");
-    if (settings.digits)
-        pools.push("0123456789");
-    if (settings.symbols)
-        pools.push(symbols);
-    if (pools.length === 0) {
-        pools.push("abcdefghijklmnopqrstuvwxyz", "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
-    }
-    const filteredPools = settings.avoidAmbiguity ? pools.map((pool) => [...pool].filter((c) => !ambiguous.has(c)).join("")) : pools;
-    const alphabet = filteredPools.join("");
-    const baseline = [];
-    if (settings.enforceMix) {
-        filteredPools.forEach((pool) => {
-            if (pool.length > 0)
-                baseline.push(pool[randomIndex(pool.length)]);
-        });
-    }
-    const remaining = Math.max(settings.length - baseline.length, 0);
-    for (let i = 0; i < remaining; i += 1) {
-        baseline.push(alphabet[randomIndex(alphabet.length)]);
-    }
-    return shuffle(baseline).join("");
-}
-function generatePassphrase(settings, wordlist) {
-    if (!wordlist.length)
-        return "loading wordlist…";
-    const sep = settings.separator === "space" ? " " : settings.separator;
-    const picks = [];
-    for (let i = 0; i < settings.words; i += 1) {
-        let word = wordlist[randomIndex(wordlist.length)];
-        if (settings.randomCase) {
-            word = maybeCapitalize(word);
-        }
-        picks.push(word);
-    }
-    if (settings.appendNumber) {
-        picks.push(String(randomIndex(10)));
-    }
-    if (settings.appendSymbol) {
-        picks.push(symbols[randomIndex(symbols.length)]);
-    }
-    return picks.join(sep);
-}
-function maybeCapitalize(value) {
-    if (value.length === 0)
-        return value;
-    const mode = randomIndex(3);
-    if (mode === 0)
-        return value.toUpperCase();
-    if (mode === 1)
-        return value[0].toUpperCase() + value.slice(1);
-    return value;
-}
-function estimatePasswordEntropy(settings) {
-    const pools = [];
-    if (settings.upper)
-        pools.push("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
-    if (settings.lower)
-        pools.push("abcdefghijklmnopqrstuvwxyz");
-    if (settings.digits)
-        pools.push("0123456789");
-    if (settings.symbols)
-        pools.push(symbols);
-    const alphabet = (settings.avoidAmbiguity ? pools.map((pool) => [...pool].filter((c) => !ambiguous.has(c)).join("")) : pools).join("");
-    const size = alphabet.length || 1;
-    return Math.round(settings.length * Math.log2(size));
-}
-function estimatePassphraseEntropy(settings, wordlistSize) {
-    const base = wordlistSize > 0 ? wordlistSize : 1;
-    const wordEntropy = settings.words * Math.log2(base);
-    const numberEntropy = settings.appendNumber ? Math.log2(10) : 0;
-    const symbolEntropy = settings.appendSymbol ? Math.log2(symbols.length) : 0;
-    const caseEntropy = settings.randomCase ? settings.words * Math.log2(3) : 0;
-    return Math.round(wordEntropy + numberEntropy + symbolEntropy + caseEntropy);
-}
-function randomIndex(max) {
-    if (max <= 0)
-        throw new Error("max must be positive");
-    const maxUint = 0xffffffff;
-    const limit = Math.floor((maxUint + 1) / max) * max;
-    let value = 0;
-    do {
-        value = crypto.getRandomValues(new Uint32Array(1))[0];
-    } while (value >= limit);
-    return value % max;
-}
-function shuffle(input) {
-    const arr = [...input];
-    for (let i = arr.length - 1; i > 0; i -= 1) {
-        const j = randomIndex(i + 1);
-        [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-    return arr;
+function gradeTagClass(grade) {
+    if (grade === "critical" || grade === "weak")
+        return "tag tag-danger";
+    if (grade === "fair")
+        return "tag";
+    return "tag tag-accent";
 }
 function clamp(value, min, max) {
     return Math.min(max, Math.max(min, value));
-}
-function buildWordlist() {
-    const syllables = ["amber", "bison", "cinder", "delta", "ember", "fable"];
-    const list = [];
-    for (let a = 0; a < 6; a += 1) {
-        for (let b = 0; b < 6; b += 1) {
-            for (let c = 0; c < 6; c += 1) {
-                for (let d = 0; d < 6; d += 1) {
-                    for (let e = 0; e < 6; e += 1) {
-                        const word = `${syllables[a]}${syllables[b].slice(0, 2)}${syllables[c].slice(-2)}${syllables[d][0]}${syllables[e].slice(1, 3)}`;
-                        list.push(word);
-                    }
-                }
-            }
-        }
-    }
-    return list;
 }
