@@ -55,7 +55,7 @@ export function MetaView({ onOpenGuide }) {
         if (!file)
             return;
         setUnsupportedReason(null);
-        setSourceFile(file);
+        setSourceFile(null);
         setFileName(file.name);
         setBeforeFields([]);
         setAfterFields([]);
@@ -79,13 +79,14 @@ export function MetaView({ onOpenGuide }) {
             setUnsupportedReason("Unsupported file type for metadata cleaning.");
             return;
         }
-        const format = detectImageFormat(file.type, new Uint8Array(await file.slice(0, 64).arrayBuffer()));
+        const format = detectImageFormat(file.type, new Uint8Array(await file.slice(0, 64).arrayBuffer()), file.name);
         if (format === "heic") {
             setMessage("HEIC/HEIF parsing is usually blocked in browser decode pipelines.");
             setUnsupportedReason("Convert HEIC/HEIF to JPEG/PNG/AVIF before cleaning.");
             return;
         }
         try {
+            setSourceFile(file);
             const dims = await readImageDimensions(file);
             const baseFields = await readMetadataFields(file);
             setBeforeFields([
@@ -151,10 +152,10 @@ export function MetaView({ onOpenGuide }) {
         };
     }, [afterPreview, beforePreview]);
     useEffect(() => {
-        if (!sourceFile)
+        if (!sourceFile || unsupportedReason)
             return;
         void refreshCleanResult(sourceFile);
-    }, [outputChoice, quality, refreshCleanResult, resizePercent, sourceFile]);
+    }, [outputChoice, quality, refreshCleanResult, resizePercent, sourceFile, unsupportedReason]);
     return (_jsxs("div", { className: "workspace-scroll", children: [_jsx("div", { className: "guide-link", children: _jsx("button", { type: "button", className: "guide-link-button", onClick: () => onOpenGuide?.("meta"), children: "? guide" }) }), _jsxs("div", { className: "grid-two", children: [_jsxs("div", { className: "panel", "aria-label": "Metadata input", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Metadata Inspector" }), _jsx("span", { className: "panel-subtext", children: "drop image" })] }), _jsxs("div", { className: "dropzone", role: "button", tabIndex: 0, "aria-label": "Drop file for inspection", onClick: () => fileInputRef.current?.click(), onKeyDown: (event) => {
                                     if (event.key === "Enter" || event.key === " ") {
                                         event.preventDefault();

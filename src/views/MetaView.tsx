@@ -77,7 +77,7 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
     async (file?: File | null) => {
       if (!file) return;
       setUnsupportedReason(null);
-      setSourceFile(file);
+      setSourceFile(null);
       setFileName(file.name);
       setBeforeFields([]);
       setAfterFields([]);
@@ -100,7 +100,7 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
         setUnsupportedReason("Unsupported file type for metadata cleaning.");
         return;
       }
-      const format = detectImageFormat(file.type, new Uint8Array(await file.slice(0, 64).arrayBuffer()));
+      const format = detectImageFormat(file.type, new Uint8Array(await file.slice(0, 64).arrayBuffer()), file.name);
       if (format === "heic") {
         setMessage("HEIC/HEIF parsing is usually blocked in browser decode pipelines.");
         setUnsupportedReason("Convert HEIC/HEIF to JPEG/PNG/AVIF before cleaning.");
@@ -108,6 +108,7 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
       }
 
       try {
+        setSourceFile(file);
         const dims = await readImageDimensions(file);
         const baseFields = await readMetadataFields(file);
         setBeforeFields([
@@ -173,9 +174,9 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
   }, [afterPreview, beforePreview]);
 
   useEffect(() => {
-    if (!sourceFile) return;
+    if (!sourceFile || unsupportedReason) return;
     void refreshCleanResult(sourceFile);
-  }, [outputChoice, quality, refreshCleanResult, resizePercent, sourceFile]);
+  }, [outputChoice, quality, refreshCleanResult, resizePercent, sourceFile, unsupportedReason]);
 
   return (
     <div className="workspace-scroll">

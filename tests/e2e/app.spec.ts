@@ -2,8 +2,21 @@ import { test, expect } from "@playwright/test";
 import path from "node:path";
 import fs from "node:fs";
 
-test("hash input stays responsive", async ({ page }) => {
+async function openApp(page: import("@playwright/test").Page) {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("nullid:onboarding-complete", "true");
+    window.localStorage.setItem("nullid:onboarding-step", "0");
+  });
   await page.goto("/");
+  const onboardingDialog = page.getByRole("dialog", { name: /Onboarding tour/i });
+  if (await onboardingDialog.isVisible()) {
+    await page.getByRole("button", { name: /^skip$/i }).click();
+    await expect(onboardingDialog).toBeHidden();
+  }
+}
+
+test("hash input stays responsive", async ({ page }) => {
+  await openApp(page);
   await page.getByRole("button", { name: /Hash & Verify/i }).click();
   const textarea = page.getByLabel("Text to hash");
   await textarea.click();
@@ -14,7 +27,7 @@ test("hash input stays responsive", async ({ page }) => {
 });
 
 test("secure note persists after reload", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await page.getByRole("button", { name: /Secure Notes/i }).click();
   await page.getByLabel("Vault key").fill("playwright-pass");
   await page.getByRole("button", { name: /^unlock$/i }).click();
@@ -29,7 +42,7 @@ test("secure note persists after reload", async ({ page }) => {
 });
 
 test("encrypt and decrypt text renders output", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await page.getByRole("button", { name: /Encrypt \/ Decrypt/i }).click();
   await page.getByLabel("Plaintext").fill("roundtrip text");
   await page.getByLabel("Encrypt passphrase").fill("play-pass");
@@ -40,7 +53,7 @@ test("encrypt and decrypt text renders output", async ({ page }) => {
 });
 
 test("download envelope button triggers download", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await page.getByRole("button", { name: /Encrypt \/ Decrypt/i }).click();
   await page.getByLabel("Encrypt passphrase").fill("play-pass");
   const filePath = path.join(process.cwd(), "tests/e2e/tmp.txt");
@@ -55,7 +68,7 @@ test("download envelope button triggers download", async ({ page }) => {
 });
 
 test("redaction module applies masking for detected values", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await page.getByRole("button", { name: /Text Redaction/i }).click();
   await page.getByRole("textbox", { name: "Redaction input" }).fill("Reach me at alice@example.com token abcdefghijklmnopqrstuvwxyz1234");
   await page.getByRole("button", { name: /apply redaction/i }).click();
@@ -65,7 +78,7 @@ test("redaction module applies masking for detected values", async ({ page }) =>
 });
 
 test("metadata module flags HEIC inputs as unsupported with remediation text", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await page.getByRole("button", { name: /Metadata Inspector/i }).click();
   const imageInput = page.locator('input[type="file"][accept="image/*"]');
   await imageInput.setInputFiles({
@@ -78,7 +91,7 @@ test("metadata module flags HEIC inputs as unsupported with remediation text", a
 });
 
 test("sanitize module exports local safe-share bundle", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await page.getByRole("button", { name: /Log Sanitizer/i }).click();
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: /^export bundle$/i }).click();
@@ -87,7 +100,7 @@ test("sanitize module exports local safe-share bundle", async ({ page }) => {
 });
 
 test("sanitize module batch-processes local files", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await page.getByRole("button", { name: /Log Sanitizer/i }).click();
   const batchInput = page.locator('input[type="file"][multiple]');
   await batchInput.setInputFiles([
@@ -101,7 +114,7 @@ test("sanitize module batch-processes local files", async ({ page }) => {
 test("mobile navigation scrolls and allows selection", async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
-  await page.goto("/");
+  await openApp(page);
   await page.getByRole("button", { name: /Encrypt \/ Decrypt/i }).click();
   await expect(page.getByText("Encrypt").first()).toBeVisible();
   await context.close();
@@ -110,7 +123,7 @@ test("mobile navigation scrolls and allows selection", async ({ browser }) => {
 test("mobile secure notes flow supports create and render", async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 375, height: 812 } });
   const page = await context.newPage();
-  await page.goto("/");
+  await openApp(page);
   await page.getByRole("button", { name: /Secure Notes/i }).click();
   await page.getByLabel("Vault key").fill("mobile-pass");
   await page.getByRole("button", { name: /^unlock$/i }).click();

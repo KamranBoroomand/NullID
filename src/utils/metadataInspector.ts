@@ -26,8 +26,9 @@ export function inspectMetadataFromBuffer(mime: string, bytes: Uint8Array): Reco
   return {};
 }
 
-export function detectImageFormat(mime: string, bytes: Uint8Array): ImageFormat {
+export function detectImageFormat(mime: string, bytes: Uint8Array, fileName = ""): ImageFormat {
   const normalized = (mime || "").toLowerCase();
+  const normalizedName = fileName.toLowerCase();
   if (normalized.includes("jpeg") || normalized.includes("jpg")) return "jpeg";
   if (normalized.includes("png")) return "png";
   if (normalized.includes("webp")) return "webp";
@@ -36,6 +37,14 @@ export function detectImageFormat(mime: string, bytes: Uint8Array): ImageFormat 
   if (normalized.includes("bmp")) return "bmp";
   if (normalized.includes("tiff")) return "tiff";
   if (normalized.includes("heic") || normalized.includes("heif")) return "heic";
+  if (/\.(jpe?g)$/i.test(normalizedName)) return "jpeg";
+  if (normalizedName.endsWith(".png")) return "png";
+  if (normalizedName.endsWith(".webp")) return "webp";
+  if (normalizedName.endsWith(".avif")) return "avif";
+  if (normalizedName.endsWith(".gif")) return "gif";
+  if (normalizedName.endsWith(".bmp")) return "bmp";
+  if (normalizedName.endsWith(".tif") || normalizedName.endsWith(".tiff")) return "tiff";
+  if (normalizedName.endsWith(".heic") || normalizedName.endsWith(".heif")) return "heic";
   if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "jpeg";
   if (isPngSignature(bytes)) return "png";
   if (bytes.length >= 12 && getAscii(bytes, 0, 4) === "RIFF" && getAscii(bytes, 8, 4) === "WEBP") return "webp";

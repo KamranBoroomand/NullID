@@ -23,8 +23,9 @@ export function inspectMetadataFromBuffer(mime, bytes) {
         return parseGifMetadata(bytes);
     return {};
 }
-export function detectImageFormat(mime, bytes) {
+export function detectImageFormat(mime, bytes, fileName = "") {
     const normalized = (mime || "").toLowerCase();
+    const normalizedName = fileName.toLowerCase();
     if (normalized.includes("jpeg") || normalized.includes("jpg"))
         return "jpeg";
     if (normalized.includes("png"))
@@ -40,6 +41,22 @@ export function detectImageFormat(mime, bytes) {
     if (normalized.includes("tiff"))
         return "tiff";
     if (normalized.includes("heic") || normalized.includes("heif"))
+        return "heic";
+    if (/\.(jpe?g)$/i.test(normalizedName))
+        return "jpeg";
+    if (normalizedName.endsWith(".png"))
+        return "png";
+    if (normalizedName.endsWith(".webp"))
+        return "webp";
+    if (normalizedName.endsWith(".avif"))
+        return "avif";
+    if (normalizedName.endsWith(".gif"))
+        return "gif";
+    if (normalizedName.endsWith(".bmp"))
+        return "bmp";
+    if (normalizedName.endsWith(".tif") || normalizedName.endsWith(".tiff"))
+        return "tiff";
+    if (normalizedName.endsWith(".heic") || normalizedName.endsWith(".heif"))
         return "heic";
     if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)
         return "jpeg";
