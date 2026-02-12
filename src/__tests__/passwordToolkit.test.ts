@@ -49,6 +49,33 @@ describe("password toolkit", () => {
     assert.equal(/\d{4}/.test(passphrase), true);
   });
 
+  it("prevents duplicate words when different dictionary indexes collide", () => {
+    const settings: PassphraseSettings = {
+      words: 2,
+      separator: "-",
+      dictionaryProfile: "extended",
+      caseStyle: "lower",
+      numberMode: "none",
+      symbolMode: "none",
+      ensureUniqueWords: true,
+    };
+    const scriptedRandom = [148_480, 851_968, 2];
+    const originalGetRandomValues = globalThis.crypto.getRandomValues;
+    let cursor = 0;
+    (globalThis.crypto as { getRandomValues: (array: Uint32Array) => Uint32Array }).getRandomValues = (array: Uint32Array) => {
+      array[0] = scriptedRandom[Math.min(cursor, scriptedRandom.length - 1)];
+      cursor += 1;
+      return array;
+    };
+    try {
+      const passphrase = generatePassphrase(settings);
+      const [firstWord, secondWord] = passphrase.split("-");
+      assert.equal(firstWord === secondWord, false);
+    } finally {
+      (globalThis.crypto as { getRandomValues: typeof originalGetRandomValues }).getRandomValues = originalGetRandomValues;
+    }
+  });
+
   it("raises passphrase entropy when using larger dictionaries", () => {
     const baseline: PassphraseSettings = {
       words: 5,

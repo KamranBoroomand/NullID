@@ -204,18 +204,12 @@ export function generatePassphrase(settings) {
     const dictionary = getPassphraseDictionaryStats(settings.dictionaryProfile);
     const separator = settings.separator === "space" ? " " : settings.separator;
     const words = [];
-    const used = new Set();
+    const usedWords = settings.ensureUniqueWords ? new Set() : undefined;
     for (let i = 0; i < settings.words; i += 1) {
-        let index = randomIndex(dictionary.size);
-        if (settings.ensureUniqueWords) {
-            let retries = 0;
-            while (used.has(index) && retries < 50) {
-                index = randomIndex(dictionary.size);
-                retries += 1;
-            }
-            used.add(index);
-        }
-        const word = applyCaseStyle(dictionaryWord(settings.dictionaryProfile, index), settings.caseStyle);
+        const baseWord = pickPassphraseWord(settings.dictionaryProfile, dictionary.size, usedWords);
+        if (usedWords)
+            usedWords.add(baseWord);
+        const word = applyCaseStyle(baseWord, settings.caseStyle);
         words.push(word);
     }
     let phrase = words.join(separator);
@@ -463,6 +457,25 @@ function dictionaryWord(profile, index) {
         return segment[pick];
     });
     return parts.join("");
+}
+function pickPassphraseWord(profile, dictionarySize, usedWords) {
+    let sampledIndex = randomIndex(dictionarySize);
+    let candidate = dictionaryWord(profile, sampledIndex);
+    if (!usedWords || !usedWords.has(candidate))
+        return candidate;
+    for (let attempts = 0; attempts < 128; attempts += 1) {
+        sampledIndex = randomIndex(dictionarySize);
+        candidate = dictionaryWord(profile, sampledIndex);
+        if (!usedWords.has(candidate))
+            return candidate;
+    }
+    for (let offset = 1; offset < dictionarySize; offset += 1) {
+        const index = (sampledIndex + offset) % dictionarySize;
+        candidate = dictionaryWord(profile, index);
+        if (!usedWords.has(candidate))
+            return candidate;
+    }
+    return candidate;
 }
 function randomDigits(length) {
     let digits = "";
