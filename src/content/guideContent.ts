@@ -12,8 +12,9 @@ export const guideTools: GuideToolContent[] = [
   {
     key: "hash",
     title: "Hash & Verify",
-    whatItDoes: "Compute SHA-256 / SHA-512 / SHA-1 (legacy) for text or files; verify against provided digests.",
-    whatWhen: ["Validate downloads or artifacts without leaving the browser", "Compare two files by hashing both"],
+    whatItDoes:
+      "Compute SHA-256 / SHA-512 / SHA-1 (legacy) for text or files, verify against expected digests, and export integrity manifests/batch hash reports.",
+    whatWhen: ["Validate downloads or artifacts without leaving the browser", "Build line-by-line digest manifests for incident notes"],
     howSteps: [
       "Paste text or drop a file; hashing runs immediately.",
       "Pick the algorithm and format (hex/base64/sha256sum).",
@@ -30,7 +31,7 @@ export const guideTools: GuideToolContent[] = [
     key: "redact",
     title: "Text Redaction",
     whatItDoes:
-      "Detects and masks PII/secrets (email, phone, IP/IPv6, IDs, IBAN, valid credit cards via Luhn, AWS keys/secrets, bearer tokens).",
+      "Detects and masks PII/secrets (email, phone, IP/IPv6, IDs, IBAN, valid credit cards via Luhn, AWS keys/secrets, bearer tokens) with severity filtering and exportable risk reports.",
     whatWhen: ["Sanitize chat transcripts or documents before sharing", "Remove account numbers or tokens from support logs"],
     howSteps: [
       "Paste text and choose mask mode (full/partial).",
@@ -48,7 +49,7 @@ export const guideTools: GuideToolContent[] = [
     key: "sanitize",
     title: "Log Sanitizer",
     whatItDoes:
-      "Rule-based scrubbing for logs with diff preview, signed local policy packs, batch file sanitization, baseline policy merge, and safe-share bundle export.",
+      "Rule-based scrubbing for logs with diff preview, signed local policy packs, simulation matrix comparisons, rule-impact ranking, batch file sanitization, baseline policy merge, and safe-share bundle export.",
     whatWhen: ["Share log snippets in tickets", "Normalize noisy logs for demos/docs", "Generate portable sanitized bundles with integrity metadata"],
     howSteps: [
       "Paste logs or load a preset, toggle rules, and enable JSON-aware cleaning if applicable.",
@@ -70,7 +71,7 @@ export const guideTools: GuideToolContent[] = [
     key: "meta",
     title: "Metadata Inspector",
     whatItDoes:
-      "Reads local image metadata (JPEG/TIFF EXIF, PNG/WebP/GIF hints), surfaces browser compatibility diagnostics, re-encodes images to strip metadata, and pairs with CLI workflows for PDF/Office metadata cleaning.",
+      "Reads local image metadata (JPEG/TIFF EXIF, PNG/WebP/GIF hints), surfaces browser compatibility diagnostics, re-encodes images with configurable output codec/quality, and records before/after forensic SHA-256 fingerprints.",
     whatWhen: ["Clear camera/location data before sharing images", "Downsize images while removing EXIF/metadata"],
     howSteps: [
       "Drop an image (JPEG/PNG/WebP/AVIF/GIF/BMP/TIFF) and inspect parsed metadata fields.",
@@ -88,7 +89,7 @@ export const guideTools: GuideToolContent[] = [
     key: "enc",
     title: "Encrypt / Decrypt",
     whatItDoes:
-      "NULLID envelope (PBKDF2 + AES-GCM) for sealing text or files; supports KDF strength profiles, encrypted download, and decrypt with AAD.",
+      "NULLID envelope (PBKDF2 + AES-GCM) for sealing text or files; supports profile/custom KDF settings, envelope-header inspection, passphrase strength checks, encrypted download, and decrypt with AAD.",
     whatWhen: ["Send a sealed blob through untrusted channels", "Quickly encrypt a snippet without installing tools"],
     howSteps: [
       "Enter plaintext and passphrase; choose KDF profile (compat/strong/paranoid), then seal text or file. Downloads use .nullid.",
@@ -122,7 +123,8 @@ export const guideTools: GuideToolContent[] = [
   {
     key: "vault",
     title: "Secure Notes",
-    whatItDoes: "IndexedDB-backed vault with AES-GCM per note, activity-based auto-lock, tab-hide lock, and panic hotkey (Ctrl+Shift+L).",
+    whatItDoes:
+      "IndexedDB-backed vault with AES-GCM per note, activity-based auto-lock countdown, note templates, analytics/report export, tab-hide lock, and panic hotkey (Ctrl+Shift+L).",
     whatWhen: ["Keep short secrets locally without syncing", "Store incident notes while offline"],
     howSteps: [
       "Unlock with a passphrase to derive the key; notes decrypt only in-memory.",

@@ -6,6 +6,7 @@ import { getVaultBackend, getVaultBackendInfo, putValue, getValue, clearStore } 
 import { probeCanvasEncodeSupport } from "../utils/imageFormats";
 import { useToast } from "../components/ToastHost";
 import type { ModuleKey } from "../components/ModuleList";
+import { usePersistentState } from "../hooks/usePersistentState";
 
 interface SelfTestViewProps {
   onOpenGuide?: (key?: ModuleKey) => void;
@@ -81,6 +82,9 @@ export function SelfTestView({ onOpenGuide }: SelfTestViewProps) {
   const [results, setResults] = useState<Record<string, ExtendedResult>>(initialResults);
   const [details, setDetails] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("ready");
+  const [autoMonitor, setAutoMonitor] = usePersistentState<boolean>("nullid:selftest:auto-monitor", false);
+  const [monitorIntervalSec, setMonitorIntervalSec] = usePersistentState<number>("nullid:selftest:interval", 180);
+  const [lastRunAt, setLastRunAt] = useState<string | null>(null);
   const resultsRef = useRef(results);
 
   useEffect(() => {
@@ -269,7 +273,60 @@ export function SelfTestView({ onOpenGuide }: SelfTestViewProps) {
     }
     setMessage("all checks passed");
     push("self-test complete", "accent");
+    setLastRunAt(new Date().toISOString());
   };
+
+  const runSingle = async (key: string) => {
+    if (key === "encrypt") await runEncryptRoundtrip();
+    else if (key === "file") await runFileRoundtrip();
+    else if (key === "storage") await runStorage();
+    else if (key === "hash") await runHash();
+    else if (key === "secure-context") runSecureContextProbe();
+    else if (key === "webcrypto") runWebCryptoProbe();
+    else if (key === "indexeddb") await runIndexedDbProbe();
+    else if (key === "clipboard") await runClipboardProbe();
+    else if (key === "service-worker") runServiceWorkerProbe();
+    else if (key === "image-codecs") await runCodecProbe();
+    setLastRunAt(new Date().toISOString());
+  };
+
+  const exportReport = () => {
+    const summary = summarizeResults(resultsRef.current);
+    const payload = {
+      schemaVersion: 1,
+      kind: "nullid-selftest-report",
+      generatedAt: new Date().toISOString(),
+      autoMonitor,
+      monitorIntervalSec,
+      summary,
+      results: checks.map((item) => ({
+        key: item.key,
+        title: item.title,
+        status: resultsRef.current[item.key] ?? "idle",
+        detail: details[item.key] ?? null,
+      })),
+    };
+    const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `nullid-selftest-${Date.now()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    push("self-test report exported", "accent");
+  };
+
+  useEffect(() => {
+    if (!autoMonitor) return;
+    void runAll();
+    const intervalMs = Math.max(30, monitorIntervalSec) * 1000;
+    const timer = window.setInterval(() => {
+      void runAll();
+    }, intervalMs);
+    return () => window.clearInterval(timer);
+  }, [autoMonitor, monitorIntervalSec]);
+
+  const summary = summarizeResults(results);
 
   const badge = (result: ExtendedResult) => {
     if (result === "running") return <span className="tag">running</span>;
@@ -298,8 +355,37 @@ export function SelfTestView({ onOpenGuide }: SelfTestViewProps) {
           <button className="button" type="button" onClick={runAll}>
             run all
           </button>
+          <label className="microcopy" style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+            <input
+              type="checkbox"
+              checked={autoMonitor}
+              onChange={(event) => setAutoMonitor(event.target.checked)}
+              aria-label="Enable auto monitor"
+            />
+            auto monitor
+          </label>
+          <input
+            className="input"
+            type="number"
+            min={30}
+            max={3600}
+            value={monitorIntervalSec}
+            onChange={(event) => setMonitorIntervalSec(Math.min(3600, Math.max(30, Number(event.target.value))))}
+            aria-label="Auto monitor interval in seconds"
+          />
+          <button className="button" type="button" onClick={exportReport}>
+            export report
+          </button>
           <span className="microcopy">status: {message}</span>
         </div>
+        <div className="status-line">
+          <span>summary</span>
+          <span className="tag tag-danger">fail {summary.fail}</span>
+          <span className="tag">warn {summary.warn}</span>
+          <span className="tag tag-accent">pass {summary.pass}</span>
+          <span className="microcopy">health score {summary.healthScore}/100</span>
+        </div>
+        <div className="microcopy">last run: {lastRunAt ? new Date(lastRunAt).toLocaleString() : "never"}</div>
         <ul className="note-list">
           {checks.map((item) => {
             const result = results[item.key] ?? "idle";
@@ -311,7 +397,12 @@ export function SelfTestView({ onOpenGuide }: SelfTestViewProps) {
                   {detail ? <div className="microcopy">{detail}</div> : null}
                   {(result === "fail" || result === "warn") && <div className="microcopy">{item.hint}</div>}
                 </div>
-                {badge(result)}
+                <div className="controls-row">
+                  {badge(result)}
+                  <button className="button" type="button" onClick={() => void runSingle(item.key)}>
+                    run
+                  </button>
+                </div>
               </li>
             );
           })}
@@ -319,4 +410,14 @@ export function SelfTestView({ onOpenGuide }: SelfTestViewProps) {
       </div>
     </div>
   );
+}
+
+function summarizeResults(map: Record<string, ExtendedResult>) {
+  const all = Object.values(map);
+  const fail = all.filter((value) => value === "fail").length;
+  const warn = all.filter((value) => value === "warn").length;
+  const pass = all.filter((value) => value === "pass").length;
+  const total = all.length || 1;
+  const healthScore = Math.max(0, Math.round(((pass + warn * 0.5) / total) * 100 - fail * 6));
+  return { fail, warn, pass, total, healthScore };
 }

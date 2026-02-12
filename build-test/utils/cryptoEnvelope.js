@@ -81,20 +81,7 @@ export async function encryptBytes(passphrase, bytes, options) {
     return { blob: `${ENVELOPE_PREFIX}.${toBase64Url(utf8ToBytes(JSON.stringify(payload)))}`, header, ciphertext };
 }
 export async function decryptBlob(passphrase, blob) {
-    const normalized = normalizeEnvelopeBlob(blob);
-    if (!normalized.startsWith(`${ENVELOPE_PREFIX}.`)) {
-        throw new Error("Unsupported envelope prefix");
-    }
-    const encoded = normalized.slice(`${ENVELOPE_PREFIX}.`.length);
-    const envelopeBytes = fromBase64Url(encoded);
-    let envelope;
-    try {
-        envelope = JSON.parse(bytesToUtf8(envelopeBytes));
-    }
-    catch (error) {
-        console.error("Envelope parse failed", error);
-        throw new Error("Invalid envelope format");
-    }
+    const envelope = parseEnvelope(blob);
     if (envelope.header.version !== ENVELOPE_VERSION || envelope.header.algo !== "AES-GCM") {
         throw new Error("Unsupported envelope version");
     }
@@ -110,4 +97,26 @@ export async function decryptBlob(passphrase, blob) {
     const ciphertext = fromBase64Url(envelope.ciphertext);
     const plaintext = new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv.buffer, additionalData: AAD.buffer }, key, ciphertext.buffer));
     return { plaintext, header: envelope.header };
+}
+export function inspectEnvelope(blob) {
+    const envelope = parseEnvelope(blob);
+    return {
+        header: envelope.header,
+        ciphertextBytes: fromBase64Url(envelope.ciphertext).byteLength,
+    };
+}
+function parseEnvelope(blob) {
+    const normalized = normalizeEnvelopeBlob(blob);
+    if (!normalized.startsWith(`${ENVELOPE_PREFIX}.`)) {
+        throw new Error("Unsupported envelope prefix");
+    }
+    const encoded = normalized.slice(`${ENVELOPE_PREFIX}.`.length);
+    const envelopeBytes = fromBase64Url(encoded);
+    try {
+        return JSON.parse(bytesToUtf8(envelopeBytes));
+    }
+    catch (error) {
+        console.error("Envelope parse failed", error);
+        throw new Error("Invalid envelope format");
+    }
 }

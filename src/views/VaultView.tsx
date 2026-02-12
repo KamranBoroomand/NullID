@@ -15,6 +15,7 @@ import {
 } from "../utils/vault";
 import { getVaultBackendInfo, wipeVault } from "../utils/storage";
 import type { ModuleKey } from "../components/ModuleList";
+import { analyzeSecret, gradeLabel, type SecretGrade } from "../utils/passwordToolkit";
 
 type DecryptedNote = { id: string; title: string; body: string; tags: string[]; createdAt: number; updatedAt: number };
 
@@ -35,10 +36,14 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [autoLockSeconds, setAutoLockSeconds] = useState(300);
   const [lockTimer, setLockTimer] = useState<number | null>(null);
+  const [lockDeadlineMs, setLockDeadlineMs] = useState<number | null>(null);
+  const [lockRemaining, setLockRemaining] = useState<number>(0);
   const [backendInfo, setBackendInfo] = useState(() => getVaultBackendInfo());
+  const [template, setTemplate] = useState<"blank" | "incident" | "credentials" | "checklist">("blank");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const encryptedImportRef = useRef<HTMLInputElement>(null);
   const formatTs = useCallback((value: number) => new Date(value).toLocaleString(), []);
+  const passphraseAssessment = useMemo(() => analyzeSecret(passphrase), [passphrase]);
 
   const filteredNotes = useMemo(
     () =>
@@ -52,15 +57,31 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
       }),
     [filter, notes],
   );
+  const vaultStats = useMemo(() => {
+    const uniqueTags = new Set(notes.flatMap((note) => note.tags));
+    const totalChars = notes.reduce((sum, note) => sum + note.body.length + note.title.length, 0);
+    return {
+      totalNotes: notes.length,
+      filteredNotes: filteredNotes.length,
+      totalChars,
+      avgChars: notes.length ? Math.round(totalChars / notes.length) : 0,
+      uniqueTags: uniqueTags.size,
+      latestUpdate: notes.length ? Math.max(...notes.map((note) => note.updatedAt)) : null,
+    };
+  }, [filteredNotes.length, notes]);
 
   const resetLockTimer = useCallback(() => {
     if (lockTimer) {
       window.clearTimeout(lockTimer);
     }
+    const deadline = Date.now() + autoLockSeconds * 1000;
+    setLockDeadlineMs(deadline);
     const timer = window.setTimeout(() => {
       setUnlocked(false);
       setKey(null);
       setNotes([]);
+      setLockDeadlineMs(null);
+      setLockRemaining(0);
       push("vault locked (timeout)", "neutral");
     }, autoLockSeconds * 1000);
     setLockTimer(timer);
@@ -85,6 +106,20 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
   useEffect(() => () => {
     if (lockTimer) window.clearTimeout(lockTimer);
   }, [lockTimer]);
+
+  useEffect(() => {
+    if (!lockDeadlineMs || !unlocked) {
+      setLockRemaining(0);
+      return;
+    }
+    const tick = () => {
+      const seconds = Math.max(0, Math.ceil((lockDeadlineMs - Date.now()) / 1000));
+      setLockRemaining(seconds);
+    };
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [lockDeadlineMs, unlocked]);
 
   useEffect(() => {
     if (!unlocked) return;
@@ -186,6 +221,8 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
     }
     setUnlocked(false);
     setKey(null);
+    setLockDeadlineMs(null);
+    setLockRemaining(0);
     setNotes([]);
     setTitle("");
     setBody("");
@@ -194,6 +231,33 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
     setPassphrase("");
     push("vault locked", "neutral");
   }, [lockTimer, push]);
+
+  const applyTemplate = useCallback(
+    (next: "blank" | "incident" | "credentials" | "checklist") => {
+      setTemplate(next);
+      if (next === "blank") {
+        setTitle("");
+        setBody("");
+        setTags("");
+        return;
+      }
+      if (next === "incident") {
+        setTitle(`Incident ${new Date().toISOString().slice(0, 10)}`);
+        setBody("Summary:\nImpact:\nIndicators:\nActions taken:\nNext steps:");
+        setTags("incident,triage");
+      } else if (next === "credentials") {
+        setTitle("Credential inventory");
+        setBody("System:\nAccount:\nRotation date:\nRecovery path:\nNotes:");
+        setTags("credentials,rotation");
+      } else {
+        setTitle("Security checklist");
+        setBody("- [ ] Validate artifact hash\n- [ ] Sanitize logs\n- [ ] Export signed snapshot\n- [ ] Confirm recipient");
+        setTags("checklist,ops");
+      }
+      if (unlocked) resetLockTimer();
+    },
+    [resetLockTimer, unlocked],
+  );
 
   const handleWipe = useCallback(async () => {
     await wipeVault();
@@ -260,6 +324,39 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
     fileInputRef.current?.click();
   }, []);
 
+  const exportFilteredReport = useCallback(() => {
+    if (!unlocked) {
+      push("unlock to export report", "danger");
+      return;
+    }
+    const includeBodies = confirm("Include note bodies in report export?");
+    const payload = {
+      schemaVersion: 1,
+      kind: "nullid-vault-report",
+      createdAt: new Date().toISOString(),
+      filters: { query: filter || null },
+      stats: vaultStats,
+      notes: filteredNotes.map((note) => ({
+        id: note.id,
+        title: note.title,
+        body: includeBodies ? note.body : undefined,
+        bodyChars: note.body.length,
+        tags: note.tags,
+        createdAt: note.createdAt,
+        updatedAt: note.updatedAt,
+      })),
+    };
+    const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `nullid-vault-report-${Date.now()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    push("vault report exported", "accent");
+    resetLockTimer();
+  }, [filter, filteredNotes, push, resetLockTimer, unlocked, vaultStats]);
+
   useEffect(() => {
     const onVisibility = () => {
       if (document.visibilityState === "hidden" && unlocked) {
@@ -309,6 +406,11 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
             <button className="button" type="button" onClick={handleLock} disabled={!unlocked}>
               lock
             </button>
+          </div>
+          <div className="status-line">
+            <span>passphrase strength</span>
+            <span className={gradeTagClass(passphraseAssessment.grade)}>{gradeLabel(passphraseAssessment.grade)}</span>
+            <span className="microcopy">effective ≈ {passphraseAssessment.effectiveEntropyBits} bits</span>
           </div>
           <div className="controls-row">
             <button className="button" type="button" onClick={handleExport} disabled={!unlocked || notes.length === 0}>
@@ -406,6 +508,11 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
             <Chip label={`storage: ${backendInfo.kind}`} tone={backendInfo.fallbackReason ? "danger" : "muted"} />
             {backendInfo.fallbackReason && <span className="microcopy">fallback: {backendInfo.fallbackReason}</span>}
           </div>
+          <div className="status-line">
+            <span>auto-lock</span>
+            <span className="tag">{unlocked ? `${lockRemaining}s` : "locked"}</span>
+            <span className="microcopy">{unlocked ? "timer resets on activity" : "unlock to start timer"}</span>
+          </div>
           <div className="controls-row">
             <label className="section-title" htmlFor="vault-search">
               Search
@@ -477,6 +584,23 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
             onChange={(event) => setTags(event.target.value)}
           />
           <div className="controls-row">
+            <span className="section-title">Templates</span>
+            <div className="pill-buttons" role="group" aria-label="Vault note templates">
+              <button type="button" className={template === "blank" ? "active" : ""} onClick={() => applyTemplate("blank")}>
+                blank
+              </button>
+              <button type="button" className={template === "incident" ? "active" : ""} onClick={() => applyTemplate("incident")}>
+                incident
+              </button>
+              <button type="button" className={template === "credentials" ? "active" : ""} onClick={() => applyTemplate("credentials")}>
+                credentials
+              </button>
+              <button type="button" className={template === "checklist" ? "active" : ""} onClick={() => applyTemplate("checklist")}>
+                checklist
+              </button>
+            </div>
+          </div>
+          <div className="controls-row">
             <button className="button" type="button" disabled={!unlocked} onClick={handleSave}>
               {activeId ? "update" : "store"}
             </button>
@@ -502,6 +626,20 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
           <span className="panel-subtext">decrypted in-memory only</span>
         </div>
         <div className="note-box">
+          <div className="status-line">
+            <span>analytics</span>
+            <span className="tag tag-accent">notes {vaultStats.totalNotes}</span>
+            <span className="tag">avg chars {vaultStats.avgChars}</span>
+            <span className="tag">tags {vaultStats.uniqueTags}</span>
+          </div>
+          <div className="controls-row">
+            <button className="button" type="button" onClick={exportFilteredReport} disabled={!unlocked || filteredNotes.length === 0}>
+              export notes report
+            </button>
+            <span className="microcopy">
+              {vaultStats.latestUpdate ? `latest update: ${formatTs(vaultStats.latestUpdate)}` : "no notes yet"}
+            </span>
+          </div>
           {unlocked ? (
             filteredNotes.length === 0 ? (
               <div className="microcopy">no matching notes</div>
@@ -545,4 +683,10 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
       </div>
     </div>
   );
+}
+
+function gradeTagClass(grade: SecretGrade): string {
+  if (grade === "critical" || grade === "weak") return "tag tag-danger";
+  if (grade === "fair") return "tag";
+  return "tag tag-accent";
 }

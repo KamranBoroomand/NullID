@@ -8,6 +8,7 @@ import { useClipboardPrefs, writeClipboard } from "../utils/clipboard";
 import type { ModuleKey } from "../components/ModuleList";
 
 type MaskMode = "full" | "partial";
+type SeverityThreshold = "low" | "medium" | "high";
 
 type Detector = {
   key: string;
@@ -104,6 +105,9 @@ export function RedactView({ onOpenGuide }: RedactViewProps) {
   const [clipboardPrefs] = useClipboardPrefs();
   const [input, setInput] = useState("");
   const [maskMode, setMaskMode] = usePersistentState<MaskMode>("nullid:redact:mask", "full");
+  const [minimumSeverity, setMinimumSeverity] = usePersistentState<SeverityThreshold>("nullid:redact:min-severity", "low");
+  const [minTokenLength, setMinTokenLength] = usePersistentState<number>("nullid:redact:min-token-length", 20);
+  const [preserveLength, setPreserveLength] = usePersistentState<boolean>("nullid:redact:preserve-length", false);
   const [customPattern, setCustomPattern] = useState("");
   const [customLabel, setCustomLabel] = useState("custom");
   const [customRules, setCustomRules] = useState<CustomRule[]>([]);
@@ -118,9 +122,26 @@ export function RedactView({ onOpenGuide }: RedactViewProps) {
     [detectorState],
   );
 
-  const findings = useMemo(() => scan(input, activeDetectors, customRules), [activeDetectors, customRules, input]);
+  const findings = useMemo(
+    () => scan(input, activeDetectors, customRules, { minimumSeverity, minTokenLength }),
+    [activeDetectors, customRules, input, minTokenLength, minimumSeverity],
+  );
 
-  const redacted = useMemo(() => redact(input, findings.matches, maskMode), [findings.matches, input, maskMode]);
+  const redacted = useMemo(() => redact(input, findings.matches, maskMode, preserveLength), [findings.matches, input, maskMode, preserveLength]);
+  const severityCounts = useMemo(() => {
+    return findings.matches.reduce(
+      (acc, match) => {
+        acc[match.severity] += 1;
+        return acc;
+      },
+      { high: 0, medium: 0, low: 0 },
+    );
+  }, [findings.matches]);
+  const coverage = useMemo(() => {
+    if (!input.length || findings.matches.length === 0) return 0;
+    const maskedChars = findings.matches.reduce((sum, match) => sum + (match.end - match.start), 0);
+    return Math.min(100, Math.round((maskedChars / Math.max(1, input.length)) * 100));
+  }, [findings.matches, input.length]);
 
   const applyCustomRule = () => {
     if (!customPattern.trim()) return;
@@ -159,6 +180,43 @@ export function RedactView({ onOpenGuide }: RedactViewProps) {
     URL.revokeObjectURL(url);
   };
 
+  const exportFindingsReport = () => {
+    const payload = {
+      schemaVersion: 1,
+      kind: "nullid-redaction-report",
+      createdAt: new Date().toISOString(),
+      config: {
+        maskMode,
+        minimumSeverity,
+        minTokenLength,
+        preserveLength,
+        enabledDetectors: activeDetectors.map((detector) => detector.key),
+      },
+      summary: {
+        totalFindings: findings.total,
+        overallSeverity: findings.overall,
+        coveragePercent: coverage,
+        severityCounts,
+      },
+      byType: findings.counts,
+      matches: findings.matches.slice(0, 400).map((match) => ({
+        label: match.label,
+        severity: match.severity,
+        start: match.start,
+        end: match.end,
+        preview: input.slice(Math.max(0, match.start - 8), Math.min(input.length, match.end + 8)),
+      })),
+    };
+    const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `nullid-redaction-report-${Date.now()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    push("redaction report exported", "accent");
+  };
+
   return (
     <div className="workspace-scroll">
       <div className="guide-link">
@@ -189,6 +247,44 @@ export function RedactView({ onOpenGuide }: RedactViewProps) {
               ))}
             </div>
           </div>
+          <div className="controls-row">
+            <label className="section-title" htmlFor="min-severity">
+              Min severity
+            </label>
+            <select
+              id="min-severity"
+              className="select"
+              value={minimumSeverity}
+              onChange={(event) => setMinimumSeverity(event.target.value as SeverityThreshold)}
+              aria-label="Minimum severity filter"
+            >
+              <option value="low">low</option>
+              <option value="medium">medium</option>
+              <option value="high">high</option>
+            </select>
+            <label className="section-title" htmlFor="token-length">
+              Token min len
+            </label>
+            <input
+              id="token-length"
+              className="input"
+              type="number"
+              min={12}
+              max={64}
+              value={minTokenLength}
+              onChange={(event) => setMinTokenLength(clamp(Number(event.target.value) || 0, 12, 64))}
+              aria-label="Minimum token detector length"
+            />
+            <label className="microcopy" style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+              <input
+                type="checkbox"
+                checked={preserveLength}
+                onChange={(event) => setPreserveLength(event.target.checked)}
+                aria-label="Preserve replacement length"
+              />
+              preserve length in full mask
+            </label>
+          </div>
         </div>
         <div className="panel" aria-label="Redaction output">
           <div className="panel-heading">
@@ -209,11 +305,21 @@ export function RedactView({ onOpenGuide }: RedactViewProps) {
             <button className="button" type="button" onClick={handleDownload}>
               download
             </button>
+            <button className="button" type="button" onClick={exportFindingsReport}>
+              export report
+            </button>
           </div>
           <div className="status-line">
             <span>severity</span>
             <Chip label={findings.overall.toUpperCase()} tone={findings.overall === "high" ? "danger" : "accent"} />
             <span className="microcopy">{findings.total} findings</span>
+          </div>
+          <div className="status-line">
+            <span>coverage</span>
+            <span className="tag">{coverage}% chars masked</span>
+            <span className="microcopy">
+              high {severityCounts.high} · medium {severityCounts.medium} · low {severityCounts.low}
+            </span>
           </div>
         </div>
       </div>
@@ -299,17 +405,28 @@ export function RedactView({ onOpenGuide }: RedactViewProps) {
 
 type Match = RedactionMatch;
 
-function scan(text: string, rules: Detector[], custom: CustomRule[]) {
+function scan(
+  text: string,
+  rules: Detector[],
+  custom: CustomRule[],
+  options: { minimumSeverity: SeverityThreshold; minTokenLength: number },
+) {
   const counts: Record<string, number> = {};
   const severityMap: Record<string, Detector["severity"]> = {};
   const matches: Match[] = [];
+  const minimumRank = rank(options.minimumSeverity);
 
   const applyRule = (rule: Detector) => {
+    if (rank(rule.severity) < minimumRank) return;
     const regex = new RegExp(rule.regex, rule.regex.flags);
     regex.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = regex.exec(text)) !== null) {
       const value = match[0];
+      if (rule.key === "token" && value.length < options.minTokenLength) {
+        if (!regex.global) break;
+        continue;
+      }
       if (rule.validate && !rule.validate(value)) {
         if (!regex.global) break;
         continue;
@@ -327,7 +444,7 @@ function scan(text: string, rules: Detector[], custom: CustomRule[]) {
       key: rule.label,
       label: rule.label,
       regex: new RegExp(rule.regex, rule.regex.flags),
-      severity: "medium",
+      severity: minimumRank > rank("medium") ? "low" : "medium",
       mask: `[${rule.label}]`,
     }),
   );
@@ -342,14 +459,15 @@ function scan(text: string, rules: Detector[], custom: CustomRule[]) {
   return { counts, total, overall: worst, matches: resolved, severityMap };
 }
 
-function redact(text: string, matches: Match[], mode: MaskMode) {
+function redact(text: string, matches: Match[], mode: MaskMode, preserveLength = false) {
   if (!matches.length) return text;
   const sorted = [...matches].sort((a, b) => a.start - b.start);
   let cursor = 0;
   let output = "";
   sorted.forEach((m) => {
     output += text.slice(cursor, m.start);
-    output += mode === "full" ? `[${m.label}]` : partialMask(text.slice(m.start, m.end));
+    const source = text.slice(m.start, m.end);
+    output += mode === "full" ? (preserveLength ? preserveMask(source, m.label) : `[${m.label}]`) : partialMask(source);
     cursor = m.end;
   });
   output += text.slice(cursor);
@@ -411,4 +529,14 @@ function highlight(text: string, matches: Match[]) {
 
 function rank(value: "high" | "medium" | "low") {
   return value === "high" ? 3 : value === "medium" ? 2 : 1;
+}
+
+function preserveMask(value: string, label: string) {
+  const base = `[${label}]`;
+  if (value.length <= base.length) return "*".repeat(value.length);
+  return `${base}${"*".repeat(value.length - base.length)}`;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }

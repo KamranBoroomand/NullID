@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./styles.css";
 import { bytesToUtf8 } from "../utils/encoding";
-import { KDF_PROFILES, KdfProfile, decryptBlob, decryptText, encryptBytes, encryptText } from "../utils/cryptoEnvelope";
+import { KDF_PROFILES, KdfHash, KdfProfile, decryptBlob, decryptText, encryptBytes, encryptText, inspectEnvelope } from "../utils/cryptoEnvelope";
 import { Chip } from "../components/Chip";
 import { useToast } from "../components/ToastHost";
 import type { ModuleKey } from "../components/ModuleList";
+import { analyzeSecret, gradeLabel, type SecretGrade } from "../utils/passwordToolkit";
 
 interface EncViewProps {
   onOpenGuide?: (key?: ModuleKey) => void;
@@ -18,6 +19,9 @@ export function EncView({ onOpenGuide }: EncViewProps) {
   const [decPass, setDecPass] = useState("");
   const [decrypted, setDecrypted] = useState("");
   const [kdfProfile, setKdfProfile] = useState<KdfProfile>("compat");
+  const [kdfMode, setKdfMode] = useState<"profile" | "custom">("profile");
+  const [customIterations, setCustomIterations] = useState(600_000);
+  const [customHash, setCustomHash] = useState<KdfHash>("SHA-512");
   const [encFile, setEncFile] = useState<File | null>(null);
   const [encFileBlob, setEncFileBlob] = useState<string | null>(null);
   const [decFileBlob, setDecFileBlob] = useState<Uint8Array | null>(null);
@@ -29,12 +33,31 @@ export function EncView({ onOpenGuide }: EncViewProps) {
   const [isEncrypting, setIsEncrypting] = useState(false);
   const [isDecrypting, setIsDecrypting] = useState(false);
   const [payloadMeta, setPayloadMeta] = useState<{ name?: string; mime?: string; bytes?: number } | null>(null);
+  const [envelopeMeta, setEnvelopeMeta] = useState<{
+    iterations: number;
+    hash: KdfHash;
+    cipherBytes: number;
+    mime?: string;
+    name?: string;
+  } | null>(null);
+  const [envelopeMetaError, setEnvelopeMetaError] = useState<string | null>(null);
   const encryptFileInput = useRef<HTMLInputElement>(null);
   const decryptFileInput = useRef<HTMLInputElement>(null);
   const clearTimerRef = useRef<number | null>(null);
 
   const MAX_FILE_BYTES = 25 * 1024 * 1024; // 25MB (envelope expands ~33%)
-  const kdfConfig = KDF_PROFILES[kdfProfile];
+  const kdfConfig = useMemo(
+    () =>
+      kdfMode === "custom"
+        ? {
+            iterations: clamp(customIterations, 100_000, 2_000_000),
+            hash: customHash,
+          }
+        : KDF_PROFILES[kdfProfile],
+    [customHash, customIterations, kdfMode, kdfProfile],
+  );
+  const encPassAssessment = useMemo(() => analyzeSecret(encPass), [encPass]);
+  const decPassAssessment = useMemo(() => analyzeSecret(decPass), [decPass]);
 
   const scheduleClear = useCallback(() => {
     if (!autoClear) return;
@@ -55,7 +78,10 @@ export function EncView({ onOpenGuide }: EncViewProps) {
     if (!plain || !encPass) return;
     setIsEncrypting(true);
     try {
-      const blob = await encryptText(encPass, plain, { kdfProfile });
+      const blob = await encryptText(encPass, plain, {
+        kdfProfile,
+        kdf: kdfMode === "custom" ? kdfConfig : undefined,
+      });
       setCipherText(blob.trim());
       setEncFileBlob(blob.trim());
       push("sealed", "accent");
@@ -69,7 +95,7 @@ export function EncView({ onOpenGuide }: EncViewProps) {
     } finally {
       setIsEncrypting(false);
     }
-  }, [encPass, kdfProfile, plain, push, scheduleClear]);
+  }, [encPass, kdfConfig, kdfMode, kdfProfile, plain, push, scheduleClear]);
 
   const handleEncryptFile = useCallback(async () => {
     if (!encPass || !encFile) return;
@@ -82,7 +108,12 @@ export function EncView({ onOpenGuide }: EncViewProps) {
     }
     try {
       const bytes = new Uint8Array(await encFile.arrayBuffer());
-      const { blob } = await encryptBytes(encPass, bytes, { mime: encFile.type, name: encFile.name, kdfProfile });
+      const { blob } = await encryptBytes(encPass, bytes, {
+        mime: encFile.type,
+        name: encFile.name,
+        kdfProfile,
+        kdf: kdfMode === "custom" ? kdfConfig : undefined,
+      });
       setEncFileBlob(blob);
       setCipherText(blob.trim());
       push("file sealed", "accent");
@@ -95,7 +126,7 @@ export function EncView({ onOpenGuide }: EncViewProps) {
     } finally {
       setIsEncrypting(false);
     }
-  }, [encFile, encPass, kdfProfile, push, scheduleClear]);
+  }, [encFile, encPass, kdfConfig, kdfMode, kdfProfile, push, scheduleClear]);
 
   const handleDecryptText = useCallback(async () => {
     if (!cipherText || !decPass) return;
@@ -181,6 +212,29 @@ export function EncView({ onOpenGuide }: EncViewProps) {
     }
   }, [cipherText, decPass]);
 
+  useEffect(() => {
+    const trimmed = cipherText.trim();
+    if (!trimmed) {
+      setEnvelopeMeta(null);
+      setEnvelopeMetaError(null);
+      return;
+    }
+    try {
+      const inspected = inspectEnvelope(trimmed);
+      setEnvelopeMeta({
+        iterations: inspected.header.kdf.iterations,
+        hash: inspected.header.kdf.hash,
+        cipherBytes: inspected.ciphertextBytes,
+        mime: inspected.header.mime,
+        name: inspected.header.name,
+      });
+      setEnvelopeMetaError(null);
+    } catch (error) {
+      setEnvelopeMeta(null);
+      setEnvelopeMetaError(error instanceof Error ? error.message : "invalid envelope");
+    }
+  }, [cipherText]);
+
   return (
     <div className="workspace-scroll">
       <div className="guide-link">
@@ -217,6 +271,11 @@ export function EncView({ onOpenGuide }: EncViewProps) {
             value={encPass}
             onChange={(event) => setEncPass(event.target.value)}
           />
+          <div className="status-line">
+            <span>passphrase strength</span>
+            <span className={gradeTagClass(encPassAssessment.grade)}>{gradeLabel(encPassAssessment.grade)}</span>
+            <span className="microcopy">effective ≈ {encPassAssessment.effectiveEntropyBits} bits</span>
+          </div>
           <div className="controls-row">
             <span className="section-title">KDF profile</span>
             <div className="pill-buttons" role="group" aria-label="KDF profile">
@@ -231,6 +290,40 @@ export function EncView({ onOpenGuide }: EncViewProps) {
                 </button>
               ))}
             </div>
+          </div>
+          <div className="controls-row">
+            <span className="section-title">KDF mode</span>
+            <div className="pill-buttons" role="group" aria-label="KDF mode">
+              <button type="button" className={kdfMode === "profile" ? "active" : ""} onClick={() => setKdfMode("profile")}>
+                profile
+              </button>
+              <button type="button" className={kdfMode === "custom" ? "active" : ""} onClick={() => setKdfMode("custom")}>
+                custom
+              </button>
+            </div>
+            {kdfMode === "custom" && (
+              <>
+                <select
+                  className="select"
+                  value={customHash}
+                  onChange={(event) => setCustomHash(event.target.value as KdfHash)}
+                  aria-label="Custom KDF hash"
+                >
+                  <option value="SHA-256">SHA-256</option>
+                  <option value="SHA-512">SHA-512</option>
+                </select>
+                <input
+                  className="input"
+                  type="number"
+                  min={100000}
+                  max={2000000}
+                  step={50000}
+                  value={customIterations}
+                  onChange={(event) => setCustomIterations(clamp(Number(event.target.value) || 0, 100_000, 2_000_000))}
+                  aria-label="Custom KDF iterations"
+                />
+              </>
+            )}
           </div>
           <div className="microcopy">PBKDF2 {kdfConfig.hash.toLowerCase()} · {kdfConfig.iterations.toLocaleString()} iterations</div>
           <div className="controls-row">
@@ -310,6 +403,11 @@ export function EncView({ onOpenGuide }: EncViewProps) {
             value={decPass}
             onChange={(event) => setDecPass(event.target.value)}
           />
+          <div className="status-line">
+            <span>passphrase strength</span>
+            <span className={gradeTagClass(decPassAssessment.grade)}>{gradeLabel(decPassAssessment.grade)}</span>
+            <span className="microcopy">effective ≈ {decPassAssessment.effectiveEntropyBits} bits</span>
+          </div>
           <div className="controls-row">
             <Chip label={payloadMeta?.name ?? "text/plain"} tone="muted" />
             {payloadMeta?.bytes !== undefined && <Chip label={`${Math.ceil((payloadMeta.bytes ?? 0) / 1024)} KB`} tone="muted" />}
@@ -326,6 +424,13 @@ export function EncView({ onOpenGuide }: EncViewProps) {
           <div className="microcopy">
             prefix NULLID:ENC:1, AES-GCM, PBKDF2 profile: {kdfProfile} ({kdfConfig.hash.toLowerCase()} / {kdfConfig.iterations.toLocaleString()}),
             AAD bound
+          </div>
+          <div className="microcopy">
+            {envelopeMeta
+              ? `header: ${envelopeMeta.hash.toLowerCase()} / ${envelopeMeta.iterations.toLocaleString()} · ${Math.ceil(envelopeMeta.cipherBytes / 1024)} KB ciphertext${envelopeMeta.name ? ` · ${envelopeMeta.name}` : ""}`
+              : envelopeMetaError
+                ? `header parse: ${envelopeMetaError}`
+                : "header parse pending"}
           </div>
           <pre className="output">{cipherText || "Generate an envelope to view"}</pre>
         </div>
@@ -381,4 +486,14 @@ export function EncView({ onOpenGuide }: EncViewProps) {
       </div>
     </div>
   );
+}
+
+function gradeTagClass(grade: SecretGrade): string {
+  if (grade === "critical" || grade === "weak") return "tag tag-danger";
+  if (grade === "fair") return "tag";
+  return "tag tag-accent";
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }

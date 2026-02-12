@@ -77,6 +77,37 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
     () => applySanitizeRules(log, rulesState, customRules, jsonAware),
     [customRules, jsonAware, log, rulesState],
   );
+  const ruleImpact = useMemo(() => {
+    return result.report
+      .map((line) => {
+        const match = line.match(/^(.*?):\s*(\d+)$/);
+        if (!match) return null;
+        return { label: match[1], count: Number(match[2]) };
+      })
+      .filter((entry): entry is { label: string; count: number } => Boolean(entry))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+  }, [result.report]);
+  const simulationRows = useMemo(() => {
+    const allRulesState = Object.fromEntries(ruleKeys.map((ruleKey) => [ruleKey, true])) as RulesState;
+    const presetRulesState = buildRulesState(sanitizePresets[preset].rules);
+    const variants = [
+      { id: "current", label: "current policy", rulesState, jsonAware, customRules },
+      { id: "strict", label: "strict all-rules", rulesState: allRulesState, jsonAware: true, customRules },
+      { id: "preset", label: `preset baseline (${sanitizePresets[preset].label})`, rulesState: presetRulesState, jsonAware: true, customRules: [] },
+      { id: "text", label: "text-only mode", rulesState, jsonAware: false, customRules },
+    ];
+    return variants.map((variant) => {
+      const simulated = applySanitizeRules(log, variant.rulesState, variant.customRules, variant.jsonAware);
+      return {
+        id: variant.id,
+        label: variant.label,
+        linesAffected: simulated.linesAffected,
+        outputChars: simulated.output.length,
+        appliedRules: simulated.applied.length,
+      };
+    });
+  }, [customRules, jsonAware, log, preset, rulesState]);
 
   const selectedPolicy = useMemo(() => policyPacks.find((pack) => pack.id === selectedPolicyId) ?? null, [policyPacks, selectedPolicyId]);
   const selectedKeyHintProfile = useMemo(
@@ -566,6 +597,29 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
           </div>
         </div>
         <div className="note-box">
+          <div className="section-title">Rule impact ranking</div>
+          {ruleImpact.length === 0 ? (
+            <div className="microcopy">no replacements counted yet</div>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>rule</th>
+                  <th>count</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ruleImpact.map((entry) => (
+                  <tr key={entry.label}>
+                    <td>{entry.label}</td>
+                    <td>{entry.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <div className="note-box">
           <div className="section-title">Custom rules</div>
           <div className="controls-row" style={{ alignItems: "flex-end" }}>
             <div style={{ flex: 1, minWidth: "180px" }}>
@@ -642,6 +696,36 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
             </ul>
           )}
         </div>
+      </div>
+
+      <div className="panel" aria-label="Policy simulation matrix">
+        <div className="panel-heading">
+          <span>Policy simulation matrix</span>
+          <span className="panel-subtext">compare policy outcomes</span>
+        </div>
+        <p className="microcopy">
+          Runs multiple policy variants against current input so you can compare redaction depth before sharing.
+        </p>
+        <table className="table">
+          <thead>
+            <tr>
+              <th>variant</th>
+              <th>rules applied</th>
+              <th>lines changed</th>
+              <th>output chars</th>
+            </tr>
+          </thead>
+          <tbody>
+            {simulationRows.map((row) => (
+              <tr key={row.id}>
+                <td>{row.label}</td>
+                <td>{row.appliedRules}</td>
+                <td>{row.linesAffected}</td>
+                <td>{row.outputChars}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       <div className="grid-two">

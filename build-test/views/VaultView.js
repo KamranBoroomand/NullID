@@ -5,6 +5,7 @@ import { Chip } from "../components/Chip";
 import { useToast } from "../components/ToastHost";
 import { decryptNote, deleteNote, exportVault, exportVaultEncrypted, importVault, importVaultEncrypted, loadNotes, saveNote, unlockVault, } from "../utils/vault";
 import { getVaultBackendInfo, wipeVault } from "../utils/storage";
+import { analyzeSecret, gradeLabel } from "../utils/passwordToolkit";
 export function VaultView({ onOpenGuide }) {
     const { push } = useToast();
     const [passphrase, setPassphrase] = useState("");
@@ -18,24 +19,44 @@ export function VaultView({ onOpenGuide }) {
     const [activeId, setActiveId] = useState(null);
     const [autoLockSeconds, setAutoLockSeconds] = useState(300);
     const [lockTimer, setLockTimer] = useState(null);
+    const [lockDeadlineMs, setLockDeadlineMs] = useState(null);
+    const [lockRemaining, setLockRemaining] = useState(0);
     const [backendInfo, setBackendInfo] = useState(() => getVaultBackendInfo());
+    const [template, setTemplate] = useState("blank");
     const fileInputRef = useRef(null);
     const encryptedImportRef = useRef(null);
     const formatTs = useCallback((value) => new Date(value).toLocaleString(), []);
+    const passphraseAssessment = useMemo(() => analyzeSecret(passphrase), [passphrase]);
     const filteredNotes = useMemo(() => notes.filter((note) => {
         const query = filter.toLowerCase();
         return (note.title.toLowerCase().includes(query) ||
             note.body.toLowerCase().includes(query) ||
             note.tags.some((tag) => tag.toLowerCase().includes(query)));
     }), [filter, notes]);
+    const vaultStats = useMemo(() => {
+        const uniqueTags = new Set(notes.flatMap((note) => note.tags));
+        const totalChars = notes.reduce((sum, note) => sum + note.body.length + note.title.length, 0);
+        return {
+            totalNotes: notes.length,
+            filteredNotes: filteredNotes.length,
+            totalChars,
+            avgChars: notes.length ? Math.round(totalChars / notes.length) : 0,
+            uniqueTags: uniqueTags.size,
+            latestUpdate: notes.length ? Math.max(...notes.map((note) => note.updatedAt)) : null,
+        };
+    }, [filteredNotes.length, notes]);
     const resetLockTimer = useCallback(() => {
         if (lockTimer) {
             window.clearTimeout(lockTimer);
         }
+        const deadline = Date.now() + autoLockSeconds * 1000;
+        setLockDeadlineMs(deadline);
         const timer = window.setTimeout(() => {
             setUnlocked(false);
             setKey(null);
             setNotes([]);
+            setLockDeadlineMs(null);
+            setLockRemaining(0);
             push("vault locked (timeout)", "neutral");
         }, autoLockSeconds * 1000);
         setLockTimer(timer);
@@ -57,6 +78,19 @@ export function VaultView({ onOpenGuide }) {
         if (lockTimer)
             window.clearTimeout(lockTimer);
     }, [lockTimer]);
+    useEffect(() => {
+        if (!lockDeadlineMs || !unlocked) {
+            setLockRemaining(0);
+            return;
+        }
+        const tick = () => {
+            const seconds = Math.max(0, Math.ceil((lockDeadlineMs - Date.now()) / 1000));
+            setLockRemaining(seconds);
+        };
+        tick();
+        const timer = window.setInterval(tick, 1000);
+        return () => window.clearInterval(timer);
+    }, [lockDeadlineMs, unlocked]);
     useEffect(() => {
         if (!unlocked)
             return;
@@ -150,6 +184,8 @@ export function VaultView({ onOpenGuide }) {
         }
         setUnlocked(false);
         setKey(null);
+        setLockDeadlineMs(null);
+        setLockRemaining(0);
         setNotes([]);
         setTitle("");
         setBody("");
@@ -158,6 +194,32 @@ export function VaultView({ onOpenGuide }) {
         setPassphrase("");
         push("vault locked", "neutral");
     }, [lockTimer, push]);
+    const applyTemplate = useCallback((next) => {
+        setTemplate(next);
+        if (next === "blank") {
+            setTitle("");
+            setBody("");
+            setTags("");
+            return;
+        }
+        if (next === "incident") {
+            setTitle(`Incident ${new Date().toISOString().slice(0, 10)}`);
+            setBody("Summary:\nImpact:\nIndicators:\nActions taken:\nNext steps:");
+            setTags("incident,triage");
+        }
+        else if (next === "credentials") {
+            setTitle("Credential inventory");
+            setBody("System:\nAccount:\nRotation date:\nRecovery path:\nNotes:");
+            setTags("credentials,rotation");
+        }
+        else {
+            setTitle("Security checklist");
+            setBody("- [ ] Validate artifact hash\n- [ ] Sanitize logs\n- [ ] Export signed snapshot\n- [ ] Confirm recipient");
+            setTags("checklist,ops");
+        }
+        if (unlocked)
+            resetLockTimer();
+    }, [resetLockTimer, unlocked]);
     const handleWipe = useCallback(async () => {
         await wipeVault();
         handleLock();
@@ -219,6 +281,38 @@ export function VaultView({ onOpenGuide }) {
     const handleImport = useCallback(async () => {
         fileInputRef.current?.click();
     }, []);
+    const exportFilteredReport = useCallback(() => {
+        if (!unlocked) {
+            push("unlock to export report", "danger");
+            return;
+        }
+        const includeBodies = confirm("Include note bodies in report export?");
+        const payload = {
+            schemaVersion: 1,
+            kind: "nullid-vault-report",
+            createdAt: new Date().toISOString(),
+            filters: { query: filter || null },
+            stats: vaultStats,
+            notes: filteredNotes.map((note) => ({
+                id: note.id,
+                title: note.title,
+                body: includeBodies ? note.body : undefined,
+                bodyChars: note.body.length,
+                tags: note.tags,
+                createdAt: note.createdAt,
+                updatedAt: note.updatedAt,
+            })),
+        };
+        const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `nullid-vault-report-${Date.now()}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+        push("vault report exported", "accent");
+        resetLockTimer();
+    }, [filter, filteredNotes, push, resetLockTimer, unlocked, vaultStats]);
     useEffect(() => {
         const onVisibility = () => {
             if (document.visibilityState === "hidden" && unlocked) {
@@ -239,7 +333,7 @@ export function VaultView({ onOpenGuide }) {
             window.removeEventListener("keydown", onPanic);
         };
     }, [handleLock, push, unlocked]);
-    return (_jsxs("div", { className: "workspace-scroll", children: [_jsx("div", { className: "guide-link", children: _jsx("button", { type: "button", className: "guide-link-button", onClick: () => onOpenGuide?.("vault"), children: "? guide" }) }), _jsxs("div", { className: "grid-two", children: [_jsxs("div", { className: "panel", "aria-label": "Vault controls", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Secure Notes" }), _jsx("span", { className: "panel-subtext", children: "AES-GCM + PBKDF2" })] }), _jsxs("div", { className: "controls-row", children: [_jsx("input", { className: "input", type: "password", placeholder: "passphrase", value: passphrase, onChange: (event) => setPassphrase(event.target.value), "aria-label": "Vault key" }), _jsx("button", { className: "button", type: "button", onClick: handleUnlock, disabled: unlocked || !passphrase, children: "unlock" }), _jsx("button", { className: "button", type: "button", onClick: handleLock, disabled: !unlocked, children: "lock" })] }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", onClick: handleExport, disabled: !unlocked || notes.length === 0, children: "export (json)" }), _jsx("button", { className: "button", type: "button", onClick: handleExportEncrypted, disabled: !unlocked || notes.length === 0, children: "export encrypted" }), _jsx("button", { className: "button", type: "button", onClick: handleImport, children: "import" }), _jsx("button", { className: "button", type: "button", onClick: () => encryptedImportRef.current?.click(), children: "import encrypted" }), _jsx("input", { ref: fileInputRef, type: "file", accept: "application/json", tabIndex: -1, style: { position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }, onChange: async (event) => {
+    return (_jsxs("div", { className: "workspace-scroll", children: [_jsx("div", { className: "guide-link", children: _jsx("button", { type: "button", className: "guide-link-button", onClick: () => onOpenGuide?.("vault"), children: "? guide" }) }), _jsxs("div", { className: "grid-two", children: [_jsxs("div", { className: "panel", "aria-label": "Vault controls", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Secure Notes" }), _jsx("span", { className: "panel-subtext", children: "AES-GCM + PBKDF2" })] }), _jsxs("div", { className: "controls-row", children: [_jsx("input", { className: "input", type: "password", placeholder: "passphrase", value: passphrase, onChange: (event) => setPassphrase(event.target.value), "aria-label": "Vault key" }), _jsx("button", { className: "button", type: "button", onClick: handleUnlock, disabled: unlocked || !passphrase, children: "unlock" }), _jsx("button", { className: "button", type: "button", onClick: handleLock, disabled: !unlocked, children: "lock" })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: "passphrase strength" }), _jsx("span", { className: gradeTagClass(passphraseAssessment.grade), children: gradeLabel(passphraseAssessment.grade) }), _jsxs("span", { className: "microcopy", children: ["effective \u2248 ", passphraseAssessment.effectiveEntropyBits, " bits"] })] }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", onClick: handleExport, disabled: !unlocked || notes.length === 0, children: "export (json)" }), _jsx("button", { className: "button", type: "button", onClick: handleExportEncrypted, disabled: !unlocked || notes.length === 0, children: "export encrypted" }), _jsx("button", { className: "button", type: "button", onClick: handleImport, children: "import" }), _jsx("button", { className: "button", type: "button", onClick: () => encryptedImportRef.current?.click(), children: "import encrypted" }), _jsx("input", { ref: fileInputRef, type: "file", accept: "application/json", tabIndex: -1, style: { position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }, onChange: async (event) => {
                                             const file = event.target.files?.[0];
                                             if (!file)
                                                 return;
@@ -291,10 +385,17 @@ export function VaultView({ onOpenGuide }) {
                                         } }), _jsx("button", { className: "button", type: "button", onClick: () => {
                                             if (confirm("Wipe all vault data?"))
                                                 handleWipe();
-                                        }, style: { borderColor: "var(--danger)", color: "var(--danger)" }, children: "wipe" })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: "state" }), _jsx(Chip, { label: unlocked ? "unsealed" : "locked", tone: unlocked ? "accent" : "muted" }), _jsxs("span", { className: "microcopy", children: ["notes: ", notes.length] }), _jsx(Chip, { label: `storage: ${backendInfo.kind}`, tone: backendInfo.fallbackReason ? "danger" : "muted" }), backendInfo.fallbackReason && _jsxs("span", { className: "microcopy", children: ["fallback: ", backendInfo.fallbackReason] })] }), _jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", htmlFor: "vault-search", children: "Search" }), _jsx("input", { id: "vault-search", className: "input", placeholder: "Filter title, body, or tags", value: filter, onChange: (event) => setFilter(event.target.value), disabled: !unlocked })] }), _jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", htmlFor: "auto-lock", children: "Auto lock (seconds)" }), _jsx("input", { id: "auto-lock", className: "input", type: "number", min: 30, max: 1800, value: autoLockSeconds, onChange: (event) => setAutoLockSeconds(Math.min(1800, Math.max(30, Number(event.target.value)))), disabled: !unlocked })] })] }), _jsxs("div", { className: "panel", "aria-label": "Create note form", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: activeId ? "Edit note" : "Create note" }), _jsx("span", { className: "panel-subtext", children: "encrypted body" })] }), _jsx("label", { className: "section-title", htmlFor: "note-title", children: "Title" }), _jsx("input", { id: "note-title", className: "input", placeholder: "Incident draft", "aria-label": "Note title", disabled: !unlocked, value: title, onChange: (event) => setTitle(event.target.value) }), _jsx("label", { className: "section-title", htmlFor: "note-body", children: "Body" }), _jsx("textarea", { id: "note-body", className: "textarea", placeholder: "Encrypted note body...", "aria-label": "Note body", disabled: !unlocked, value: body, onChange: (event) => setBody(event.target.value) }), _jsx("label", { className: "section-title", htmlFor: "note-tags", children: "Tags (comma separated)" }), _jsx("input", { id: "note-tags", className: "input", placeholder: "incident, access, case-142", "aria-label": "Note tags", disabled: !unlocked, value: tags, onChange: (event) => setTags(event.target.value) }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", disabled: !unlocked, onClick: handleSave, children: activeId ? "update" : "store" }), _jsx("button", { className: "button", type: "button", disabled: !unlocked, onClick: () => {
+                                        }, style: { borderColor: "var(--danger)", color: "var(--danger)" }, children: "wipe" })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: "state" }), _jsx(Chip, { label: unlocked ? "unsealed" : "locked", tone: unlocked ? "accent" : "muted" }), _jsxs("span", { className: "microcopy", children: ["notes: ", notes.length] }), _jsx(Chip, { label: `storage: ${backendInfo.kind}`, tone: backendInfo.fallbackReason ? "danger" : "muted" }), backendInfo.fallbackReason && _jsxs("span", { className: "microcopy", children: ["fallback: ", backendInfo.fallbackReason] })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: "auto-lock" }), _jsx("span", { className: "tag", children: unlocked ? `${lockRemaining}s` : "locked" }), _jsx("span", { className: "microcopy", children: unlocked ? "timer resets on activity" : "unlock to start timer" })] }), _jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", htmlFor: "vault-search", children: "Search" }), _jsx("input", { id: "vault-search", className: "input", placeholder: "Filter title, body, or tags", value: filter, onChange: (event) => setFilter(event.target.value), disabled: !unlocked })] }), _jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", htmlFor: "auto-lock", children: "Auto lock (seconds)" }), _jsx("input", { id: "auto-lock", className: "input", type: "number", min: 30, max: 1800, value: autoLockSeconds, onChange: (event) => setAutoLockSeconds(Math.min(1800, Math.max(30, Number(event.target.value)))), disabled: !unlocked })] })] }), _jsxs("div", { className: "panel", "aria-label": "Create note form", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: activeId ? "Edit note" : "Create note" }), _jsx("span", { className: "panel-subtext", children: "encrypted body" })] }), _jsx("label", { className: "section-title", htmlFor: "note-title", children: "Title" }), _jsx("input", { id: "note-title", className: "input", placeholder: "Incident draft", "aria-label": "Note title", disabled: !unlocked, value: title, onChange: (event) => setTitle(event.target.value) }), _jsx("label", { className: "section-title", htmlFor: "note-body", children: "Body" }), _jsx("textarea", { id: "note-body", className: "textarea", placeholder: "Encrypted note body...", "aria-label": "Note body", disabled: !unlocked, value: body, onChange: (event) => setBody(event.target.value) }), _jsx("label", { className: "section-title", htmlFor: "note-tags", children: "Tags (comma separated)" }), _jsx("input", { id: "note-tags", className: "input", placeholder: "incident, access, case-142", "aria-label": "Note tags", disabled: !unlocked, value: tags, onChange: (event) => setTags(event.target.value) }), _jsxs("div", { className: "controls-row", children: [_jsx("span", { className: "section-title", children: "Templates" }), _jsxs("div", { className: "pill-buttons", role: "group", "aria-label": "Vault note templates", children: [_jsx("button", { type: "button", className: template === "blank" ? "active" : "", onClick: () => applyTemplate("blank"), children: "blank" }), _jsx("button", { type: "button", className: template === "incident" ? "active" : "", onClick: () => applyTemplate("incident"), children: "incident" }), _jsx("button", { type: "button", className: template === "credentials" ? "active" : "", onClick: () => applyTemplate("credentials"), children: "credentials" }), _jsx("button", { type: "button", className: template === "checklist" ? "active" : "", onClick: () => applyTemplate("checklist"), children: "checklist" })] })] }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", disabled: !unlocked, onClick: handleSave, children: activeId ? "update" : "store" }), _jsx("button", { className: "button", type: "button", disabled: !unlocked, onClick: () => {
                                             setTitle("");
                                             setBody("");
                                             setTags("");
                                             setActiveId(null);
-                                        }, children: "clear" })] })] })] }), _jsxs("div", { className: "panel", "aria-label": "Notes list", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Notes" }), _jsx("span", { className: "panel-subtext", children: "decrypted in-memory only" })] }), _jsx("div", { className: "note-box", children: unlocked ? (filteredNotes.length === 0 ? (_jsx("div", { className: "microcopy", children: "no matching notes" })) : (_jsx("ul", { className: "note-list", children: filteredNotes.map((note) => (_jsxs("li", { children: [_jsx("div", { className: "note-title", children: note.title }), _jsx("div", { className: "note-body", children: note.body }), note.tags.length > 0 && (_jsx("div", { className: "controls-row", children: note.tags.map((tag) => (_jsx(Chip, { label: tag, tone: "muted" }, tag))) })), _jsxs("div", { className: "microcopy", children: ["created ", formatTs(note.createdAt), " \u00B7 updated ", formatTs(note.updatedAt)] }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", onClick: () => handleEdit(note), children: "edit" }), _jsx("button", { className: "button", type: "button", onClick: () => handleDelete(note.id), style: { borderColor: "var(--danger)", color: "var(--danger)" }, children: "delete" })] })] }, note.id))) }))) : (_jsx("div", { className: "microcopy", children: "locked. unlock to view." })) })] })] }));
+                                        }, children: "clear" })] })] })] }), _jsxs("div", { className: "panel", "aria-label": "Notes list", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Notes" }), _jsx("span", { className: "panel-subtext", children: "decrypted in-memory only" })] }), _jsxs("div", { className: "note-box", children: [_jsxs("div", { className: "status-line", children: [_jsx("span", { children: "analytics" }), _jsxs("span", { className: "tag tag-accent", children: ["notes ", vaultStats.totalNotes] }), _jsxs("span", { className: "tag", children: ["avg chars ", vaultStats.avgChars] }), _jsxs("span", { className: "tag", children: ["tags ", vaultStats.uniqueTags] })] }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", onClick: exportFilteredReport, disabled: !unlocked || filteredNotes.length === 0, children: "export notes report" }), _jsx("span", { className: "microcopy", children: vaultStats.latestUpdate ? `latest update: ${formatTs(vaultStats.latestUpdate)}` : "no notes yet" })] }), unlocked ? (filteredNotes.length === 0 ? (_jsx("div", { className: "microcopy", children: "no matching notes" })) : (_jsx("ul", { className: "note-list", children: filteredNotes.map((note) => (_jsxs("li", { children: [_jsx("div", { className: "note-title", children: note.title }), _jsx("div", { className: "note-body", children: note.body }), note.tags.length > 0 && (_jsx("div", { className: "controls-row", children: note.tags.map((tag) => (_jsx(Chip, { label: tag, tone: "muted" }, tag))) })), _jsxs("div", { className: "microcopy", children: ["created ", formatTs(note.createdAt), " \u00B7 updated ", formatTs(note.updatedAt)] }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", onClick: () => handleEdit(note), children: "edit" }), _jsx("button", { className: "button", type: "button", onClick: () => handleDelete(note.id), style: { borderColor: "var(--danger)", color: "var(--danger)" }, children: "delete" })] })] }, note.id))) }))) : (_jsx("div", { className: "microcopy", children: "locked. unlock to view." }))] })] })] }));
+}
+function gradeTagClass(grade) {
+    if (grade === "critical" || grade === "weak")
+        return "tag tag-danger";
+    if (grade === "fair")
+        return "tag";
+    return "tag tag-accent";
 }

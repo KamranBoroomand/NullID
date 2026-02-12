@@ -6,6 +6,7 @@ import type { HashAlgorithm } from "../utils/hash";
 import { expectedHashLengths, hashFile, hashText, normalizeHashInput } from "../utils/hash";
 import { useClipboardPrefs, writeClipboard } from "../utils/clipboard";
 import type { ModuleKey } from "../components/ModuleList";
+import { usePersistentState } from "../hooks/usePersistentState";
 
 export type HashViewActions = {
   copyDigest: () => void | Promise<void>;
@@ -40,7 +41,13 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
   const [progress, setProgress] = useState<number>(0);
   const [fileComparison, setFileComparison] = useState<"idle" | "match" | "mismatch" | "pending">("idle");
   const [fileCompareName, setFileCompareName] = useState<string>("none");
+  const [batchInput, setBatchInput] = usePersistentState<string>("nullid:hash:batch-input", "");
+  const [batchAlgorithm, setBatchAlgorithm] = usePersistentState<HashAlgorithm>("nullid:hash:batch-algo", "SHA-256");
+  const [batchRows, setBatchRows] = useState<Array<{ line: string; hex: string; base64: string; index: number }>>([]);
+  const [isBatching, setIsBatching] = useState(false);
   const [isHashing, setIsHashing] = useState(false);
+  const [lastDurationMs, setLastDurationMs] = useState<number | null>(null);
+  const [lastInputBytes, setLastInputBytes] = useState<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const textDebounceRef = useRef<number | null>(null);
   const verifyDebounceRef = useRef<number | null>(null);
@@ -86,6 +93,7 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
       const controller = new AbortController();
       abortRef.current = controller;
       const jobId = (jobRef.current += 1);
+      const startedAt = performance.now();
       let succeeded = false;
       try {
         const nextResult =
@@ -96,6 +104,9 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
           setResult(nextResult);
           setSource(input);
           setFileName(input.kind === "file" ? input.file.name : "inline");
+          const bytes = input.kind === "file" ? input.file.size : new TextEncoder().encode(input.value).byteLength;
+          setLastDurationMs(Math.round(performance.now() - startedAt));
+          setLastInputBytes(bytes);
           succeeded = true;
           onStatus?.("digest ready", "accent");
         }
@@ -169,6 +180,85 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
     const line = `${result.hex}  ${name}`;
     await writeClipboard(line, clipboardPrefs, report, "sha256sum line copied");
   }, [clipboardPrefs, report, result, source]);
+
+  const runBatchHash = useCallback(async () => {
+    const lines = batchInput
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .slice(0, 120);
+    if (lines.length === 0) {
+      report("add lines for batch hashing", "danger");
+      return;
+    }
+    setIsBatching(true);
+    try {
+      const rows: Array<{ line: string; hex: string; base64: string; index: number }> = [];
+      for (let i = 0; i < lines.length; i += 1) {
+        const digest = await hashText(lines[i], batchAlgorithm);
+        rows.push({ line: lines[i], hex: digest.hex, base64: digest.base64, index: i + 1 });
+      }
+      setBatchRows(rows);
+      report(`batch hashed ${rows.length} lines`, "accent");
+    } catch (error) {
+      console.error(error);
+      report("batch hash failed", "danger");
+    } finally {
+      setIsBatching(false);
+    }
+  }, [batchAlgorithm, batchInput, report]);
+
+  const exportDigestManifest = useCallback(() => {
+    if (!result) {
+      report("no digest to export", "danger");
+      return;
+    }
+    const payload = {
+      schemaVersion: 1,
+      kind: "nullid-hash-manifest",
+      createdAt: new Date().toISOString(),
+      algorithm,
+      source: source?.kind ?? "none",
+      sourceName: source?.kind === "file" ? source.file.name : "inline",
+      sourceBytes: source?.kind === "file" ? source.file.size : source?.kind === "text" ? new TextEncoder().encode(source.value).byteLength : 0,
+      digest: result,
+      verifyValue: verifyValue.trim() || null,
+      comparison,
+      fileComparison,
+      fileCompareName,
+      durationMs: lastDurationMs,
+    };
+    const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `nullid-hash-manifest-${Date.now()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    report("hash manifest exported", "accent");
+  }, [algorithm, comparison, fileCompareName, fileComparison, lastDurationMs, report, result, source, verifyValue]);
+
+  const exportBatchManifest = useCallback(() => {
+    if (batchRows.length === 0) {
+      report("no batch rows", "danger");
+      return;
+    }
+    const payload = {
+      schemaVersion: 1,
+      kind: "nullid-hash-batch",
+      createdAt: new Date().toISOString(),
+      algorithm: batchAlgorithm,
+      rows: batchRows.map((row) => ({ index: row.index, line: row.line, hex: row.hex, base64: row.base64 })),
+    };
+    const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `nullid-hash-batch-${Date.now()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    report("batch manifest exported", "accent");
+  }, [batchAlgorithm, batchRows, report]);
 
   const clearInputs = useCallback(() => {
     abortRef.current?.abort();
@@ -295,6 +385,11 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
   }, []);
 
   const comparisonTone = comparison === "match" ? "accent" : comparison === "invalid" || comparison === "mismatch" ? "danger" : "muted";
+  const throughput = useMemo(() => {
+    if (!lastDurationMs || !lastInputBytes || lastDurationMs <= 0) return null;
+    const kibPerSec = (lastInputBytes / 1024) / (lastDurationMs / 1000);
+    return `${kibPerSec.toFixed(1)} KiB/s`;
+  }, [lastDurationMs, lastInputBytes]);
 
   return (
     <div className="workspace-scroll">
@@ -373,6 +468,9 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
             </button>
             <button className="button" type="button" onClick={copyShaLine} disabled={!result || algorithm !== "SHA-256"}>
               sha256sum line
+            </button>
+            <button className="button" type="button" onClick={exportDigestManifest} disabled={!result}>
+              export manifest
             </button>
           </div>
           <div className="controls-row">
@@ -487,6 +585,13 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
             <span className="microcopy">{result ? "digest ready" : "awaiting input"}</span>
           </div>
           <div className="status-line">
+            <span>Perf</span>
+            <span className="tag">{lastDurationMs ? `${lastDurationMs}ms` : "pending"}</span>
+            <span className="microcopy">
+              {throughput ? `${throughput} · ${Math.ceil((lastInputBytes ?? 0) / 1024)} KiB` : "hash telemetry after first run"}
+            </span>
+          </div>
+          <div className="status-line">
             <span>File compare</span>
             <Chip
               label={
@@ -503,6 +608,61 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
             <span className="microcopy">against: {fileCompareName}</span>
           </div>
         </div>
+      </div>
+      <div className="panel" aria-label="Batch hash lab">
+        <div className="panel-heading">
+          <span>Batch Hash Lab</span>
+          <span className="panel-subtext">line-by-line integrity</span>
+        </div>
+        <div className="controls-row">
+          <select
+            className="select"
+            value={batchAlgorithm}
+            onChange={(event) => setBatchAlgorithm(event.target.value as HashAlgorithm)}
+            aria-label="Batch hash algorithm"
+          >
+            <option value="SHA-256">SHA-256</option>
+            <option value="SHA-512">SHA-512</option>
+            <option value="SHA-1">SHA-1 (legacy/insecure)</option>
+          </select>
+          <button className="button" type="button" onClick={() => void runBatchHash()} disabled={isBatching}>
+            {isBatching ? "hashing..." : "hash lines"}
+          </button>
+          <button className="button" type="button" onClick={exportBatchManifest} disabled={batchRows.length === 0}>
+            export batch
+          </button>
+        </div>
+        <textarea
+          className="textarea"
+          value={batchInput}
+          onChange={(event) => setBatchInput(event.target.value)}
+          placeholder="Paste one value per line (up to 120 lines)"
+          aria-label="Batch hash input"
+        />
+        <table className="table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>input</th>
+              <th>digest (hex)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {batchRows.length === 0 ? (
+              <tr>
+                <td colSpan={3} className="muted">run batch hashing to populate</td>
+              </tr>
+            ) : (
+              batchRows.slice(0, 10).map((row) => (
+                <tr key={`${row.index}-${row.hex}`}>
+                  <td>{row.index}</td>
+                  <td className="microcopy">{row.line}</td>
+                  <td className="microcopy">{row.hex}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );

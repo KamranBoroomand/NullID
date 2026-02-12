@@ -5,6 +5,7 @@ import { useToast } from "../components/ToastHost";
 import "./styles.css";
 import { expectedHashLengths, hashFile, hashText, normalizeHashInput } from "../utils/hash";
 import { useClipboardPrefs, writeClipboard } from "../utils/clipboard";
+import { usePersistentState } from "../hooks/usePersistentState";
 export function HashView({ onRegisterActions, onStatus, onOpenGuide }) {
     const { push } = useToast();
     const [clipboardPrefs] = useClipboardPrefs();
@@ -20,7 +21,13 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }) {
     const [progress, setProgress] = useState(0);
     const [fileComparison, setFileComparison] = useState("idle");
     const [fileCompareName, setFileCompareName] = useState("none");
+    const [batchInput, setBatchInput] = usePersistentState("nullid:hash:batch-input", "");
+    const [batchAlgorithm, setBatchAlgorithm] = usePersistentState("nullid:hash:batch-algo", "SHA-256");
+    const [batchRows, setBatchRows] = useState([]);
+    const [isBatching, setIsBatching] = useState(false);
     const [isHashing, setIsHashing] = useState(false);
+    const [lastDurationMs, setLastDurationMs] = useState(null);
+    const [lastInputBytes, setLastInputBytes] = useState(null);
     const abortRef = useRef(null);
     const textDebounceRef = useRef(null);
     const verifyDebounceRef = useRef(null);
@@ -64,6 +71,7 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }) {
         const controller = new AbortController();
         abortRef.current = controller;
         const jobId = (jobRef.current += 1);
+        const startedAt = performance.now();
         let succeeded = false;
         try {
             const nextResult = input.kind === "file"
@@ -73,6 +81,9 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }) {
                 setResult(nextResult);
                 setSource(input);
                 setFileName(input.kind === "file" ? input.file.name : "inline");
+                const bytes = input.kind === "file" ? input.file.size : new TextEncoder().encode(input.value).byteLength;
+                setLastDurationMs(Math.round(performance.now() - startedAt));
+                setLastInputBytes(bytes);
                 succeeded = true;
                 onStatus?.("digest ready", "accent");
             }
@@ -134,6 +145,84 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }) {
         const line = `${result.hex}  ${name}`;
         await writeClipboard(line, clipboardPrefs, report, "sha256sum line copied");
     }, [clipboardPrefs, report, result, source]);
+    const runBatchHash = useCallback(async () => {
+        const lines = batchInput
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .slice(0, 120);
+        if (lines.length === 0) {
+            report("add lines for batch hashing", "danger");
+            return;
+        }
+        setIsBatching(true);
+        try {
+            const rows = [];
+            for (let i = 0; i < lines.length; i += 1) {
+                const digest = await hashText(lines[i], batchAlgorithm);
+                rows.push({ line: lines[i], hex: digest.hex, base64: digest.base64, index: i + 1 });
+            }
+            setBatchRows(rows);
+            report(`batch hashed ${rows.length} lines`, "accent");
+        }
+        catch (error) {
+            console.error(error);
+            report("batch hash failed", "danger");
+        }
+        finally {
+            setIsBatching(false);
+        }
+    }, [batchAlgorithm, batchInput, report]);
+    const exportDigestManifest = useCallback(() => {
+        if (!result) {
+            report("no digest to export", "danger");
+            return;
+        }
+        const payload = {
+            schemaVersion: 1,
+            kind: "nullid-hash-manifest",
+            createdAt: new Date().toISOString(),
+            algorithm,
+            source: source?.kind ?? "none",
+            sourceName: source?.kind === "file" ? source.file.name : "inline",
+            sourceBytes: source?.kind === "file" ? source.file.size : source?.kind === "text" ? new TextEncoder().encode(source.value).byteLength : 0,
+            digest: result,
+            verifyValue: verifyValue.trim() || null,
+            comparison,
+            fileComparison,
+            fileCompareName,
+            durationMs: lastDurationMs,
+        };
+        const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `nullid-hash-manifest-${Date.now()}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+        report("hash manifest exported", "accent");
+    }, [algorithm, comparison, fileCompareName, fileComparison, lastDurationMs, report, result, source, verifyValue]);
+    const exportBatchManifest = useCallback(() => {
+        if (batchRows.length === 0) {
+            report("no batch rows", "danger");
+            return;
+        }
+        const payload = {
+            schemaVersion: 1,
+            kind: "nullid-hash-batch",
+            createdAt: new Date().toISOString(),
+            algorithm: batchAlgorithm,
+            rows: batchRows.map((row) => ({ index: row.index, line: row.line, hex: row.hex, base64: row.base64 })),
+        };
+        const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `nullid-hash-batch-${Date.now()}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+        report("batch manifest exported", "accent");
+    }, [batchAlgorithm, batchRows, report]);
     const clearInputs = useCallback(() => {
         abortRef.current?.abort();
         setTextValue("");
@@ -256,6 +345,12 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }) {
         };
     }, []);
     const comparisonTone = comparison === "match" ? "accent" : comparison === "invalid" || comparison === "mismatch" ? "danger" : "muted";
+    const throughput = useMemo(() => {
+        if (!lastDurationMs || !lastInputBytes || lastDurationMs <= 0)
+            return null;
+        const kibPerSec = (lastInputBytes / 1024) / (lastDurationMs / 1000);
+        return `${kibPerSec.toFixed(1)} KiB/s`;
+    }, [lastDurationMs, lastInputBytes]);
     return (_jsxs("div", { className: "workspace-scroll", children: [_jsx("div", { className: "guide-link", children: _jsx("button", { type: "button", className: "guide-link-button", onClick: () => onOpenGuide?.("hash"), children: "? guide" }) }), _jsxs("div", { className: "grid-two", children: [_jsxs("div", { className: "panel", "aria-label": "Hash inputs", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Hash input" }), _jsx("span", { className: "panel-subtext", children: "text or file" })] }), _jsx("label", { className: "section-title", htmlFor: "hash-text", children: "Text" }), _jsx("textarea", { id: "hash-text", className: "textarea", placeholder: "Type or paste text to hash", value: textValue, onCompositionStart: () => setIsComposing(true), onCompositionEnd: (event) => {
                                     setIsComposing(false);
                                     handleTextChange(event.currentTarget.value);
@@ -267,7 +362,7 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }) {
                                 }, onDragOver: (event) => event.preventDefault(), onDrop: (event) => {
                                     event.preventDefault();
                                     void handleFile(event.dataTransfer.files?.[0] ?? null);
-                                }, children: [_jsx("input", { ref: fileInputRef, type: "file", "aria-label": "Pick file", onChange: (event) => void handleFile(event.target.files?.[0] ?? null), style: { position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }, tabIndex: -1 }), _jsx("div", { className: "section-title", children: "Drop or select file" }), _jsx("div", { className: "microcopy", children: "progressive chunk hashing" }), isBusy && _jsxs("div", { className: "microcopy", children: ["progress ", progress, "%"] }), isHashing && _jsx("div", { className: "microcopy", children: "Hashing..." })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: "source" }), _jsx(Chip, { label: fileName, tone: "muted" }), isBusy && _jsx(Chip, { label: "hashing\u2026", tone: "accent" })] })] }), _jsxs("div", { className: "panel", "aria-label": "Hash output", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Digest" }), _jsx("span", { className: "panel-subtext", children: algorithm.toLowerCase() })] }), _jsxs("div", { className: "controls-row", children: [_jsx("input", { className: "input", value: digestDisplay, readOnly: true, "aria-label": "Computed hash" }), _jsx("button", { className: "button", type: "button", onClick: copyDigest, disabled: !result, children: "copy" }), _jsx("button", { className: "button", type: "button", onClick: copyShaLine, disabled: !result || algorithm !== "SHA-256", children: "sha256sum line" })] }), _jsxs("div", { className: "controls-row", children: [_jsxs("div", { children: [_jsx("label", { className: "section-title", htmlFor: "hash-algo", children: "Algorithm" }), _jsxs("select", { id: "hash-algo", className: "select", value: algorithm, onChange: (event) => setAlgorithm(event.target.value), "aria-label": "Select hash algorithm", children: [_jsx("option", { value: "SHA-256", children: "SHA-256" }), _jsx("option", { value: "SHA-512", children: "SHA-512" }), _jsx("option", { value: "SHA-1", children: "SHA-1 (legacy/insecure)" })] })] }), _jsxs("div", { children: [_jsx("div", { className: "section-title", "aria-hidden": "true", children: "Output" }), _jsx("div", { className: "pill-buttons", role: "group", "aria-label": "Output format", children: ["hex", "base64", "sha256sum"].map((format) => (_jsx("button", { type: "button", className: displayFormat === format ? "active" : "", onClick: () => setDisplayFormat(format), disabled: format === "sha256sum" && algorithm !== "SHA-256", children: format }, format))) })] })] }), _jsx("label", { className: "section-title", htmlFor: "hash-verify", children: "Verify digest" }), _jsxs("div", { className: "controls-row", children: [_jsx("input", { id: "hash-verify", className: "input", placeholder: "Paste hash to verify", value: verifyValue, onChange: (event) => handleVerifyChange(event.target.value), "aria-label": "Hash to verify", onKeyDown: (event) => {
+                                }, children: [_jsx("input", { ref: fileInputRef, type: "file", "aria-label": "Pick file", onChange: (event) => void handleFile(event.target.files?.[0] ?? null), style: { position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }, tabIndex: -1 }), _jsx("div", { className: "section-title", children: "Drop or select file" }), _jsx("div", { className: "microcopy", children: "progressive chunk hashing" }), isBusy && _jsxs("div", { className: "microcopy", children: ["progress ", progress, "%"] }), isHashing && _jsx("div", { className: "microcopy", children: "Hashing..." })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: "source" }), _jsx(Chip, { label: fileName, tone: "muted" }), isBusy && _jsx(Chip, { label: "hashing\u2026", tone: "accent" })] })] }), _jsxs("div", { className: "panel", "aria-label": "Hash output", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Digest" }), _jsx("span", { className: "panel-subtext", children: algorithm.toLowerCase() })] }), _jsxs("div", { className: "controls-row", children: [_jsx("input", { className: "input", value: digestDisplay, readOnly: true, "aria-label": "Computed hash" }), _jsx("button", { className: "button", type: "button", onClick: copyDigest, disabled: !result, children: "copy" }), _jsx("button", { className: "button", type: "button", onClick: copyShaLine, disabled: !result || algorithm !== "SHA-256", children: "sha256sum line" }), _jsx("button", { className: "button", type: "button", onClick: exportDigestManifest, disabled: !result, children: "export manifest" })] }), _jsxs("div", { className: "controls-row", children: [_jsxs("div", { children: [_jsx("label", { className: "section-title", htmlFor: "hash-algo", children: "Algorithm" }), _jsxs("select", { id: "hash-algo", className: "select", value: algorithm, onChange: (event) => setAlgorithm(event.target.value), "aria-label": "Select hash algorithm", children: [_jsx("option", { value: "SHA-256", children: "SHA-256" }), _jsx("option", { value: "SHA-512", children: "SHA-512" }), _jsx("option", { value: "SHA-1", children: "SHA-1 (legacy/insecure)" })] })] }), _jsxs("div", { children: [_jsx("div", { className: "section-title", "aria-hidden": "true", children: "Output" }), _jsx("div", { className: "pill-buttons", role: "group", "aria-label": "Output format", children: ["hex", "base64", "sha256sum"].map((format) => (_jsx("button", { type: "button", className: displayFormat === format ? "active" : "", onClick: () => setDisplayFormat(format), disabled: format === "sha256sum" && algorithm !== "SHA-256", children: format }, format))) })] })] }), _jsx("label", { className: "section-title", htmlFor: "hash-verify", children: "Verify digest" }), _jsxs("div", { className: "controls-row", children: [_jsx("input", { id: "hash-verify", className: "input", placeholder: "Paste hash to verify", value: verifyValue, onChange: (event) => handleVerifyChange(event.target.value), "aria-label": "Hash to verify", onKeyDown: (event) => {
                                             if (event.key === "Enter") {
                                                 event.preventDefault();
                                                 compare(verifyValue);
@@ -300,11 +395,11 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }) {
                                                 ? "MISMATCH"
                                                 : comparison === "invalid"
                                                     ? "INVALID"
-                                                    : "PENDING", tone: comparisonTone }), _jsx("span", { className: "microcopy", children: result ? "digest ready" : "awaiting input" })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: "File compare" }), _jsx(Chip, { label: fileComparison === "match"
+                                                    : "PENDING", tone: comparisonTone }), _jsx("span", { className: "microcopy", children: result ? "digest ready" : "awaiting input" })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: "Perf" }), _jsx("span", { className: "tag", children: lastDurationMs ? `${lastDurationMs}ms` : "pending" }), _jsx("span", { className: "microcopy", children: throughput ? `${throughput} · ${Math.ceil((lastInputBytes ?? 0) / 1024)} KiB` : "hash telemetry after first run" })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: "File compare" }), _jsx(Chip, { label: fileComparison === "match"
                                             ? "FILES MATCH"
                                             : fileComparison === "mismatch"
                                                 ? "FILES DIFFER"
                                                 : fileComparison === "pending"
                                                     ? "CHECKING"
-                                                    : "IDLE", tone: fileComparison === "match" ? "accent" : fileComparison === "mismatch" ? "danger" : "muted" }), _jsxs("span", { className: "microcopy", children: ["against: ", fileCompareName] })] })] })] })] }));
+                                                    : "IDLE", tone: fileComparison === "match" ? "accent" : fileComparison === "mismatch" ? "danger" : "muted" }), _jsxs("span", { className: "microcopy", children: ["against: ", fileCompareName] })] })] })] }), _jsxs("div", { className: "panel", "aria-label": "Batch hash lab", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Batch Hash Lab" }), _jsx("span", { className: "panel-subtext", children: "line-by-line integrity" })] }), _jsxs("div", { className: "controls-row", children: [_jsxs("select", { className: "select", value: batchAlgorithm, onChange: (event) => setBatchAlgorithm(event.target.value), "aria-label": "Batch hash algorithm", children: [_jsx("option", { value: "SHA-256", children: "SHA-256" }), _jsx("option", { value: "SHA-512", children: "SHA-512" }), _jsx("option", { value: "SHA-1", children: "SHA-1 (legacy/insecure)" })] }), _jsx("button", { className: "button", type: "button", onClick: () => void runBatchHash(), disabled: isBatching, children: isBatching ? "hashing..." : "hash lines" }), _jsx("button", { className: "button", type: "button", onClick: exportBatchManifest, disabled: batchRows.length === 0, children: "export batch" })] }), _jsx("textarea", { className: "textarea", value: batchInput, onChange: (event) => setBatchInput(event.target.value), placeholder: "Paste one value per line (up to 120 lines)", "aria-label": "Batch hash input" }), _jsxs("table", { className: "table", children: [_jsx("thead", { children: _jsxs("tr", { children: [_jsx("th", { children: "#" }), _jsx("th", { children: "input" }), _jsx("th", { children: "digest (hex)" })] }) }), _jsx("tbody", { children: batchRows.length === 0 ? (_jsx("tr", { children: _jsx("td", { colSpan: 3, className: "muted", children: "run batch hashing to populate" }) })) : (batchRows.slice(0, 10).map((row) => (_jsxs("tr", { children: [_jsx("td", { children: row.index }), _jsx("td", { className: "microcopy", children: row.line }), _jsx("td", { className: "microcopy", children: row.hex })] }, `${row.index}-${row.hex}`)))) })] })] })] }));
 }

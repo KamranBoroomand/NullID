@@ -6,6 +6,7 @@ import { hashText } from "../utils/hash";
 import { getVaultBackend, getVaultBackendInfo, putValue, getValue, clearStore } from "../utils/storage";
 import { probeCanvasEncodeSupport } from "../utils/imageFormats";
 import { useToast } from "../components/ToastHost";
+import { usePersistentState } from "../hooks/usePersistentState";
 const checks = [
     {
         key: "encrypt",
@@ -65,6 +66,9 @@ export function SelfTestView({ onOpenGuide }) {
     const [results, setResults] = useState(initialResults);
     const [details, setDetails] = useState({});
     const [message, setMessage] = useState("ready");
+    const [autoMonitor, setAutoMonitor] = usePersistentState("nullid:selftest:auto-monitor", false);
+    const [monitorIntervalSec, setMonitorIntervalSec] = usePersistentState("nullid:selftest:interval", 180);
+    const [lastRunAt, setLastRunAt] = useState(null);
     const resultsRef = useRef(results);
     useEffect(() => {
         resultsRef.current = results;
@@ -240,7 +244,67 @@ export function SelfTestView({ onOpenGuide }) {
         }
         setMessage("all checks passed");
         push("self-test complete", "accent");
+        setLastRunAt(new Date().toISOString());
     };
+    const runSingle = async (key) => {
+        if (key === "encrypt")
+            await runEncryptRoundtrip();
+        else if (key === "file")
+            await runFileRoundtrip();
+        else if (key === "storage")
+            await runStorage();
+        else if (key === "hash")
+            await runHash();
+        else if (key === "secure-context")
+            runSecureContextProbe();
+        else if (key === "webcrypto")
+            runWebCryptoProbe();
+        else if (key === "indexeddb")
+            await runIndexedDbProbe();
+        else if (key === "clipboard")
+            await runClipboardProbe();
+        else if (key === "service-worker")
+            runServiceWorkerProbe();
+        else if (key === "image-codecs")
+            await runCodecProbe();
+        setLastRunAt(new Date().toISOString());
+    };
+    const exportReport = () => {
+        const summary = summarizeResults(resultsRef.current);
+        const payload = {
+            schemaVersion: 1,
+            kind: "nullid-selftest-report",
+            generatedAt: new Date().toISOString(),
+            autoMonitor,
+            monitorIntervalSec,
+            summary,
+            results: checks.map((item) => ({
+                key: item.key,
+                title: item.title,
+                status: resultsRef.current[item.key] ?? "idle",
+                detail: details[item.key] ?? null,
+            })),
+        };
+        const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `nullid-selftest-${Date.now()}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+        push("self-test report exported", "accent");
+    };
+    useEffect(() => {
+        if (!autoMonitor)
+            return;
+        void runAll();
+        const intervalMs = Math.max(30, monitorIntervalSec) * 1000;
+        const timer = window.setInterval(() => {
+            void runAll();
+        }, intervalMs);
+        return () => window.clearInterval(timer);
+    }, [autoMonitor, monitorIntervalSec]);
+    const summary = summarizeResults(results);
     const badge = (result) => {
         if (result === "running")
             return _jsx("span", { className: "tag", children: "running" });
@@ -252,9 +316,18 @@ export function SelfTestView({ onOpenGuide }) {
             return _jsx("span", { className: "tag tag-danger", children: "fail" });
         return _jsx("span", { className: "tag", children: "idle" });
     };
-    return (_jsxs("div", { className: "workspace-scroll", children: [_jsx("div", { className: "guide-link", children: _jsx("button", { type: "button", className: "guide-link-button", onClick: () => onOpenGuide?.("guide"), children: "? guide" }) }), _jsxs("div", { className: "panel", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Self-test" }), _jsx("span", { className: "panel-subtext", children: "dev diagnostics" })] }), _jsx("p", { className: "microcopy", children: "Runs runtime checks for crypto, storage, browser capability support, and responsiveness. Failed or warning checks include remediation hints." }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", onClick: runAll, children: "run all" }), _jsxs("span", { className: "microcopy", children: ["status: ", message] })] }), _jsx("ul", { className: "note-list", children: checks.map((item) => {
+    return (_jsxs("div", { className: "workspace-scroll", children: [_jsx("div", { className: "guide-link", children: _jsx("button", { type: "button", className: "guide-link-button", onClick: () => onOpenGuide?.("guide"), children: "? guide" }) }), _jsxs("div", { className: "panel", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Self-test" }), _jsx("span", { className: "panel-subtext", children: "dev diagnostics" })] }), _jsx("p", { className: "microcopy", children: "Runs runtime checks for crypto, storage, browser capability support, and responsiveness. Failed or warning checks include remediation hints." }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", onClick: runAll, children: "run all" }), _jsxs("label", { className: "microcopy", style: { display: "flex", alignItems: "center", gap: "0.35rem" }, children: [_jsx("input", { type: "checkbox", checked: autoMonitor, onChange: (event) => setAutoMonitor(event.target.checked), "aria-label": "Enable auto monitor" }), "auto monitor"] }), _jsx("input", { className: "input", type: "number", min: 30, max: 3600, value: monitorIntervalSec, onChange: (event) => setMonitorIntervalSec(Math.min(3600, Math.max(30, Number(event.target.value)))), "aria-label": "Auto monitor interval in seconds" }), _jsx("button", { className: "button", type: "button", onClick: exportReport, children: "export report" }), _jsxs("span", { className: "microcopy", children: ["status: ", message] })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: "summary" }), _jsxs("span", { className: "tag tag-danger", children: ["fail ", summary.fail] }), _jsxs("span", { className: "tag", children: ["warn ", summary.warn] }), _jsxs("span", { className: "tag tag-accent", children: ["pass ", summary.pass] }), _jsxs("span", { className: "microcopy", children: ["health score ", summary.healthScore, "/100"] })] }), _jsxs("div", { className: "microcopy", children: ["last run: ", lastRunAt ? new Date(lastRunAt).toLocaleString() : "never"] }), _jsx("ul", { className: "note-list", children: checks.map((item) => {
                             const result = results[item.key] ?? "idle";
                             const detail = details[item.key];
-                            return (_jsxs("li", { children: [_jsxs("div", { children: [_jsx("div", { className: "note-title", children: item.title }), detail ? _jsx("div", { className: "microcopy", children: detail }) : null, (result === "fail" || result === "warn") && _jsx("div", { className: "microcopy", children: item.hint })] }), badge(result)] }, item.key));
+                            return (_jsxs("li", { children: [_jsxs("div", { children: [_jsx("div", { className: "note-title", children: item.title }), detail ? _jsx("div", { className: "microcopy", children: detail }) : null, (result === "fail" || result === "warn") && _jsx("div", { className: "microcopy", children: item.hint })] }), _jsxs("div", { className: "controls-row", children: [badge(result), _jsx("button", { className: "button", type: "button", onClick: () => void runSingle(item.key), children: "run" })] })] }, item.key));
                         }) })] })] }));
+}
+function summarizeResults(map) {
+    const all = Object.values(map);
+    const fail = all.filter((value) => value === "fail").length;
+    const warn = all.filter((value) => value === "warn").length;
+    const pass = all.filter((value) => value === "pass").length;
+    const total = all.length || 1;
+    const healthScore = Math.max(0, Math.round(((pass + warn * 0.5) / total) * 100 - fail * 6));
+    return { fail, warn, pass, total, healthScore };
 }
