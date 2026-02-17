@@ -31,11 +31,11 @@ The app is organized into focused modules:
 ## Core Features
 - Hash & Verify: SHA-256, SHA-512, and SHA-1 (legacy) for text and files, plus digest comparison and multiple output formats.
 - Text Redaction: detector-based masking for common PII/secrets with custom regex rules and overlap-safe resolution.
-- Log Sanitizer: preset-driven cleanup with rule toggles, reusable local policy packs (import/export), signed policy pack verification, JSON-aware masking, batch file processing, safe-share bundle export, and broader format handling in CLI (`text/json/ndjson/csv/xml/yaml`).
+- Log Sanitizer: preset-driven cleanup with rule toggles, reusable local policy packs (import/export), explicit signed-pack verification dialogs, shared saved key-hint profiles, JSON-aware masking, batch file processing, safe-share bundle export, and broader format handling in CLI (`text/json/ndjson/csv/xml/yaml`).
 - Metadata Inspector: local metadata parsing (JPEG/TIFF EXIF, PNG/WebP/GIF metadata hints), compatibility diagnostics, clean image re-encoding with before/after preview and resize options, plus CLI workflows for PDF and Office metadata cleanup.
 - Encrypt / Decrypt: versioned `NULLID:ENC:1` envelope using PBKDF2 + AES-GCM with text/file support and selectable KDF profiles (`compat`, `strong`, `paranoid`).
 - Password & Passphrase: random generators with entropy estimates, presets, and copy hygiene support.
-- Secure Notes Vault: encrypted notes, auto-lock, panic lock (`Ctrl+Shift+L`), and import/export (plain + encrypted) with integrity metadata and optional signing.
+- Secure Notes Vault: encrypted notes, auto-lock, panic lock (`Ctrl+Shift+L`), and import/export (plain + encrypted) with integrity metadata, shared key-hint profiles, and explicit verification dialogs for signed snapshots.
 - Self-test: operational checks plus browser capability probes (secure context, WebCrypto, IndexedDB, clipboard, service worker, codec support) with remediation hints.
 - Installable PWA: install on desktop and mobile (including iOS) with offline app-shell caching and standalone launch.
 - Local CLI parity: `hash`, `sanitize`, `sanitize-dir`, `bundle`, `redact`, `enc`, `dec`, `pwgen`, `meta`, `pdf-clean`, `office-clean`, `archive-sanitize`, `precommit`, and `policy-init`.
@@ -141,6 +141,7 @@ Team enforcement helpers:
 - Reuse CI templates from `.github/workflow-templates/nullid-pr-sanitize.yml` and `.github/workflow-templates/nullid-artifact-checks.yml`.
 - Platform-breadth workflow reference: `docs/phase3-workflows.md`.
 - Signed release + provenance workflow: `.github/workflows/release-signed.yml`.
+- Signed export/import operating conventions: `docs/signed-workflow-conventions.md`.
 - Release-candidate security checklist: `docs/release-security-checklist.md`.
 
 ## Deployment
@@ -176,11 +177,11 @@ Reproducibility guidance:
 - Sanitizer policy packs, batch runs, and safe-share bundles are fully local and do not require paid infrastructure; signed packs support explicit verify-before-import.
 - Build outputs now include `dist/sbom.json`; reproducibility checks still validate full artifact integrity via `SHA256SUMS`.
 - Release workflow includes keyless Sigstore signatures and GitHub provenance attestations for packaged release artifacts.
-- Quality gates include unit tests (`cryptoEnvelope`, hash behavior, profile integrity, vault snapshot integrity, redaction overlap, theme contrast) and Playwright e2e coverage.
+- Quality gates include unit tests (`cryptoEnvelope`, hash behavior, profile integrity, vault snapshot integrity, redaction overlap, theme contrast), Playwright e2e coverage, and module-specific mobile visual regression snapshots (run when platform baselines are present under `tests/e2e/app.spec.ts-snapshots/`).
 - This project is not represented as an externally audited cryptography product; validate threat model and controls before high-risk production use.
 
 ## Roadmap
-- Continue hardening metadata parsing against malformed edge files and uncommon vendor tags.
-- Expand signed export UX beyond prompts (saved key-hint profiles + explicit verification dialogs).
-- Add visual regression snapshots for module-specific mobile layouts.
-- Continue complete-tool rollout tracked in `docs/complete-tool-roadmap.md`.
+- [x] Continue hardening metadata parsing against malformed edge files and uncommon vendor tags.
+- [x] Expand signed export UX beyond prompts (saved key-hint profiles + explicit verification dialogs).
+- [x] Add visual regression snapshots for module-specific mobile layouts.
+- [x] Continue complete-tool rollout tracked in `docs/complete-tool-roadmap.md`.

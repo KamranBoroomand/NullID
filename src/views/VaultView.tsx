@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./styles.css";
 import { Chip } from "../components/Chip";
+import { ActionDialog } from "../components/ActionDialog";
 import { useToast } from "../components/ToastHost";
 import {
+  describeVaultPayload,
   decryptNote,
   deleteNote,
   exportVault,
@@ -11,11 +13,19 @@ import {
   importVaultEncrypted,
   loadNotes,
   saveNote,
+  type VaultSnapshotDescriptor,
   unlockVault,
 } from "../utils/vault";
 import { getVaultBackendInfo, wipeVault } from "../utils/storage";
 import type { ModuleKey } from "../components/ModuleList";
 import { analyzeSecret, gradeLabel, type SecretGrade } from "../utils/passwordToolkit";
+import { usePersistentState } from "../hooks/usePersistentState";
+import {
+  SHARED_KEY_HINT_PROFILE_KEY,
+  readLegacyProfiles,
+  sanitizeKeyHint,
+  type KeyHintProfile,
+} from "../utils/keyHintProfiles";
 
 type DecryptedNote = { id: string; title: string; body: string; tags: string[]; createdAt: number; updatedAt: number };
 
@@ -40,10 +50,33 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
   const [lockRemaining, setLockRemaining] = useState<number>(0);
   const [backendInfo, setBackendInfo] = useState(() => getVaultBackendInfo());
   const [template, setTemplate] = useState<"blank" | "incident" | "credentials" | "checklist">("blank");
+  const [keyHintProfiles, setKeyHintProfiles] = usePersistentState<KeyHintProfile[]>(SHARED_KEY_HINT_PROFILE_KEY, []);
+  const [selectedKeyHintProfileId, setSelectedKeyHintProfileId] = usePersistentState<string>("nullid:vault:key-hint-selected", "");
+  const [vaultExportDialogOpen, setVaultExportDialogOpen] = useState(false);
+  const [vaultExportMode, setVaultExportMode] = useState<"plain" | "encrypted">("plain");
+  const [vaultExportPassphrase, setVaultExportPassphrase] = useState("");
+  const [vaultExportSign, setVaultExportSign] = useState(false);
+  const [vaultSigningPassphrase, setVaultSigningPassphrase] = useState("");
+  const [vaultExportKeyHint, setVaultExportKeyHint] = useState("");
+  const [vaultExportError, setVaultExportError] = useState<string | null>(null);
+  const [vaultImportDialogOpen, setVaultImportDialogOpen] = useState(false);
+  const [vaultImportMode, setVaultImportMode] = useState<"plain" | "encrypted">("plain");
+  const [vaultImportFile, setVaultImportFile] = useState<File | null>(null);
+  const [vaultImportDescriptor, setVaultImportDescriptor] = useState<VaultSnapshotDescriptor | null>(null);
+  const [vaultImportExportPassphrase, setVaultImportExportPassphrase] = useState("");
+  const [vaultImportVerifyPassphrase, setVaultImportVerifyPassphrase] = useState("");
+  const [vaultImportError, setVaultImportError] = useState<string | null>(null);
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
+  const [reportIncludeBodies, setReportIncludeBodies] = useState(false);
+  const [wipeDialogOpen, setWipeDialogOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const encryptedImportRef = useRef<HTMLInputElement>(null);
   const formatTs = useCallback((value: number) => new Date(value).toLocaleString(), []);
   const passphraseAssessment = useMemo(() => analyzeSecret(passphrase), [passphrase]);
+  const selectedKeyHintProfile = useMemo(
+    () => keyHintProfiles.find((profile) => profile.id === selectedKeyHintProfileId) ?? null,
+    [keyHintProfiles, selectedKeyHintProfileId],
+  );
 
   const filteredNotes = useMemo(
     () =>
@@ -69,6 +102,14 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
       latestUpdate: notes.length ? Math.max(...notes.map((note) => note.updatedAt)) : null,
     };
   }, [filteredNotes.length, notes]);
+
+  useEffect(() => {
+    if (keyHintProfiles.length > 0) return;
+    const legacy = readLegacyProfiles("nullid:sanitize:key-hints");
+    if (legacy.length > 0) {
+      setKeyHintProfiles(legacy);
+    }
+  }, [keyHintProfiles.length, setKeyHintProfiles]);
 
   const resetLockTimer = useCallback(() => {
     if (lockTimer) {
@@ -265,97 +306,181 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
     push("vault wiped", "danger");
   }, [handleLock, push]);
 
-  const handleExport = useCallback(async () => {
-    const shouldSign = confirm("Sign vault export metadata with a passphrase?");
-    let signingPassphrase: string | undefined;
-    let keyHint: string | undefined;
-    if (shouldSign) {
-      const signaturePass = prompt("Signing passphrase:");
-      if (!signaturePass) {
-        push("export cancelled", "neutral");
-        return;
-      }
-      signingPassphrase = signaturePass;
-      keyHint = prompt("Optional key hint (for verification):")?.trim() || undefined;
-    }
-    const blob = await exportVault({ signingPassphrase, keyHint });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "nullid-vault.json";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-    push(`vault export ready${signingPassphrase ? " (signed)" : ""}`, "accent");
-  }, [push]);
+  const openVaultExportDialog = useCallback(
+    (mode: "plain" | "encrypted") => {
+      setVaultExportMode(mode);
+      setVaultExportPassphrase("");
+      setVaultExportSign(false);
+      setVaultSigningPassphrase("");
+      setVaultExportKeyHint(selectedKeyHintProfile?.keyHint ?? "");
+      setVaultExportError(null);
+      setVaultExportDialogOpen(true);
+    },
+    [selectedKeyHintProfile],
+  );
 
-  const handleExportEncrypted = useCallback(async () => {
-    const pass = prompt("Set export passphrase:");
-    if (!pass) {
-      push("export cancelled", "neutral");
+  const closeVaultExportDialog = useCallback(() => {
+    setVaultExportDialogOpen(false);
+    setVaultExportError(null);
+    setVaultExportPassphrase("");
+    setVaultSigningPassphrase("");
+  }, []);
+
+  const confirmVaultExport = useCallback(async () => {
+    if (vaultExportMode === "encrypted" && !vaultExportPassphrase.trim()) {
+      setVaultExportError("export passphrase required for encrypted export");
       return;
     }
-    const shouldSign = confirm("Sign vault metadata before encryption?");
-    let signingPassphrase: string | undefined;
-    let keyHint: string | undefined;
-    if (shouldSign) {
-      const signaturePass = prompt("Signing passphrase:");
-      if (!signaturePass) {
-        push("export cancelled", "neutral");
-        return;
-      }
-      signingPassphrase = signaturePass;
-      keyHint = prompt("Optional key hint (for verification):")?.trim() || undefined;
+    if (vaultExportSign && !vaultSigningPassphrase.trim()) {
+      setVaultExportError("signing passphrase required when metadata signing is enabled");
+      return;
     }
-    const blob = await exportVaultEncrypted(pass, { signingPassphrase, keyHint });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "nullid-vault.enc";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-    push(`encrypted export ready${signingPassphrase ? " (signed metadata)" : ""}`, "accent");
-  }, [push]);
+    try {
+      const options = {
+        signingPassphrase: vaultExportSign ? vaultSigningPassphrase : undefined,
+        keyHint: vaultExportSign ? sanitizeKeyHint(vaultExportKeyHint) || undefined : undefined,
+      };
+      const blob =
+        vaultExportMode === "encrypted"
+          ? await exportVaultEncrypted(vaultExportPassphrase.trim(), options)
+          : await exportVault(options);
+      const filename = vaultExportMode === "encrypted" ? "nullid-vault.enc" : "nullid-vault.json";
+      downloadBlob(blob, filename);
+      push(
+        vaultExportMode === "encrypted"
+          ? `encrypted export ready${vaultExportSign ? " (signed metadata)" : ""}`
+          : `vault export ready${vaultExportSign ? " (signed)" : ""}`,
+        "accent",
+      );
+      closeVaultExportDialog();
+    } catch (error) {
+      console.error(error);
+      setVaultExportError(error instanceof Error ? error.message : "vault export failed");
+    }
+  }, [
+    closeVaultExportDialog,
+    push,
+    vaultExportKeyHint,
+    vaultExportMode,
+    vaultExportPassphrase,
+    vaultExportSign,
+    vaultSigningPassphrase,
+  ]);
 
-  const handleImport = useCallback(async () => {
+  const handleImport = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
 
-  const exportFilteredReport = useCallback(() => {
-    if (!unlocked) {
-      push("unlock to export report", "danger");
+  const beginVaultImport = useCallback(
+    async (file?: File | null, mode: "plain" | "encrypted" = "plain") => {
+      if (!file) return;
+      try {
+        setVaultImportFile(file);
+        setVaultImportMode(mode);
+        setVaultImportError(null);
+        setVaultImportVerifyPassphrase("");
+        setVaultImportExportPassphrase("");
+        if (mode === "plain") {
+          const parsed = JSON.parse(await file.text()) as unknown;
+          setVaultImportDescriptor(describeVaultPayload(parsed));
+        } else {
+          setVaultImportDescriptor(null);
+        }
+        setVaultImportDialogOpen(true);
+      } catch (error) {
+        console.error(error);
+        const message = error instanceof Error ? error.message : "vault import failed";
+        push(`vault import failed: ${message}`, "danger");
+      }
+    },
+    [push],
+  );
+
+  const closeVaultImportDialog = useCallback(() => {
+    setVaultImportDialogOpen(false);
+    setVaultImportFile(null);
+    setVaultImportDescriptor(null);
+    setVaultImportError(null);
+    setVaultImportVerifyPassphrase("");
+    setVaultImportExportPassphrase("");
+  }, []);
+
+  const confirmVaultImport = useCallback(async () => {
+    if (!vaultImportFile) return;
+    if (vaultImportMode === "plain" && vaultImportDescriptor?.signed && !vaultImportVerifyPassphrase.trim()) {
+      setVaultImportError("verification passphrase required for signed snapshots");
       return;
     }
-    const includeBodies = confirm("Include note bodies in report export?");
-    const payload = {
-      schemaVersion: 1,
-      kind: "nullid-vault-report",
-      createdAt: new Date().toISOString(),
-      filters: { query: filter || null },
-      stats: vaultStats,
-      notes: filteredNotes.map((note) => ({
-        id: note.id,
-        title: note.title,
-        body: includeBodies ? note.body : undefined,
-        bodyChars: note.body.length,
-        tags: note.tags,
-        createdAt: note.createdAt,
-        updatedAt: note.updatedAt,
-      })),
-    };
-    const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `nullid-vault-report-${Date.now()}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-    push("vault report exported", "accent");
-    resetLockTimer();
-  }, [filter, filteredNotes, push, resetLockTimer, unlocked, vaultStats]);
+    if (vaultImportMode === "encrypted" && !vaultImportExportPassphrase.trim()) {
+      setVaultImportError("export passphrase required for encrypted vault imports");
+      return;
+    }
+    try {
+      const result =
+        vaultImportMode === "encrypted"
+          ? await importVaultEncrypted(vaultImportFile, vaultImportExportPassphrase.trim(), {
+              verificationPassphrase: vaultImportVerifyPassphrase.trim() || undefined,
+            })
+          : await importVault(vaultImportFile, {
+              verificationPassphrase: vaultImportVerifyPassphrase.trim() || undefined,
+            });
+      setUnlocked(false);
+      setKey(null);
+      setNotes([]);
+      setTitle("");
+      setBody("");
+      setTags("");
+      setActiveId(null);
+      const suffix = result.legacy ? "legacy" : result.signed ? (result.verified ? "signed+verified" : "signed") : "unsigned";
+      push(
+        `${vaultImportMode === "encrypted" ? "encrypted vault imported" : "vault imported"} (${result.noteCount} notes, ${suffix}); please unlock`,
+        vaultImportMode === "encrypted" ? "accent" : "neutral",
+      );
+      closeVaultImportDialog();
+    } catch (error) {
+      console.error(error);
+      const message = error instanceof Error ? error.message : "vault import failed";
+      setVaultImportError(message);
+    }
+  }, [
+    closeVaultImportDialog,
+    push,
+    vaultImportDescriptor?.signed,
+    vaultImportExportPassphrase,
+    vaultImportFile,
+    vaultImportMode,
+    vaultImportVerifyPassphrase,
+  ]);
+
+  const exportFilteredReport = useCallback(
+    (includeBodies: boolean) => {
+      if (!unlocked) {
+        push("unlock to export report", "danger");
+        return;
+      }
+      const payload = {
+        schemaVersion: 1,
+        kind: "nullid-vault-report",
+        createdAt: new Date().toISOString(),
+        filters: { query: filter || null },
+        stats: vaultStats,
+        notes: filteredNotes.map((note) => ({
+          id: note.id,
+          title: note.title,
+          body: includeBodies ? note.body : undefined,
+          bodyChars: note.body.length,
+          tags: note.tags,
+          createdAt: note.createdAt,
+          updatedAt: note.updatedAt,
+        })),
+      };
+      const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" });
+      downloadBlob(blob, `nullid-vault-report-${Date.now()}.json`);
+      push("vault report exported", "accent");
+      resetLockTimer();
+    },
+    [filter, filteredNotes, push, resetLockTimer, unlocked, vaultStats],
+  );
 
   useEffect(() => {
     const onVisibility = () => {
@@ -413,10 +538,10 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
             <span className="microcopy">effective ≈ {passphraseAssessment.effectiveEntropyBits} bits</span>
           </div>
           <div className="controls-row">
-            <button className="button" type="button" onClick={handleExport} disabled={!unlocked || notes.length === 0}>
+            <button className="button" type="button" onClick={() => openVaultExportDialog("plain")} disabled={!unlocked || notes.length === 0}>
               export (json)
             </button>
-            <button className="button" type="button" onClick={handleExportEncrypted} disabled={!unlocked || notes.length === 0}>
+            <button className="button" type="button" onClick={() => openVaultExportDialog("encrypted")} disabled={!unlocked || notes.length === 0}>
               export encrypted
             </button>
             <button className="button" type="button" onClick={handleImport}>
@@ -437,24 +562,8 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
               style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }}
               onChange={async (event) => {
                 const file = event.target.files?.[0];
-                if (!file) return;
-                try {
-                  const verifyPassphrase = prompt("Verification passphrase for signed snapshots (optional):")?.trim() || undefined;
-                  const result = await importVault(file, { verificationPassphrase: verifyPassphrase });
-                  setUnlocked(false);
-                  setKey(null);
-                  setNotes([]);
-                  setTitle("");
-                  setBody("");
-                  setTags("");
-                  setActiveId(null);
-                  const suffix = result.legacy ? "legacy" : result.signed ? result.verified ? "signed+verified" : "signed" : "unsigned";
-                  push(`vault imported (${result.noteCount} notes, ${suffix}); please unlock`, "neutral");
-                } catch (error) {
-                  console.error(error);
-                  const message = error instanceof Error ? error.message : "vault import failed";
-                  push(`vault import failed: ${message}`, "danger");
-                }
+                await beginVaultImport(file, "plain");
+                event.target.value = "";
               }}
             />
             <input
@@ -465,37 +574,14 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
               style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }}
               onChange={async (event) => {
                 const file = event.target.files?.[0];
-                if (!file) return;
-                const pass = prompt("Enter export passphrase:");
-                if (!pass) {
-                  push("import cancelled", "neutral");
-                  return;
-                }
-                try {
-                  const verifyPassphrase = prompt("Verification passphrase for signed snapshots (optional):")?.trim() || undefined;
-                  const result = await importVaultEncrypted(file, pass, { verificationPassphrase: verifyPassphrase });
-                  setUnlocked(false);
-                  setKey(null);
-                  setNotes([]);
-                  setTitle("");
-                  setBody("");
-                  setTags("");
-                  setActiveId(null);
-                  const suffix = result.legacy ? "legacy" : result.signed ? result.verified ? "signed+verified" : "signed" : "unsigned";
-                  push(`encrypted vault imported (${result.noteCount} notes, ${suffix}); please unlock`, "accent");
-                } catch (error) {
-                  console.error(error);
-                  const message = error instanceof Error ? error.message : "encrypted import failed";
-                  push(`encrypted import failed: ${message}`, "danger");
-                }
+                await beginVaultImport(file, "encrypted");
+                event.target.value = "";
               }}
             />
             <button
               className="button"
               type="button"
-              onClick={() => {
-                if (confirm("Wipe all vault data?")) handleWipe();
-              }}
+              onClick={() => setWipeDialogOpen(true)}
               style={{ borderColor: "var(--danger)", color: "var(--danger)" }}
             >
               wipe
@@ -633,7 +719,15 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
             <span className="tag">tags {vaultStats.uniqueTags}</span>
           </div>
           <div className="controls-row">
-            <button className="button" type="button" onClick={exportFilteredReport} disabled={!unlocked || filteredNotes.length === 0}>
+            <button
+              className="button"
+              type="button"
+              onClick={() => {
+                setReportIncludeBodies(false);
+                setReportDialogOpen(true);
+              }}
+              disabled={!unlocked || filteredNotes.length === 0}
+            >
               export notes report
             </button>
             <span className="microcopy">
@@ -681,8 +775,214 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
           )}
         </div>
       </div>
+      <ActionDialog
+        open={vaultExportDialogOpen}
+        title={vaultExportMode === "encrypted" ? "Export encrypted vault snapshot" : "Export vault snapshot"}
+        description="Signed exports add integrity metadata that can be verified during import."
+        confirmLabel={vaultExportMode === "encrypted" ? "export encrypted" : "export snapshot"}
+        onCancel={closeVaultExportDialog}
+        onConfirm={() => void confirmVaultExport()}
+        confirmDisabled={
+          (vaultExportMode === "encrypted" && !vaultExportPassphrase.trim()) || (vaultExportSign && !vaultSigningPassphrase.trim())
+        }
+      >
+        {vaultExportMode === "encrypted" ? (
+          <label className="action-dialog-field">
+            <span>Export passphrase</span>
+            <input
+              className="action-dialog-input"
+              type="password"
+              value={vaultExportPassphrase}
+              onChange={(event) => {
+                setVaultExportPassphrase(event.target.value);
+                if (vaultExportError) setVaultExportError(null);
+              }}
+              aria-label="Vault export passphrase"
+              placeholder="required for encrypted export"
+            />
+          </label>
+        ) : null}
+        <label className="action-dialog-field">
+          <span>Sign metadata</span>
+          <input
+            type="checkbox"
+            checked={vaultExportSign}
+            onChange={(event) => setVaultExportSign(event.target.checked)}
+            aria-label="Sign vault export metadata"
+          />
+        </label>
+        {vaultExportSign ? (
+          <>
+            <label className="action-dialog-field">
+              <span>Signing passphrase</span>
+              <input
+                className="action-dialog-input"
+                type="password"
+                value={vaultSigningPassphrase}
+                onChange={(event) => {
+                  setVaultSigningPassphrase(event.target.value);
+                  if (vaultExportError) setVaultExportError(null);
+                }}
+                aria-label="Vault signing passphrase"
+                placeholder="required when signing"
+              />
+            </label>
+            <div className="action-dialog-row">
+              <label className="action-dialog-field">
+                <span>Saved key hint</span>
+                <select
+                  className="action-dialog-select"
+                  value={selectedKeyHintProfileId}
+                  onChange={(event) => {
+                    const nextId = event.target.value;
+                    setSelectedKeyHintProfileId(nextId);
+                    const profile = keyHintProfiles.find((entry) => entry.id === nextId);
+                    setVaultExportKeyHint(profile?.keyHint ?? "");
+                  }}
+                  aria-label="Saved vault key hint profile"
+                >
+                  <option value="">custom key hint</option>
+                  {keyHintProfiles.map((profile) => (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.name} · {profile.keyHint}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="action-dialog-field">
+                <span>Key hint label</span>
+                <input
+                  className="action-dialog-input"
+                  value={vaultExportKeyHint}
+                  onChange={(event) => setVaultExportKeyHint(event.target.value)}
+                  aria-label="Vault key hint"
+                  placeholder="optional verification hint"
+                />
+              </label>
+            </div>
+            <p className="action-dialog-note">
+              Key hints are local labels only; passphrases are never persisted.
+              {selectedKeyHintProfile ? ` Active: ${selectedKeyHintProfile.name} (v${selectedKeyHintProfile.version})` : ""}
+            </p>
+          </>
+        ) : (
+          <p className="action-dialog-note">Unsigned exports skip signature verification during import.</p>
+        )}
+        {vaultExportError ? <p className="action-dialog-error">{vaultExportError}</p> : null}
+      </ActionDialog>
+      <ActionDialog
+        open={vaultImportDialogOpen}
+        title={vaultImportMode === "encrypted" ? "Import encrypted vault snapshot" : "Import vault snapshot"}
+        description={
+          vaultImportMode === "encrypted"
+            ? "Provide export passphrase and optional verification passphrase."
+            : `${vaultImportDescriptor?.noteCount ?? 0} notes · schema ${vaultImportDescriptor?.schemaVersion ?? "unknown"}`
+        }
+        confirmLabel={vaultImportMode === "encrypted" ? "import encrypted" : "import snapshot"}
+        onCancel={closeVaultImportDialog}
+        onConfirm={() => void confirmVaultImport()}
+      >
+        {vaultImportMode === "encrypted" ? (
+          <>
+            <label className="action-dialog-field">
+              <span>Export passphrase</span>
+              <input
+                className="action-dialog-input"
+                type="password"
+                value={vaultImportExportPassphrase}
+                onChange={(event) => {
+                  setVaultImportExportPassphrase(event.target.value);
+                  if (vaultImportError) setVaultImportError(null);
+                }}
+                aria-label="Encrypted vault import passphrase"
+                placeholder="required"
+              />
+            </label>
+            <label className="action-dialog-field">
+              <span>Verification passphrase</span>
+              <input
+                className="action-dialog-input"
+                type="password"
+                value={vaultImportVerifyPassphrase}
+                onChange={(event) => {
+                  setVaultImportVerifyPassphrase(event.target.value);
+                  if (vaultImportError) setVaultImportError(null);
+                }}
+                aria-label="Encrypted vault verification passphrase"
+                placeholder="required when snapshot metadata is signed"
+              />
+            </label>
+          </>
+        ) : vaultImportDescriptor?.signed ? (
+          <>
+            <p className="action-dialog-note">
+              Signed snapshot detected{vaultImportDescriptor.keyHint ? ` (hint: ${vaultImportDescriptor.keyHint})` : ""}. Verification is required before import.
+            </p>
+            <label className="action-dialog-field">
+              <span>Verification passphrase</span>
+              <input
+                className="action-dialog-input"
+                type="password"
+                value={vaultImportVerifyPassphrase}
+                onChange={(event) => {
+                  setVaultImportVerifyPassphrase(event.target.value);
+                  if (vaultImportError) setVaultImportError(null);
+                }}
+                aria-label="Vault verification passphrase"
+                placeholder="required for signed snapshots"
+              />
+            </label>
+          </>
+        ) : (
+          <p className="action-dialog-note">Unsigned snapshot. Continue only if you trust this file.</p>
+        )}
+        {vaultImportError ? <p className="action-dialog-error">{vaultImportError}</p> : null}
+      </ActionDialog>
+      <ActionDialog
+        open={reportDialogOpen}
+        title="Export notes report"
+        description="Choose whether note body content should be included in the report."
+        confirmLabel="export report"
+        onCancel={() => setReportDialogOpen(false)}
+        onConfirm={() => {
+          exportFilteredReport(reportIncludeBodies);
+          setReportDialogOpen(false);
+        }}
+      >
+        <label className="action-dialog-field">
+          <span>Include note bodies in report</span>
+          <input
+            type="checkbox"
+            checked={reportIncludeBodies}
+            onChange={(event) => setReportIncludeBodies(event.target.checked)}
+            aria-label="Include note bodies"
+          />
+        </label>
+      </ActionDialog>
+      <ActionDialog
+        open={wipeDialogOpen}
+        title="Wipe vault data"
+        description="This removes all vault metadata, canary records, and encrypted notes from local storage."
+        confirmLabel="wipe vault"
+        danger
+        onCancel={() => setWipeDialogOpen(false)}
+        onConfirm={() => {
+          void handleWipe();
+          setWipeDialogOpen(false);
+        }}
+      />
     </div>
   );
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.rel = "noopener";
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
 function gradeTagClass(grade: SecretGrade): string {

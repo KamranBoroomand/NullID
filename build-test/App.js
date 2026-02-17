@@ -1,4 +1,4 @@
-import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CommandPalette } from "./components/CommandPalette";
 import { Frame } from "./components/Frame";
@@ -9,10 +9,12 @@ import { ToastProvider, useToast } from "./components/ToastHost";
 import { usePersistentState } from "./hooks/usePersistentState";
 import { wipeVault } from "./utils/storage";
 import { applyTheme } from "./theme";
-import { downloadProfile, importProfileFile } from "./utils/profile";
+import { describeProfilePayload, downloadProfile, importProfileFile } from "./utils/profile";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { FeedbackWidget } from "./components/FeedbackWidget";
 import { OnboardingTour } from "./components/OnboardingTour";
+import { ActionDialog } from "./components/ActionDialog";
+import { SHARED_KEY_HINT_PROFILE_KEY, readLegacyProfiles, sanitizeKeyHint, upsertKeyHintProfile, } from "./utils/keyHintProfiles";
 const HashView = lazy(() => import("./views/HashView").then((module) => ({ default: module.HashView })));
 const RedactView = lazy(() => import("./views/RedactView").then((module) => ({ default: module.RedactView })));
 const SanitizeView = lazy(() => import("./views/SanitizeView").then((module) => ({ default: module.SanitizeView })));
@@ -47,8 +49,22 @@ function AppShell() {
     const [tourOpen, setTourOpen] = useState(!onboardingComplete);
     const [hashActions, setHashActions] = useState(null);
     const [viewport, setViewport] = useState({ width: window.innerWidth, height: window.innerHeight });
+    const [keyHintProfiles, setKeyHintProfiles] = usePersistentState(SHARED_KEY_HINT_PROFILE_KEY, []);
+    const [selectedKeyHintProfileId, setSelectedKeyHintProfileId] = usePersistentState("nullid:profile:key-hint-selected", "");
+    const [keyHintProfileName, setKeyHintProfileName] = useState("");
+    const [profileExportOpen, setProfileExportOpen] = useState(false);
+    const [profileExportSign, setProfileExportSign] = useState(false);
+    const [profileExportPassphrase, setProfileExportPassphrase] = useState("");
+    const [profileExportKeyHint, setProfileExportKeyHint] = useState("");
+    const [profileExportError, setProfileExportError] = useState(null);
+    const [profileImportOpen, setProfileImportOpen] = useState(false);
+    const [pendingProfileImportFile, setPendingProfileImportFile] = useState(null);
+    const [profileImportDescriptor, setProfileImportDescriptor] = useState(null);
+    const [profileImportPassphrase, setProfileImportPassphrase] = useState("");
+    const [profileImportError, setProfileImportError] = useState(null);
     const importProfileInputRef = useRef(null);
     const moduleLookup = useMemo(() => Object.fromEntries(modules.map((module) => [module.key, module])), []);
+    const selectedKeyHintProfile = useMemo(() => keyHintProfiles.find((profile) => profile.id === selectedKeyHintProfileId) ?? null, [keyHintProfiles, selectedKeyHintProfileId]);
     const resolvedActiveModule = useMemo(() => (modules.some((module) => module.key === activeModule) ? activeModule : "guide"), [activeModule]);
     useEffect(() => {
         if (resolvedActiveModule !== activeModule) {
@@ -60,6 +76,14 @@ function AppShell() {
             setTourOpen(true);
         }
     }, [onboardingComplete]);
+    useEffect(() => {
+        if (keyHintProfiles.length > 0)
+            return;
+        const legacy = readLegacyProfiles("nullid:sanitize:key-hints");
+        if (legacy.length > 0) {
+            setKeyHintProfiles(legacy);
+        }
+    }, [keyHintProfiles.length, setKeyHintProfiles]);
     const handleStatus = useCallback((message, tone = "neutral") => {
         setStatus({ message, tone });
     }, []);
@@ -102,6 +126,99 @@ function AppShell() {
         setTourOpen(true);
         setStatus({ message: "onboarding", tone: "accent" });
     }, [setOnboardingComplete, setTourStepIndex]);
+    const openProfileExportDialog = useCallback(() => {
+        setProfileExportOpen(true);
+        setProfileExportError(null);
+        setProfileExportSign(false);
+        setProfileExportPassphrase("");
+        setProfileExportKeyHint(selectedKeyHintProfile?.keyHint ?? "");
+    }, [selectedKeyHintProfile]);
+    const closeProfileExportDialog = useCallback(() => {
+        setProfileExportOpen(false);
+        setProfileExportError(null);
+        setProfileExportPassphrase("");
+    }, []);
+    const confirmProfileExport = useCallback(async () => {
+        try {
+            if (profileExportSign && !profileExportPassphrase.trim()) {
+                setProfileExportError("signing passphrase required");
+                return;
+            }
+            const keyHint = profileExportSign ? sanitizeKeyHint(profileExportKeyHint) || undefined : undefined;
+            const signingPassphrase = profileExportSign ? profileExportPassphrase : undefined;
+            const result = await downloadProfile(`nullid-profile-${Date.now()}.json`, { signingPassphrase, keyHint });
+            push(`profile exported (${result.entryCount}${result.signed ? ", signed" : ""})`, "accent");
+            setStatus({ message: "profile exported", tone: "accent" });
+            closeProfileExportDialog();
+        }
+        catch (error) {
+            console.error(error);
+            setProfileExportError(error instanceof Error ? error.message : "profile export failed");
+        }
+    }, [closeProfileExportDialog, profileExportKeyHint, profileExportPassphrase, profileExportSign, push]);
+    const saveProfileHint = useCallback(() => {
+        const result = upsertKeyHintProfile(keyHintProfiles, keyHintProfileName, profileExportKeyHint);
+        if (!result.ok) {
+            setProfileExportError(result.message);
+            return;
+        }
+        setKeyHintProfiles(result.profiles);
+        setSelectedKeyHintProfileId(result.selectedId);
+        setKeyHintProfileName("");
+        setProfileExportKeyHint(result.profiles.find((entry) => entry.id === result.selectedId)?.keyHint ?? profileExportKeyHint);
+        setProfileExportError(null);
+        push("key hint profile saved", "accent");
+    }, [keyHintProfileName, keyHintProfiles, profileExportKeyHint, push, setKeyHintProfiles, setSelectedKeyHintProfileId]);
+    const beginProfileImportFlow = useCallback(async (file) => {
+        if (!file)
+            return;
+        try {
+            const text = await file.text();
+            const parsed = JSON.parse(text);
+            const descriptor = describeProfilePayload(parsed);
+            setPendingProfileImportFile(file);
+            setProfileImportDescriptor(descriptor);
+            setProfileImportPassphrase("");
+            setProfileImportError(null);
+            setProfileImportOpen(true);
+        }
+        catch (error) {
+            console.error(error);
+            const message = error instanceof Error ? error.message : "import failed";
+            push(`import failed: ${message}`, "danger");
+            setStatus({ message: "import failed", tone: "danger" });
+        }
+    }, [push]);
+    const closeProfileImportDialog = useCallback(() => {
+        setProfileImportOpen(false);
+        setPendingProfileImportFile(null);
+        setProfileImportDescriptor(null);
+        setProfileImportPassphrase("");
+        setProfileImportError(null);
+    }, []);
+    const confirmProfileImport = useCallback(async () => {
+        if (!pendingProfileImportFile || !profileImportDescriptor)
+            return;
+        if (profileImportDescriptor.signed && !profileImportPassphrase.trim()) {
+            setProfileImportError("verification passphrase required for signed profiles");
+            return;
+        }
+        try {
+            const result = await importProfileFile(pendingProfileImportFile, {
+                verificationPassphrase: profileImportDescriptor.signed ? profileImportPassphrase.trim() : undefined,
+            });
+            const suffix = result.legacy ? "legacy" : result.signed ? (result.verified ? "signed+verified" : "signed") : "unsigned";
+            push(`profile imported (${result.applied}, ${suffix})`, "accent");
+            setStatus({ message: "profile imported", tone: "accent" });
+            closeProfileImportDialog();
+            window.location.reload();
+        }
+        catch (error) {
+            console.error(error);
+            const message = error instanceof Error ? error.message : "import failed";
+            setProfileImportError(message);
+        }
+    }, [closeProfileImportDialog, pendingProfileImportFile, profileImportDescriptor, profileImportPassphrase, push]);
     const navigationCommands = useMemo(() => modules.map((module) => ({
         id: `:${module.key}`,
         label: module.title,
@@ -137,28 +254,7 @@ function AppShell() {
                 label: "Export profile",
                 description: "Download preferences as JSON",
                 group: "System",
-                action: async () => {
-                    const shouldSign = confirm("Sign profile metadata with a passphrase?");
-                    let signingPassphrase;
-                    let keyHint;
-                    if (shouldSign) {
-                        const pass = prompt("Signing passphrase:");
-                        if (!pass) {
-                            push("profile export cancelled", "neutral");
-                            setStatus({ message: "profile export cancelled", tone: "neutral" });
-                            return;
-                        }
-                        signingPassphrase = pass;
-                        const hint = prompt("Optional key hint (for future verification):");
-                        keyHint = hint?.trim() || undefined;
-                    }
-                    const result = await downloadProfile(`nullid-profile-${Date.now()}.json`, {
-                        signingPassphrase,
-                        keyHint,
-                    });
-                    push(`profile exported (${result.entryCount}${result.signed ? ", signed" : ""})`, "accent");
-                    setStatus({ message: "profile exported", tone: "accent" });
-                },
+                action: openProfileExportDialog,
             },
             {
                 id: "import-profile",
@@ -204,7 +300,7 @@ function AppShell() {
             });
         }
         return base;
-    }, [activeModule, hashActions, startOnboarding, toggleTheme]);
+    }, [activeModule, hashActions, openProfileExportDialog, startOnboarding, toggleTheme]);
     const commandList = useMemo(() => [...navigationCommands, ...contextualCommands], [contextualCommands, navigationCommands]);
     const openPalette = useCallback(() => setPaletteOpen(true), []);
     const closePalette = useCallback(() => setPaletteOpen(false), []);
@@ -317,28 +413,28 @@ function AppShell() {
     ], [goToGuide, handleSelectModule, openPalette]);
     return (_jsxs("div", { className: `app-surface ${isCompact ? "is-compact" : ""}`, children: [_jsx("input", { ref: importProfileInputRef, type: "file", accept: "application/json", style: { position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }, tabIndex: -1, onChange: async (event) => {
                     const file = event.target.files?.[0];
-                    if (!file)
-                        return;
-                    try {
-                        const verifyPassphrase = prompt("Verification passphrase for signed profiles (optional):")?.trim() || undefined;
-                        const result = await importProfileFile(file, { verificationPassphrase: verifyPassphrase });
-                        const suffix = result.legacy ? "legacy" : result.signed ? result.verified ? "signed+verified" : "signed" : "unsigned";
-                        push(`profile imported (${result.applied}, ${suffix})`, "accent");
-                        setStatus({ message: "profile imported", tone: "accent" });
-                        window.location.reload();
-                    }
-                    catch (error) {
-                        console.error(error);
-                        const message = error instanceof Error ? error.message : "import failed";
-                        push(`import failed: ${message}`, "danger");
-                        setStatus({ message: "import failed", tone: "danger" });
-                    }
+                    await beginProfileImportFlow(file);
                     event.target.value = "";
                 } }), _jsx(Frame, { stacked: isStacked, compact: isCompact, modulePane: _jsx(ModuleList, { modules: modules, active: resolvedActiveModule, onSelect: handleSelectModule }), header: _jsx(GlobalHeader, { brand: "NullID", pageTitle: moduleLookup[resolvedActiveModule].title, pageToken: `:${resolvedActiveModule}`, status: status, theme: theme, compact: isCompact, onToggleTheme: toggleTheme, onOpenCommands: openPalette, onWipe: () => {
                         localStorage.clear();
                         void wipeVault();
                         push("local data wiped", "danger");
-                    } }), workspace: _jsx("div", { className: "workspace", children: _jsx(WorkspaceView, { active: resolvedActiveModule, onRegisterHashActions: setHashActions, onStatus: handleStatus, onOpenGuide: goToGuide }) }) }), _jsx(CommandPalette, { open: paletteOpen, commands: commandList, completions: modules.map((module) => module.key), historyKey: "command-bar", onClose: closePalette, onSelect: handleCommandSelect }), _jsx(FeedbackWidget, { activeModule: resolvedActiveModule }), _jsx(OnboardingTour, { open: tourOpen, stepIndex: tourStepIndex, steps: onboardingSteps, onStepIndexChange: setTourStepIndex, onSkip: skipOnboarding, onFinish: finishOnboarding })] }));
+                    } }), workspace: _jsx("div", { className: "workspace", children: _jsx(WorkspaceView, { active: resolvedActiveModule, onRegisterHashActions: setHashActions, onStatus: handleStatus, onOpenGuide: goToGuide }) }) }), _jsx(CommandPalette, { open: paletteOpen, commands: commandList, completions: modules.map((module) => module.key), historyKey: "command-bar", onClose: closePalette, onSelect: handleCommandSelect }), _jsxs(ActionDialog, { open: profileExportOpen, title: "Export profile snapshot", description: "Export local nullid:* settings as JSON. Signed exports require a verification passphrase on import.", confirmLabel: "export profile", onCancel: closeProfileExportDialog, onConfirm: () => void confirmProfileExport(), confirmDisabled: profileExportSign && !profileExportPassphrase.trim(), children: [_jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Sign metadata" }), _jsx("input", { type: "checkbox", checked: profileExportSign, onChange: (event) => setProfileExportSign(event.target.checked), "aria-label": "Sign profile metadata" })] }), profileExportSign ? (_jsxs(_Fragment, { children: [_jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Signing passphrase" }), _jsx("input", { className: "action-dialog-input", type: "password", value: profileExportPassphrase, onChange: (event) => {
+                                            setProfileExportPassphrase(event.target.value);
+                                            if (profileExportError)
+                                                setProfileExportError(null);
+                                        }, "aria-label": "Profile signing passphrase", placeholder: "required when signing" })] }), _jsxs("div", { className: "action-dialog-row", children: [_jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Saved key hint" }), _jsxs("select", { className: "action-dialog-select", value: selectedKeyHintProfileId, onChange: (event) => {
+                                                    const nextId = event.target.value;
+                                                    setSelectedKeyHintProfileId(nextId);
+                                                    const profile = keyHintProfiles.find((entry) => entry.id === nextId);
+                                                    setProfileExportKeyHint(profile?.keyHint ?? "");
+                                                }, "aria-label": "Saved key hint profile", children: [_jsx("option", { value: "", children: "custom key hint" }), keyHintProfiles.map((profile) => (_jsxs("option", { value: profile.id, children: [profile.name, " \u00B7 ", profile.keyHint] }, profile.id)))] })] }), _jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Key hint label" }), _jsx("input", { className: "action-dialog-input", value: profileExportKeyHint, onChange: (event) => setProfileExportKeyHint(event.target.value), "aria-label": "Profile key hint", placeholder: "optional recipient-visible hint" })] })] }), _jsxs("div", { className: "action-dialog-row", children: [_jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Save key hint profile as" }), _jsx("input", { className: "action-dialog-input", value: keyHintProfileName, onChange: (event) => setKeyHintProfileName(event.target.value), "aria-label": "Key hint profile name", placeholder: "team-signing-key" })] }), _jsx("button", { type: "button", className: "button", onClick: saveProfileHint, disabled: !profileExportKeyHint.trim(), children: "save hint" })] }), _jsxs("p", { className: "action-dialog-note", children: ["Key hints are local labels only. Passphrases are not persisted.", selectedKeyHintProfile ? ` Active: ${selectedKeyHintProfile.name} (v${selectedKeyHintProfile.version})` : ""] })] })) : (_jsx("p", { className: "action-dialog-note", children: "Unsigned profile exports can still be imported, but signature verification is unavailable." })), profileExportError ? _jsx("p", { className: "action-dialog-error", children: profileExportError }) : null] }), _jsxs(ActionDialog, { open: profileImportOpen, title: "Import profile snapshot", description: profileImportDescriptor
+                    ? `${profileImportDescriptor.entryCount} entries · ${profileImportDescriptor.legacy ? "legacy" : `schema ${profileImportDescriptor.schemaVersion}`}`
+                    : "Select import settings", confirmLabel: "import profile", onCancel: closeProfileImportDialog, onConfirm: () => void confirmProfileImport(), children: [profileImportDescriptor?.signed ? (_jsxs(_Fragment, { children: [_jsxs("p", { className: "action-dialog-note", children: ["Signed profile detected", profileImportDescriptor.keyHint ? ` (hint: ${profileImportDescriptor.keyHint})` : "", ". Verification is required before import."] }), _jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Verification passphrase" }), _jsx("input", { className: "action-dialog-input", type: "password", value: profileImportPassphrase, onChange: (event) => {
+                                            setProfileImportPassphrase(event.target.value);
+                                            if (profileImportError)
+                                                setProfileImportError(null);
+                                        }, "aria-label": "Profile verification passphrase", placeholder: "required for signed profile" })] })] })) : (_jsx("p", { className: "action-dialog-note", children: "Unsigned profile snapshot. Continue only if you trust the source." })), profileImportError ? _jsx("p", { className: "action-dialog-error", children: profileImportError }) : null] }), _jsx(FeedbackWidget, { activeModule: resolvedActiveModule }), _jsx(OnboardingTour, { open: tourOpen, stepIndex: tourStepIndex, steps: onboardingSteps, onStepIndexChange: setTourStepIndex, onSkip: skipOnboarding, onFinish: finishOnboarding })] }));
 }
 export default function App() {
     return (_jsx(ToastProvider, { children: _jsx(ErrorBoundary, { children: _jsx(AppShell, {}) }) }));

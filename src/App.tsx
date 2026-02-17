@@ -9,11 +9,19 @@ import { usePersistentState } from "./hooks/usePersistentState";
 import { wipeVault } from "./utils/storage";
 import { applyTheme } from "./theme";
 import type { ThemeMode } from "./theme/tokens";
-import { downloadProfile, importProfileFile } from "./utils/profile";
+import { describeProfilePayload, downloadProfile, importProfileFile, type ProfileDescriptor } from "./utils/profile";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { FeedbackWidget } from "./components/FeedbackWidget";
 import { OnboardingStep, OnboardingTour } from "./components/OnboardingTour";
 import type { HashViewActions } from "./views/HashView";
+import { ActionDialog } from "./components/ActionDialog";
+import {
+  SHARED_KEY_HINT_PROFILE_KEY,
+  readLegacyProfiles,
+  sanitizeKeyHint,
+  upsertKeyHintProfile,
+  type KeyHintProfile,
+} from "./utils/keyHintProfiles";
 
 const HashView = lazy(() => import("./views/HashView").then((module) => ({ default: module.HashView })));
 const RedactView = lazy(() => import("./views/RedactView").then((module) => ({ default: module.RedactView })));
@@ -72,10 +80,27 @@ function AppShell() {
   const [tourOpen, setTourOpen] = useState(!onboardingComplete);
   const [hashActions, setHashActions] = useState<HashViewActions | null>(null);
   const [viewport, setViewport] = useState({ width: window.innerWidth, height: window.innerHeight });
+  const [keyHintProfiles, setKeyHintProfiles] = usePersistentState<KeyHintProfile[]>(SHARED_KEY_HINT_PROFILE_KEY, []);
+  const [selectedKeyHintProfileId, setSelectedKeyHintProfileId] = usePersistentState<string>("nullid:profile:key-hint-selected", "");
+  const [keyHintProfileName, setKeyHintProfileName] = useState("");
+  const [profileExportOpen, setProfileExportOpen] = useState(false);
+  const [profileExportSign, setProfileExportSign] = useState(false);
+  const [profileExportPassphrase, setProfileExportPassphrase] = useState("");
+  const [profileExportKeyHint, setProfileExportKeyHint] = useState("");
+  const [profileExportError, setProfileExportError] = useState<string | null>(null);
+  const [profileImportOpen, setProfileImportOpen] = useState(false);
+  const [pendingProfileImportFile, setPendingProfileImportFile] = useState<File | null>(null);
+  const [profileImportDescriptor, setProfileImportDescriptor] = useState<ProfileDescriptor | null>(null);
+  const [profileImportPassphrase, setProfileImportPassphrase] = useState("");
+  const [profileImportError, setProfileImportError] = useState<string | null>(null);
   const importProfileInputRef = useRef<HTMLInputElement>(null);
   const moduleLookup = useMemo(
     () => Object.fromEntries(modules.map((module) => [module.key, module])) as Record<ModuleKey, ModuleDefinition>,
     [],
+  );
+  const selectedKeyHintProfile = useMemo(
+    () => keyHintProfiles.find((profile) => profile.id === selectedKeyHintProfileId) ?? null,
+    [keyHintProfiles, selectedKeyHintProfileId],
   );
 
   const resolvedActiveModule = useMemo<ModuleKey>(
@@ -94,6 +119,14 @@ function AppShell() {
       setTourOpen(true);
     }
   }, [onboardingComplete]);
+
+  useEffect(() => {
+    if (keyHintProfiles.length > 0) return;
+    const legacy = readLegacyProfiles("nullid:sanitize:key-hints");
+    if (legacy.length > 0) {
+      setKeyHintProfiles(legacy);
+    }
+  }, [keyHintProfiles.length, setKeyHintProfiles]);
 
   const handleStatus = useCallback((message: string, tone: StatusTone = "neutral") => {
     setStatus({ message, tone });
@@ -146,6 +179,101 @@ function AppShell() {
     setStatus({ message: "onboarding", tone: "accent" });
   }, [setOnboardingComplete, setTourStepIndex]);
 
+  const openProfileExportDialog = useCallback(() => {
+    setProfileExportOpen(true);
+    setProfileExportError(null);
+    setProfileExportSign(false);
+    setProfileExportPassphrase("");
+    setProfileExportKeyHint(selectedKeyHintProfile?.keyHint ?? "");
+  }, [selectedKeyHintProfile]);
+
+  const closeProfileExportDialog = useCallback(() => {
+    setProfileExportOpen(false);
+    setProfileExportError(null);
+    setProfileExportPassphrase("");
+  }, []);
+
+  const confirmProfileExport = useCallback(async () => {
+    try {
+      if (profileExportSign && !profileExportPassphrase.trim()) {
+        setProfileExportError("signing passphrase required");
+        return;
+      }
+      const keyHint = profileExportSign ? sanitizeKeyHint(profileExportKeyHint) || undefined : undefined;
+      const signingPassphrase = profileExportSign ? profileExportPassphrase : undefined;
+      const result = await downloadProfile(`nullid-profile-${Date.now()}.json`, { signingPassphrase, keyHint });
+      push(`profile exported (${result.entryCount}${result.signed ? ", signed" : ""})`, "accent");
+      setStatus({ message: "profile exported", tone: "accent" });
+      closeProfileExportDialog();
+    } catch (error) {
+      console.error(error);
+      setProfileExportError(error instanceof Error ? error.message : "profile export failed");
+    }
+  }, [closeProfileExportDialog, profileExportKeyHint, profileExportPassphrase, profileExportSign, push]);
+
+  const saveProfileHint = useCallback(() => {
+    const result = upsertKeyHintProfile(keyHintProfiles, keyHintProfileName, profileExportKeyHint);
+    if (!result.ok) {
+      setProfileExportError(result.message);
+      return;
+    }
+    setKeyHintProfiles(result.profiles);
+    setSelectedKeyHintProfileId(result.selectedId);
+    setKeyHintProfileName("");
+    setProfileExportKeyHint(result.profiles.find((entry) => entry.id === result.selectedId)?.keyHint ?? profileExportKeyHint);
+    setProfileExportError(null);
+    push("key hint profile saved", "accent");
+  }, [keyHintProfileName, keyHintProfiles, profileExportKeyHint, push, setKeyHintProfiles, setSelectedKeyHintProfileId]);
+
+  const beginProfileImportFlow = useCallback(async (file?: File | null) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as unknown;
+      const descriptor = describeProfilePayload(parsed);
+      setPendingProfileImportFile(file);
+      setProfileImportDescriptor(descriptor);
+      setProfileImportPassphrase("");
+      setProfileImportError(null);
+      setProfileImportOpen(true);
+    } catch (error) {
+      console.error(error);
+      const message = error instanceof Error ? error.message : "import failed";
+      push(`import failed: ${message}`, "danger");
+      setStatus({ message: "import failed", tone: "danger" });
+    }
+  }, [push]);
+
+  const closeProfileImportDialog = useCallback(() => {
+    setProfileImportOpen(false);
+    setPendingProfileImportFile(null);
+    setProfileImportDescriptor(null);
+    setProfileImportPassphrase("");
+    setProfileImportError(null);
+  }, []);
+
+  const confirmProfileImport = useCallback(async () => {
+    if (!pendingProfileImportFile || !profileImportDescriptor) return;
+    if (profileImportDescriptor.signed && !profileImportPassphrase.trim()) {
+      setProfileImportError("verification passphrase required for signed profiles");
+      return;
+    }
+    try {
+      const result = await importProfileFile(pendingProfileImportFile, {
+        verificationPassphrase: profileImportDescriptor.signed ? profileImportPassphrase.trim() : undefined,
+      });
+      const suffix = result.legacy ? "legacy" : result.signed ? (result.verified ? "signed+verified" : "signed") : "unsigned";
+      push(`profile imported (${result.applied}, ${suffix})`, "accent");
+      setStatus({ message: "profile imported", tone: "accent" });
+      closeProfileImportDialog();
+      window.location.reload();
+    } catch (error) {
+      console.error(error);
+      const message = error instanceof Error ? error.message : "import failed";
+      setProfileImportError(message);
+    }
+  }, [closeProfileImportDialog, pendingProfileImportFile, profileImportDescriptor, profileImportPassphrase, push]);
+
   const navigationCommands: CommandItem[] = useMemo(
     () =>
       modules.map((module) => ({
@@ -186,28 +314,7 @@ function AppShell() {
         label: "Export profile",
         description: "Download preferences as JSON",
         group: "System",
-        action: async () => {
-          const shouldSign = confirm("Sign profile metadata with a passphrase?");
-          let signingPassphrase: string | undefined;
-          let keyHint: string | undefined;
-          if (shouldSign) {
-            const pass = prompt("Signing passphrase:");
-            if (!pass) {
-              push("profile export cancelled", "neutral");
-              setStatus({ message: "profile export cancelled", tone: "neutral" });
-              return;
-            }
-            signingPassphrase = pass;
-            const hint = prompt("Optional key hint (for future verification):");
-            keyHint = hint?.trim() || undefined;
-          }
-          const result = await downloadProfile(`nullid-profile-${Date.now()}.json`, {
-            signingPassphrase,
-            keyHint,
-          });
-          push(`profile exported (${result.entryCount}${result.signed ? ", signed" : ""})`, "accent");
-          setStatus({ message: "profile exported", tone: "accent" });
-        },
+        action: openProfileExportDialog,
       },
       {
         id: "import-profile",
@@ -259,7 +366,7 @@ function AppShell() {
     }
 
     return base;
-  }, [activeModule, hashActions, startOnboarding, toggleTheme]);
+  }, [activeModule, hashActions, openProfileExportDialog, startOnboarding, toggleTheme]);
 
   const commandList = useMemo(() => [...navigationCommands, ...contextualCommands], [contextualCommands, navigationCommands]);
 
@@ -403,20 +510,7 @@ function AppShell() {
         tabIndex={-1}
         onChange={async (event) => {
           const file = event.target.files?.[0];
-          if (!file) return;
-          try {
-            const verifyPassphrase = prompt("Verification passphrase for signed profiles (optional):")?.trim() || undefined;
-            const result = await importProfileFile(file, { verificationPassphrase: verifyPassphrase });
-            const suffix = result.legacy ? "legacy" : result.signed ? result.verified ? "signed+verified" : "signed" : "unsigned";
-            push(`profile imported (${result.applied}, ${suffix})`, "accent");
-            setStatus({ message: "profile imported", tone: "accent" });
-            window.location.reload();
-          } catch (error) {
-            console.error(error);
-            const message = error instanceof Error ? error.message : "import failed";
-            push(`import failed: ${message}`, "danger");
-            setStatus({ message: "import failed", tone: "danger" });
-          }
+          await beginProfileImportFlow(file);
           event.target.value = "";
         }}
       />
@@ -460,6 +554,135 @@ function AppShell() {
         onClose={closePalette}
         onSelect={handleCommandSelect}
       />
+      <ActionDialog
+        open={profileExportOpen}
+        title="Export profile snapshot"
+        description="Export local nullid:* settings as JSON. Signed exports require a verification passphrase on import."
+        confirmLabel="export profile"
+        onCancel={closeProfileExportDialog}
+        onConfirm={() => void confirmProfileExport()}
+        confirmDisabled={profileExportSign && !profileExportPassphrase.trim()}
+      >
+        <label className="action-dialog-field">
+          <span>Sign metadata</span>
+          <input
+            type="checkbox"
+            checked={profileExportSign}
+            onChange={(event) => setProfileExportSign(event.target.checked)}
+            aria-label="Sign profile metadata"
+          />
+        </label>
+        {profileExportSign ? (
+          <>
+            <label className="action-dialog-field">
+              <span>Signing passphrase</span>
+              <input
+                className="action-dialog-input"
+                type="password"
+                value={profileExportPassphrase}
+                onChange={(event) => {
+                  setProfileExportPassphrase(event.target.value);
+                  if (profileExportError) setProfileExportError(null);
+                }}
+                aria-label="Profile signing passphrase"
+                placeholder="required when signing"
+              />
+            </label>
+            <div className="action-dialog-row">
+              <label className="action-dialog-field">
+                <span>Saved key hint</span>
+                <select
+                  className="action-dialog-select"
+                  value={selectedKeyHintProfileId}
+                  onChange={(event) => {
+                    const nextId = event.target.value;
+                    setSelectedKeyHintProfileId(nextId);
+                    const profile = keyHintProfiles.find((entry) => entry.id === nextId);
+                    setProfileExportKeyHint(profile?.keyHint ?? "");
+                  }}
+                  aria-label="Saved key hint profile"
+                >
+                  <option value="">custom key hint</option>
+                  {keyHintProfiles.map((profile) => (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.name} · {profile.keyHint}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="action-dialog-field">
+                <span>Key hint label</span>
+                <input
+                  className="action-dialog-input"
+                  value={profileExportKeyHint}
+                  onChange={(event) => setProfileExportKeyHint(event.target.value)}
+                  aria-label="Profile key hint"
+                  placeholder="optional recipient-visible hint"
+                />
+              </label>
+            </div>
+            <div className="action-dialog-row">
+              <label className="action-dialog-field">
+                <span>Save key hint profile as</span>
+                <input
+                  className="action-dialog-input"
+                  value={keyHintProfileName}
+                  onChange={(event) => setKeyHintProfileName(event.target.value)}
+                  aria-label="Key hint profile name"
+                  placeholder="team-signing-key"
+                />
+              </label>
+              <button type="button" className="button" onClick={saveProfileHint} disabled={!profileExportKeyHint.trim()}>
+                save hint
+              </button>
+            </div>
+            <p className="action-dialog-note">
+              Key hints are local labels only. Passphrases are not persisted.
+              {selectedKeyHintProfile ? ` Active: ${selectedKeyHintProfile.name} (v${selectedKeyHintProfile.version})` : ""}
+            </p>
+          </>
+        ) : (
+          <p className="action-dialog-note">Unsigned profile exports can still be imported, but signature verification is unavailable.</p>
+        )}
+        {profileExportError ? <p className="action-dialog-error">{profileExportError}</p> : null}
+      </ActionDialog>
+      <ActionDialog
+        open={profileImportOpen}
+        title="Import profile snapshot"
+        description={
+          profileImportDescriptor
+            ? `${profileImportDescriptor.entryCount} entries · ${profileImportDescriptor.legacy ? "legacy" : `schema ${profileImportDescriptor.schemaVersion}`}`
+            : "Select import settings"
+        }
+        confirmLabel="import profile"
+        onCancel={closeProfileImportDialog}
+        onConfirm={() => void confirmProfileImport()}
+      >
+        {profileImportDescriptor?.signed ? (
+          <>
+            <p className="action-dialog-note">
+              Signed profile detected{profileImportDescriptor.keyHint ? ` (hint: ${profileImportDescriptor.keyHint})` : ""}. Verification is required before import.
+            </p>
+            <label className="action-dialog-field">
+              <span>Verification passphrase</span>
+              <input
+                className="action-dialog-input"
+                type="password"
+                value={profileImportPassphrase}
+                onChange={(event) => {
+                  setProfileImportPassphrase(event.target.value);
+                  if (profileImportError) setProfileImportError(null);
+                }}
+                aria-label="Profile verification passphrase"
+                placeholder="required for signed profile"
+              />
+            </label>
+          </>
+        ) : (
+          <p className="action-dialog-note">Unsigned profile snapshot. Continue only if you trust the source.</p>
+        )}
+        {profileImportError ? <p className="action-dialog-error">{profileImportError}</p> : null}
+      </ActionDialog>
       <FeedbackWidget activeModule={resolvedActiveModule} />
       <OnboardingTour
         open={tourOpen}

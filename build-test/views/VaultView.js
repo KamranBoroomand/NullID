@@ -1,11 +1,14 @@
-import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./styles.css";
 import { Chip } from "../components/Chip";
+import { ActionDialog } from "../components/ActionDialog";
 import { useToast } from "../components/ToastHost";
-import { decryptNote, deleteNote, exportVault, exportVaultEncrypted, importVault, importVaultEncrypted, loadNotes, saveNote, unlockVault, } from "../utils/vault";
+import { describeVaultPayload, decryptNote, deleteNote, exportVault, exportVaultEncrypted, importVault, importVaultEncrypted, loadNotes, saveNote, unlockVault, } from "../utils/vault";
 import { getVaultBackendInfo, wipeVault } from "../utils/storage";
 import { analyzeSecret, gradeLabel } from "../utils/passwordToolkit";
+import { usePersistentState } from "../hooks/usePersistentState";
+import { SHARED_KEY_HINT_PROFILE_KEY, readLegacyProfiles, sanitizeKeyHint, } from "../utils/keyHintProfiles";
 export function VaultView({ onOpenGuide }) {
     const { push } = useToast();
     const [passphrase, setPassphrase] = useState("");
@@ -23,10 +26,30 @@ export function VaultView({ onOpenGuide }) {
     const [lockRemaining, setLockRemaining] = useState(0);
     const [backendInfo, setBackendInfo] = useState(() => getVaultBackendInfo());
     const [template, setTemplate] = useState("blank");
+    const [keyHintProfiles, setKeyHintProfiles] = usePersistentState(SHARED_KEY_HINT_PROFILE_KEY, []);
+    const [selectedKeyHintProfileId, setSelectedKeyHintProfileId] = usePersistentState("nullid:vault:key-hint-selected", "");
+    const [vaultExportDialogOpen, setVaultExportDialogOpen] = useState(false);
+    const [vaultExportMode, setVaultExportMode] = useState("plain");
+    const [vaultExportPassphrase, setVaultExportPassphrase] = useState("");
+    const [vaultExportSign, setVaultExportSign] = useState(false);
+    const [vaultSigningPassphrase, setVaultSigningPassphrase] = useState("");
+    const [vaultExportKeyHint, setVaultExportKeyHint] = useState("");
+    const [vaultExportError, setVaultExportError] = useState(null);
+    const [vaultImportDialogOpen, setVaultImportDialogOpen] = useState(false);
+    const [vaultImportMode, setVaultImportMode] = useState("plain");
+    const [vaultImportFile, setVaultImportFile] = useState(null);
+    const [vaultImportDescriptor, setVaultImportDescriptor] = useState(null);
+    const [vaultImportExportPassphrase, setVaultImportExportPassphrase] = useState("");
+    const [vaultImportVerifyPassphrase, setVaultImportVerifyPassphrase] = useState("");
+    const [vaultImportError, setVaultImportError] = useState(null);
+    const [reportDialogOpen, setReportDialogOpen] = useState(false);
+    const [reportIncludeBodies, setReportIncludeBodies] = useState(false);
+    const [wipeDialogOpen, setWipeDialogOpen] = useState(false);
     const fileInputRef = useRef(null);
     const encryptedImportRef = useRef(null);
     const formatTs = useCallback((value) => new Date(value).toLocaleString(), []);
     const passphraseAssessment = useMemo(() => analyzeSecret(passphrase), [passphrase]);
+    const selectedKeyHintProfile = useMemo(() => keyHintProfiles.find((profile) => profile.id === selectedKeyHintProfileId) ?? null, [keyHintProfiles, selectedKeyHintProfileId]);
     const filteredNotes = useMemo(() => notes.filter((note) => {
         const query = filter.toLowerCase();
         return (note.title.toLowerCase().includes(query) ||
@@ -45,6 +68,14 @@ export function VaultView({ onOpenGuide }) {
             latestUpdate: notes.length ? Math.max(...notes.map((note) => note.updatedAt)) : null,
         };
     }, [filteredNotes.length, notes]);
+    useEffect(() => {
+        if (keyHintProfiles.length > 0)
+            return;
+        const legacy = readLegacyProfiles("nullid:sanitize:key-hints");
+        if (legacy.length > 0) {
+            setKeyHintProfiles(legacy);
+        }
+    }, [keyHintProfiles.length, setKeyHintProfiles]);
     const resetLockTimer = useCallback(() => {
         if (lockTimer) {
             window.clearTimeout(lockTimer);
@@ -225,68 +256,142 @@ export function VaultView({ onOpenGuide }) {
         handleLock();
         push("vault wiped", "danger");
     }, [handleLock, push]);
-    const handleExport = useCallback(async () => {
-        const shouldSign = confirm("Sign vault export metadata with a passphrase?");
-        let signingPassphrase;
-        let keyHint;
-        if (shouldSign) {
-            const signaturePass = prompt("Signing passphrase:");
-            if (!signaturePass) {
-                push("export cancelled", "neutral");
-                return;
-            }
-            signingPassphrase = signaturePass;
-            keyHint = prompt("Optional key hint (for verification):")?.trim() || undefined;
-        }
-        const blob = await exportVault({ signingPassphrase, keyHint });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = "nullid-vault.json";
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-        push(`vault export ready${signingPassphrase ? " (signed)" : ""}`, "accent");
-    }, [push]);
-    const handleExportEncrypted = useCallback(async () => {
-        const pass = prompt("Set export passphrase:");
-        if (!pass) {
-            push("export cancelled", "neutral");
+    const openVaultExportDialog = useCallback((mode) => {
+        setVaultExportMode(mode);
+        setVaultExportPassphrase("");
+        setVaultExportSign(false);
+        setVaultSigningPassphrase("");
+        setVaultExportKeyHint(selectedKeyHintProfile?.keyHint ?? "");
+        setVaultExportError(null);
+        setVaultExportDialogOpen(true);
+    }, [selectedKeyHintProfile]);
+    const closeVaultExportDialog = useCallback(() => {
+        setVaultExportDialogOpen(false);
+        setVaultExportError(null);
+        setVaultExportPassphrase("");
+        setVaultSigningPassphrase("");
+    }, []);
+    const confirmVaultExport = useCallback(async () => {
+        if (vaultExportMode === "encrypted" && !vaultExportPassphrase.trim()) {
+            setVaultExportError("export passphrase required for encrypted export");
             return;
         }
-        const shouldSign = confirm("Sign vault metadata before encryption?");
-        let signingPassphrase;
-        let keyHint;
-        if (shouldSign) {
-            const signaturePass = prompt("Signing passphrase:");
-            if (!signaturePass) {
-                push("export cancelled", "neutral");
-                return;
-            }
-            signingPassphrase = signaturePass;
-            keyHint = prompt("Optional key hint (for verification):")?.trim() || undefined;
+        if (vaultExportSign && !vaultSigningPassphrase.trim()) {
+            setVaultExportError("signing passphrase required when metadata signing is enabled");
+            return;
         }
-        const blob = await exportVaultEncrypted(pass, { signingPassphrase, keyHint });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = "nullid-vault.enc";
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-        push(`encrypted export ready${signingPassphrase ? " (signed metadata)" : ""}`, "accent");
-    }, [push]);
-    const handleImport = useCallback(async () => {
+        try {
+            const options = {
+                signingPassphrase: vaultExportSign ? vaultSigningPassphrase : undefined,
+                keyHint: vaultExportSign ? sanitizeKeyHint(vaultExportKeyHint) || undefined : undefined,
+            };
+            const blob = vaultExportMode === "encrypted"
+                ? await exportVaultEncrypted(vaultExportPassphrase.trim(), options)
+                : await exportVault(options);
+            const filename = vaultExportMode === "encrypted" ? "nullid-vault.enc" : "nullid-vault.json";
+            downloadBlob(blob, filename);
+            push(vaultExportMode === "encrypted"
+                ? `encrypted export ready${vaultExportSign ? " (signed metadata)" : ""}`
+                : `vault export ready${vaultExportSign ? " (signed)" : ""}`, "accent");
+            closeVaultExportDialog();
+        }
+        catch (error) {
+            console.error(error);
+            setVaultExportError(error instanceof Error ? error.message : "vault export failed");
+        }
+    }, [
+        closeVaultExportDialog,
+        push,
+        vaultExportKeyHint,
+        vaultExportMode,
+        vaultExportPassphrase,
+        vaultExportSign,
+        vaultSigningPassphrase,
+    ]);
+    const handleImport = useCallback(() => {
         fileInputRef.current?.click();
     }, []);
-    const exportFilteredReport = useCallback(() => {
+    const beginVaultImport = useCallback(async (file, mode = "plain") => {
+        if (!file)
+            return;
+        try {
+            setVaultImportFile(file);
+            setVaultImportMode(mode);
+            setVaultImportError(null);
+            setVaultImportVerifyPassphrase("");
+            setVaultImportExportPassphrase("");
+            if (mode === "plain") {
+                const parsed = JSON.parse(await file.text());
+                setVaultImportDescriptor(describeVaultPayload(parsed));
+            }
+            else {
+                setVaultImportDescriptor(null);
+            }
+            setVaultImportDialogOpen(true);
+        }
+        catch (error) {
+            console.error(error);
+            const message = error instanceof Error ? error.message : "vault import failed";
+            push(`vault import failed: ${message}`, "danger");
+        }
+    }, [push]);
+    const closeVaultImportDialog = useCallback(() => {
+        setVaultImportDialogOpen(false);
+        setVaultImportFile(null);
+        setVaultImportDescriptor(null);
+        setVaultImportError(null);
+        setVaultImportVerifyPassphrase("");
+        setVaultImportExportPassphrase("");
+    }, []);
+    const confirmVaultImport = useCallback(async () => {
+        if (!vaultImportFile)
+            return;
+        if (vaultImportMode === "plain" && vaultImportDescriptor?.signed && !vaultImportVerifyPassphrase.trim()) {
+            setVaultImportError("verification passphrase required for signed snapshots");
+            return;
+        }
+        if (vaultImportMode === "encrypted" && !vaultImportExportPassphrase.trim()) {
+            setVaultImportError("export passphrase required for encrypted vault imports");
+            return;
+        }
+        try {
+            const result = vaultImportMode === "encrypted"
+                ? await importVaultEncrypted(vaultImportFile, vaultImportExportPassphrase.trim(), {
+                    verificationPassphrase: vaultImportVerifyPassphrase.trim() || undefined,
+                })
+                : await importVault(vaultImportFile, {
+                    verificationPassphrase: vaultImportVerifyPassphrase.trim() || undefined,
+                });
+            setUnlocked(false);
+            setKey(null);
+            setNotes([]);
+            setTitle("");
+            setBody("");
+            setTags("");
+            setActiveId(null);
+            const suffix = result.legacy ? "legacy" : result.signed ? (result.verified ? "signed+verified" : "signed") : "unsigned";
+            push(`${vaultImportMode === "encrypted" ? "encrypted vault imported" : "vault imported"} (${result.noteCount} notes, ${suffix}); please unlock`, vaultImportMode === "encrypted" ? "accent" : "neutral");
+            closeVaultImportDialog();
+        }
+        catch (error) {
+            console.error(error);
+            const message = error instanceof Error ? error.message : "vault import failed";
+            setVaultImportError(message);
+        }
+    }, [
+        closeVaultImportDialog,
+        push,
+        vaultImportDescriptor?.signed,
+        vaultImportExportPassphrase,
+        vaultImportFile,
+        vaultImportMode,
+        vaultImportVerifyPassphrase,
+    ]);
+    const exportFilteredReport = useCallback((includeBodies) => {
         if (!unlocked) {
             push("unlock to export report", "danger");
             return;
         }
-        const includeBodies = confirm("Include note bodies in report export?");
         const payload = {
             schemaVersion: 1,
             kind: "nullid-vault-report",
@@ -304,12 +409,7 @@ export function VaultView({ onOpenGuide }) {
             })),
         };
         const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `nullid-vault-report-${Date.now()}.json`;
-        link.click();
-        URL.revokeObjectURL(url);
+        downloadBlob(blob, `nullid-vault-report-${Date.now()}.json`);
         push("vault report exported", "accent");
         resetLockTimer();
     }, [filter, filteredNotes, push, resetLockTimer, unlocked, vaultStats]);
@@ -333,64 +433,65 @@ export function VaultView({ onOpenGuide }) {
             window.removeEventListener("keydown", onPanic);
         };
     }, [handleLock, push, unlocked]);
-    return (_jsxs("div", { className: "workspace-scroll", children: [_jsx("div", { className: "guide-link", children: _jsx("button", { type: "button", className: "guide-link-button", onClick: () => onOpenGuide?.("vault"), children: "? guide" }) }), _jsxs("div", { className: "grid-two", children: [_jsxs("div", { className: "panel", "aria-label": "Vault controls", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Secure Notes" }), _jsx("span", { className: "panel-subtext", children: "AES-GCM + PBKDF2" })] }), _jsxs("div", { className: "controls-row", children: [_jsx("input", { className: "input", type: "password", placeholder: "passphrase", value: passphrase, onChange: (event) => setPassphrase(event.target.value), "aria-label": "Vault key" }), _jsx("button", { className: "button", type: "button", onClick: handleUnlock, disabled: unlocked || !passphrase, children: "unlock" }), _jsx("button", { className: "button", type: "button", onClick: handleLock, disabled: !unlocked, children: "lock" })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: "passphrase strength" }), _jsx("span", { className: gradeTagClass(passphraseAssessment.grade), children: gradeLabel(passphraseAssessment.grade) }), _jsxs("span", { className: "microcopy", children: ["effective \u2248 ", passphraseAssessment.effectiveEntropyBits, " bits"] })] }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", onClick: handleExport, disabled: !unlocked || notes.length === 0, children: "export (json)" }), _jsx("button", { className: "button", type: "button", onClick: handleExportEncrypted, disabled: !unlocked || notes.length === 0, children: "export encrypted" }), _jsx("button", { className: "button", type: "button", onClick: handleImport, children: "import" }), _jsx("button", { className: "button", type: "button", onClick: () => encryptedImportRef.current?.click(), children: "import encrypted" }), _jsx("input", { ref: fileInputRef, type: "file", accept: "application/json", tabIndex: -1, style: { position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }, onChange: async (event) => {
+    return (_jsxs("div", { className: "workspace-scroll", children: [_jsx("div", { className: "guide-link", children: _jsx("button", { type: "button", className: "guide-link-button", onClick: () => onOpenGuide?.("vault"), children: "? guide" }) }), _jsxs("div", { className: "grid-two", children: [_jsxs("div", { className: "panel", "aria-label": "Vault controls", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Secure Notes" }), _jsx("span", { className: "panel-subtext", children: "AES-GCM + PBKDF2" })] }), _jsxs("div", { className: "controls-row", children: [_jsx("input", { className: "input", type: "password", placeholder: "passphrase", value: passphrase, onChange: (event) => setPassphrase(event.target.value), "aria-label": "Vault key" }), _jsx("button", { className: "button", type: "button", onClick: handleUnlock, disabled: unlocked || !passphrase, children: "unlock" }), _jsx("button", { className: "button", type: "button", onClick: handleLock, disabled: !unlocked, children: "lock" })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: "passphrase strength" }), _jsx("span", { className: gradeTagClass(passphraseAssessment.grade), children: gradeLabel(passphraseAssessment.grade) }), _jsxs("span", { className: "microcopy", children: ["effective \u2248 ", passphraseAssessment.effectiveEntropyBits, " bits"] })] }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", onClick: () => openVaultExportDialog("plain"), disabled: !unlocked || notes.length === 0, children: "export (json)" }), _jsx("button", { className: "button", type: "button", onClick: () => openVaultExportDialog("encrypted"), disabled: !unlocked || notes.length === 0, children: "export encrypted" }), _jsx("button", { className: "button", type: "button", onClick: handleImport, children: "import" }), _jsx("button", { className: "button", type: "button", onClick: () => encryptedImportRef.current?.click(), children: "import encrypted" }), _jsx("input", { ref: fileInputRef, type: "file", accept: "application/json", tabIndex: -1, style: { position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }, onChange: async (event) => {
                                             const file = event.target.files?.[0];
-                                            if (!file)
-                                                return;
-                                            try {
-                                                const verifyPassphrase = prompt("Verification passphrase for signed snapshots (optional):")?.trim() || undefined;
-                                                const result = await importVault(file, { verificationPassphrase: verifyPassphrase });
-                                                setUnlocked(false);
-                                                setKey(null);
-                                                setNotes([]);
-                                                setTitle("");
-                                                setBody("");
-                                                setTags("");
-                                                setActiveId(null);
-                                                const suffix = result.legacy ? "legacy" : result.signed ? result.verified ? "signed+verified" : "signed" : "unsigned";
-                                                push(`vault imported (${result.noteCount} notes, ${suffix}); please unlock`, "neutral");
-                                            }
-                                            catch (error) {
-                                                console.error(error);
-                                                const message = error instanceof Error ? error.message : "vault import failed";
-                                                push(`vault import failed: ${message}`, "danger");
-                                            }
+                                            await beginVaultImport(file, "plain");
+                                            event.target.value = "";
                                         } }), _jsx("input", { ref: encryptedImportRef, type: "file", accept: "text/plain", tabIndex: -1, style: { position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }, onChange: async (event) => {
                                             const file = event.target.files?.[0];
-                                            if (!file)
-                                                return;
-                                            const pass = prompt("Enter export passphrase:");
-                                            if (!pass) {
-                                                push("import cancelled", "neutral");
-                                                return;
-                                            }
-                                            try {
-                                                const verifyPassphrase = prompt("Verification passphrase for signed snapshots (optional):")?.trim() || undefined;
-                                                const result = await importVaultEncrypted(file, pass, { verificationPassphrase: verifyPassphrase });
-                                                setUnlocked(false);
-                                                setKey(null);
-                                                setNotes([]);
-                                                setTitle("");
-                                                setBody("");
-                                                setTags("");
-                                                setActiveId(null);
-                                                const suffix = result.legacy ? "legacy" : result.signed ? result.verified ? "signed+verified" : "signed" : "unsigned";
-                                                push(`encrypted vault imported (${result.noteCount} notes, ${suffix}); please unlock`, "accent");
-                                            }
-                                            catch (error) {
-                                                console.error(error);
-                                                const message = error instanceof Error ? error.message : "encrypted import failed";
-                                                push(`encrypted import failed: ${message}`, "danger");
-                                            }
-                                        } }), _jsx("button", { className: "button", type: "button", onClick: () => {
-                                            if (confirm("Wipe all vault data?"))
-                                                handleWipe();
-                                        }, style: { borderColor: "var(--danger)", color: "var(--danger)" }, children: "wipe" })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: "state" }), _jsx(Chip, { label: unlocked ? "unsealed" : "locked", tone: unlocked ? "accent" : "muted" }), _jsxs("span", { className: "microcopy", children: ["notes: ", notes.length] }), _jsx(Chip, { label: `storage: ${backendInfo.kind}`, tone: backendInfo.fallbackReason ? "danger" : "muted" }), backendInfo.fallbackReason && _jsxs("span", { className: "microcopy", children: ["fallback: ", backendInfo.fallbackReason] })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: "auto-lock" }), _jsx("span", { className: "tag", children: unlocked ? `${lockRemaining}s` : "locked" }), _jsx("span", { className: "microcopy", children: unlocked ? "timer resets on activity" : "unlock to start timer" })] }), _jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", htmlFor: "vault-search", children: "Search" }), _jsx("input", { id: "vault-search", className: "input", placeholder: "Filter title, body, or tags", value: filter, onChange: (event) => setFilter(event.target.value), disabled: !unlocked })] }), _jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", htmlFor: "auto-lock", children: "Auto lock (seconds)" }), _jsx("input", { id: "auto-lock", className: "input", type: "number", min: 30, max: 1800, value: autoLockSeconds, onChange: (event) => setAutoLockSeconds(Math.min(1800, Math.max(30, Number(event.target.value)))), disabled: !unlocked })] })] }), _jsxs("div", { className: "panel", "aria-label": "Create note form", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: activeId ? "Edit note" : "Create note" }), _jsx("span", { className: "panel-subtext", children: "encrypted body" })] }), _jsx("label", { className: "section-title", htmlFor: "note-title", children: "Title" }), _jsx("input", { id: "note-title", className: "input", placeholder: "Incident draft", "aria-label": "Note title", disabled: !unlocked, value: title, onChange: (event) => setTitle(event.target.value) }), _jsx("label", { className: "section-title", htmlFor: "note-body", children: "Body" }), _jsx("textarea", { id: "note-body", className: "textarea", placeholder: "Encrypted note body...", "aria-label": "Note body", disabled: !unlocked, value: body, onChange: (event) => setBody(event.target.value) }), _jsx("label", { className: "section-title", htmlFor: "note-tags", children: "Tags (comma separated)" }), _jsx("input", { id: "note-tags", className: "input", placeholder: "incident, access, case-142", "aria-label": "Note tags", disabled: !unlocked, value: tags, onChange: (event) => setTags(event.target.value) }), _jsxs("div", { className: "controls-row", children: [_jsx("span", { className: "section-title", children: "Templates" }), _jsxs("div", { className: "pill-buttons", role: "group", "aria-label": "Vault note templates", children: [_jsx("button", { type: "button", className: template === "blank" ? "active" : "", onClick: () => applyTemplate("blank"), children: "blank" }), _jsx("button", { type: "button", className: template === "incident" ? "active" : "", onClick: () => applyTemplate("incident"), children: "incident" }), _jsx("button", { type: "button", className: template === "credentials" ? "active" : "", onClick: () => applyTemplate("credentials"), children: "credentials" }), _jsx("button", { type: "button", className: template === "checklist" ? "active" : "", onClick: () => applyTemplate("checklist"), children: "checklist" })] })] }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", disabled: !unlocked, onClick: handleSave, children: activeId ? "update" : "store" }), _jsx("button", { className: "button", type: "button", disabled: !unlocked, onClick: () => {
+                                            await beginVaultImport(file, "encrypted");
+                                            event.target.value = "";
+                                        } }), _jsx("button", { className: "button", type: "button", onClick: () => setWipeDialogOpen(true), style: { borderColor: "var(--danger)", color: "var(--danger)" }, children: "wipe" })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: "state" }), _jsx(Chip, { label: unlocked ? "unsealed" : "locked", tone: unlocked ? "accent" : "muted" }), _jsxs("span", { className: "microcopy", children: ["notes: ", notes.length] }), _jsx(Chip, { label: `storage: ${backendInfo.kind}`, tone: backendInfo.fallbackReason ? "danger" : "muted" }), backendInfo.fallbackReason && _jsxs("span", { className: "microcopy", children: ["fallback: ", backendInfo.fallbackReason] })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: "auto-lock" }), _jsx("span", { className: "tag", children: unlocked ? `${lockRemaining}s` : "locked" }), _jsx("span", { className: "microcopy", children: unlocked ? "timer resets on activity" : "unlock to start timer" })] }), _jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", htmlFor: "vault-search", children: "Search" }), _jsx("input", { id: "vault-search", className: "input", placeholder: "Filter title, body, or tags", value: filter, onChange: (event) => setFilter(event.target.value), disabled: !unlocked })] }), _jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", htmlFor: "auto-lock", children: "Auto lock (seconds)" }), _jsx("input", { id: "auto-lock", className: "input", type: "number", min: 30, max: 1800, value: autoLockSeconds, onChange: (event) => setAutoLockSeconds(Math.min(1800, Math.max(30, Number(event.target.value)))), disabled: !unlocked })] })] }), _jsxs("div", { className: "panel", "aria-label": "Create note form", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: activeId ? "Edit note" : "Create note" }), _jsx("span", { className: "panel-subtext", children: "encrypted body" })] }), _jsx("label", { className: "section-title", htmlFor: "note-title", children: "Title" }), _jsx("input", { id: "note-title", className: "input", placeholder: "Incident draft", "aria-label": "Note title", disabled: !unlocked, value: title, onChange: (event) => setTitle(event.target.value) }), _jsx("label", { className: "section-title", htmlFor: "note-body", children: "Body" }), _jsx("textarea", { id: "note-body", className: "textarea", placeholder: "Encrypted note body...", "aria-label": "Note body", disabled: !unlocked, value: body, onChange: (event) => setBody(event.target.value) }), _jsx("label", { className: "section-title", htmlFor: "note-tags", children: "Tags (comma separated)" }), _jsx("input", { id: "note-tags", className: "input", placeholder: "incident, access, case-142", "aria-label": "Note tags", disabled: !unlocked, value: tags, onChange: (event) => setTags(event.target.value) }), _jsxs("div", { className: "controls-row", children: [_jsx("span", { className: "section-title", children: "Templates" }), _jsxs("div", { className: "pill-buttons", role: "group", "aria-label": "Vault note templates", children: [_jsx("button", { type: "button", className: template === "blank" ? "active" : "", onClick: () => applyTemplate("blank"), children: "blank" }), _jsx("button", { type: "button", className: template === "incident" ? "active" : "", onClick: () => applyTemplate("incident"), children: "incident" }), _jsx("button", { type: "button", className: template === "credentials" ? "active" : "", onClick: () => applyTemplate("credentials"), children: "credentials" }), _jsx("button", { type: "button", className: template === "checklist" ? "active" : "", onClick: () => applyTemplate("checklist"), children: "checklist" })] })] }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", disabled: !unlocked, onClick: handleSave, children: activeId ? "update" : "store" }), _jsx("button", { className: "button", type: "button", disabled: !unlocked, onClick: () => {
                                             setTitle("");
                                             setBody("");
                                             setTags("");
                                             setActiveId(null);
-                                        }, children: "clear" })] })] })] }), _jsxs("div", { className: "panel", "aria-label": "Notes list", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Notes" }), _jsx("span", { className: "panel-subtext", children: "decrypted in-memory only" })] }), _jsxs("div", { className: "note-box", children: [_jsxs("div", { className: "status-line", children: [_jsx("span", { children: "analytics" }), _jsxs("span", { className: "tag tag-accent", children: ["notes ", vaultStats.totalNotes] }), _jsxs("span", { className: "tag", children: ["avg chars ", vaultStats.avgChars] }), _jsxs("span", { className: "tag", children: ["tags ", vaultStats.uniqueTags] })] }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", onClick: exportFilteredReport, disabled: !unlocked || filteredNotes.length === 0, children: "export notes report" }), _jsx("span", { className: "microcopy", children: vaultStats.latestUpdate ? `latest update: ${formatTs(vaultStats.latestUpdate)}` : "no notes yet" })] }), unlocked ? (filteredNotes.length === 0 ? (_jsx("div", { className: "microcopy", children: "no matching notes" })) : (_jsx("ul", { className: "note-list", children: filteredNotes.map((note) => (_jsxs("li", { children: [_jsx("div", { className: "note-title", children: note.title }), _jsx("div", { className: "note-body", children: note.body }), note.tags.length > 0 && (_jsx("div", { className: "controls-row", children: note.tags.map((tag) => (_jsx(Chip, { label: tag, tone: "muted" }, tag))) })), _jsxs("div", { className: "microcopy", children: ["created ", formatTs(note.createdAt), " \u00B7 updated ", formatTs(note.updatedAt)] }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", onClick: () => handleEdit(note), children: "edit" }), _jsx("button", { className: "button", type: "button", onClick: () => handleDelete(note.id), style: { borderColor: "var(--danger)", color: "var(--danger)" }, children: "delete" })] })] }, note.id))) }))) : (_jsx("div", { className: "microcopy", children: "locked. unlock to view." }))] })] })] }));
+                                        }, children: "clear" })] })] })] }), _jsxs("div", { className: "panel", "aria-label": "Notes list", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Notes" }), _jsx("span", { className: "panel-subtext", children: "decrypted in-memory only" })] }), _jsxs("div", { className: "note-box", children: [_jsxs("div", { className: "status-line", children: [_jsx("span", { children: "analytics" }), _jsxs("span", { className: "tag tag-accent", children: ["notes ", vaultStats.totalNotes] }), _jsxs("span", { className: "tag", children: ["avg chars ", vaultStats.avgChars] }), _jsxs("span", { className: "tag", children: ["tags ", vaultStats.uniqueTags] })] }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", onClick: () => {
+                                            setReportIncludeBodies(false);
+                                            setReportDialogOpen(true);
+                                        }, disabled: !unlocked || filteredNotes.length === 0, children: "export notes report" }), _jsx("span", { className: "microcopy", children: vaultStats.latestUpdate ? `latest update: ${formatTs(vaultStats.latestUpdate)}` : "no notes yet" })] }), unlocked ? (filteredNotes.length === 0 ? (_jsx("div", { className: "microcopy", children: "no matching notes" })) : (_jsx("ul", { className: "note-list", children: filteredNotes.map((note) => (_jsxs("li", { children: [_jsx("div", { className: "note-title", children: note.title }), _jsx("div", { className: "note-body", children: note.body }), note.tags.length > 0 && (_jsx("div", { className: "controls-row", children: note.tags.map((tag) => (_jsx(Chip, { label: tag, tone: "muted" }, tag))) })), _jsxs("div", { className: "microcopy", children: ["created ", formatTs(note.createdAt), " \u00B7 updated ", formatTs(note.updatedAt)] }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", onClick: () => handleEdit(note), children: "edit" }), _jsx("button", { className: "button", type: "button", onClick: () => handleDelete(note.id), style: { borderColor: "var(--danger)", color: "var(--danger)" }, children: "delete" })] })] }, note.id))) }))) : (_jsx("div", { className: "microcopy", children: "locked. unlock to view." }))] })] }), _jsxs(ActionDialog, { open: vaultExportDialogOpen, title: vaultExportMode === "encrypted" ? "Export encrypted vault snapshot" : "Export vault snapshot", description: "Signed exports add integrity metadata that can be verified during import.", confirmLabel: vaultExportMode === "encrypted" ? "export encrypted" : "export snapshot", onCancel: closeVaultExportDialog, onConfirm: () => void confirmVaultExport(), confirmDisabled: (vaultExportMode === "encrypted" && !vaultExportPassphrase.trim()) || (vaultExportSign && !vaultSigningPassphrase.trim()), children: [vaultExportMode === "encrypted" ? (_jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Export passphrase" }), _jsx("input", { className: "action-dialog-input", type: "password", value: vaultExportPassphrase, onChange: (event) => {
+                                    setVaultExportPassphrase(event.target.value);
+                                    if (vaultExportError)
+                                        setVaultExportError(null);
+                                }, "aria-label": "Vault export passphrase", placeholder: "required for encrypted export" })] })) : null, _jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Sign metadata" }), _jsx("input", { type: "checkbox", checked: vaultExportSign, onChange: (event) => setVaultExportSign(event.target.checked), "aria-label": "Sign vault export metadata" })] }), vaultExportSign ? (_jsxs(_Fragment, { children: [_jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Signing passphrase" }), _jsx("input", { className: "action-dialog-input", type: "password", value: vaultSigningPassphrase, onChange: (event) => {
+                                            setVaultSigningPassphrase(event.target.value);
+                                            if (vaultExportError)
+                                                setVaultExportError(null);
+                                        }, "aria-label": "Vault signing passphrase", placeholder: "required when signing" })] }), _jsxs("div", { className: "action-dialog-row", children: [_jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Saved key hint" }), _jsxs("select", { className: "action-dialog-select", value: selectedKeyHintProfileId, onChange: (event) => {
+                                                    const nextId = event.target.value;
+                                                    setSelectedKeyHintProfileId(nextId);
+                                                    const profile = keyHintProfiles.find((entry) => entry.id === nextId);
+                                                    setVaultExportKeyHint(profile?.keyHint ?? "");
+                                                }, "aria-label": "Saved vault key hint profile", children: [_jsx("option", { value: "", children: "custom key hint" }), keyHintProfiles.map((profile) => (_jsxs("option", { value: profile.id, children: [profile.name, " \u00B7 ", profile.keyHint] }, profile.id)))] })] }), _jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Key hint label" }), _jsx("input", { className: "action-dialog-input", value: vaultExportKeyHint, onChange: (event) => setVaultExportKeyHint(event.target.value), "aria-label": "Vault key hint", placeholder: "optional verification hint" })] })] }), _jsxs("p", { className: "action-dialog-note", children: ["Key hints are local labels only; passphrases are never persisted.", selectedKeyHintProfile ? ` Active: ${selectedKeyHintProfile.name} (v${selectedKeyHintProfile.version})` : ""] })] })) : (_jsx("p", { className: "action-dialog-note", children: "Unsigned exports skip signature verification during import." })), vaultExportError ? _jsx("p", { className: "action-dialog-error", children: vaultExportError }) : null] }), _jsxs(ActionDialog, { open: vaultImportDialogOpen, title: vaultImportMode === "encrypted" ? "Import encrypted vault snapshot" : "Import vault snapshot", description: vaultImportMode === "encrypted"
+                    ? "Provide export passphrase and optional verification passphrase."
+                    : `${vaultImportDescriptor?.noteCount ?? 0} notes · schema ${vaultImportDescriptor?.schemaVersion ?? "unknown"}`, confirmLabel: vaultImportMode === "encrypted" ? "import encrypted" : "import snapshot", onCancel: closeVaultImportDialog, onConfirm: () => void confirmVaultImport(), children: [vaultImportMode === "encrypted" ? (_jsxs(_Fragment, { children: [_jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Export passphrase" }), _jsx("input", { className: "action-dialog-input", type: "password", value: vaultImportExportPassphrase, onChange: (event) => {
+                                            setVaultImportExportPassphrase(event.target.value);
+                                            if (vaultImportError)
+                                                setVaultImportError(null);
+                                        }, "aria-label": "Encrypted vault import passphrase", placeholder: "required" })] }), _jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Verification passphrase" }), _jsx("input", { className: "action-dialog-input", type: "password", value: vaultImportVerifyPassphrase, onChange: (event) => {
+                                            setVaultImportVerifyPassphrase(event.target.value);
+                                            if (vaultImportError)
+                                                setVaultImportError(null);
+                                        }, "aria-label": "Encrypted vault verification passphrase", placeholder: "required when snapshot metadata is signed" })] })] })) : vaultImportDescriptor?.signed ? (_jsxs(_Fragment, { children: [_jsxs("p", { className: "action-dialog-note", children: ["Signed snapshot detected", vaultImportDescriptor.keyHint ? ` (hint: ${vaultImportDescriptor.keyHint})` : "", ". Verification is required before import."] }), _jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Verification passphrase" }), _jsx("input", { className: "action-dialog-input", type: "password", value: vaultImportVerifyPassphrase, onChange: (event) => {
+                                            setVaultImportVerifyPassphrase(event.target.value);
+                                            if (vaultImportError)
+                                                setVaultImportError(null);
+                                        }, "aria-label": "Vault verification passphrase", placeholder: "required for signed snapshots" })] })] })) : (_jsx("p", { className: "action-dialog-note", children: "Unsigned snapshot. Continue only if you trust this file." })), vaultImportError ? _jsx("p", { className: "action-dialog-error", children: vaultImportError }) : null] }), _jsx(ActionDialog, { open: reportDialogOpen, title: "Export notes report", description: "Choose whether note body content should be included in the report.", confirmLabel: "export report", onCancel: () => setReportDialogOpen(false), onConfirm: () => {
+                    exportFilteredReport(reportIncludeBodies);
+                    setReportDialogOpen(false);
+                }, children: _jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Include note bodies in report" }), _jsx("input", { type: "checkbox", checked: reportIncludeBodies, onChange: (event) => setReportIncludeBodies(event.target.checked), "aria-label": "Include note bodies" })] }) }), _jsx(ActionDialog, { open: wipeDialogOpen, title: "Wipe vault data", description: "This removes all vault metadata, canary records, and encrypted notes from local storage.", confirmLabel: "wipe vault", danger: true, onCancel: () => setWipeDialogOpen(false), onConfirm: () => {
+                    void handleWipe();
+                    setWipeDialogOpen(false);
+                } })] }));
+}
+function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.rel = "noopener";
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 function gradeTagClass(grade) {
     if (grade === "critical" || grade === "weak")

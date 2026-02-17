@@ -1,0 +1,106 @@
+.action-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay, 1200);
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: color-mix(in srgb, #000 32%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.action-dialog-panel {
+  width: min(560px, 100%);
+  max-height: min(84vh, 760px);
+  overflow: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.9rem;
+  padding: 0.95rem;
+  background: linear-gradient(180deg, var(--surface-0), color-mix(in srgb, var(--surface-1) 92%, transparent));
+  box-shadow: var(--shadow-strong);
+  display: grid;
+  gap: 0.75rem;
+}
+
+.action-dialog-header h2 {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 1.08rem;
+}
+
+.action-dialog-description {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.action-dialog-body {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.action-dialog-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.5rem;
+  align-items: end;
+}
+
+.action-dialog-field {
+  display: grid;
+  gap: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.action-dialog-field > input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+}
+
+.action-dialog-input,
+.action-dialog-select {
+  width: 100%;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.6rem;
+  padding: 0.65rem 0.72rem;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.92rem;
+}
+
+.action-dialog-note {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  line-height: 1.45;
+}
+
+.action-dialog-error {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--danger);
+  font-family: var(--font-mono);
+}
+
+.action-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.action-dialog-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.action-dialog-danger:hover,
+.action-dialog-danger:focus-visible {
+  border-color: var(--danger);
+}

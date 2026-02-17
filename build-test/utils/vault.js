@@ -140,6 +140,22 @@ export async function importVault(file, options) {
     await applySnapshot(resolved.snapshot);
     return resolved.result;
 }
+export function describeVaultPayload(input) {
+    if (!isRecord(input)) {
+        return { schemaVersion: 0, kind: "unknown", noteCount: 0, signed: false, legacy: false };
+    }
+    const schemaVersion = typeof input.schemaVersion === "number" ? input.schemaVersion : 0;
+    const noteCount = isRecord(input.integrity) && typeof input.integrity.noteCount === "number" ? Math.max(0, Math.floor(input.integrity.noteCount)) : 0;
+    const signature = isRecord(input.signature) ? input.signature : undefined;
+    return {
+        schemaVersion,
+        kind: typeof input.kind === "string" ? input.kind : "vault",
+        noteCount,
+        signed: Boolean(signature),
+        keyHint: typeof signature?.keyHint === "string" ? signature.keyHint : undefined,
+        legacy: schemaVersion !== VAULT_EXPORT_SCHEMA_VERSION,
+    };
+}
 export async function exportVaultEncrypted(passphrase, options) {
     const snapshot = await readVaultSnapshot(options);
     const envelope = await encryptText(passphrase, snapshot);

@@ -133,3 +133,40 @@ test("mobile secure notes flow supports create and render", async ({ browser }) 
   await expect(page.getByText("mobile-note").first()).toBeVisible();
   await context.close();
 });
+
+test("mobile visual snapshot :: sanitize module", async ({ browser }) => {
+  test.skip(!hasSnapshotBaseline("mobile-sanitize.png"), `snapshot baseline missing for ${process.platform}`);
+  await expectMobileModuleSnapshot(browser, /Log Sanitizer/i, "mobile-sanitize.png");
+});
+
+test("mobile visual snapshot :: metadata module", async ({ browser }) => {
+  test.skip(!hasSnapshotBaseline("mobile-metadata.png"), `snapshot baseline missing for ${process.platform}`);
+  await expectMobileModuleSnapshot(browser, /Metadata Inspector/i, "mobile-metadata.png");
+});
+
+test("mobile visual snapshot :: vault module", async ({ browser }) => {
+  test.skip(!hasSnapshotBaseline("mobile-vault.png"), `snapshot baseline missing for ${process.platform}`);
+  await expectMobileModuleSnapshot(browser, /Secure Notes/i, "mobile-vault.png");
+});
+
+async function expectMobileModuleSnapshot(
+  browser: import("@playwright/test").Browser,
+  moduleButton: RegExp,
+  snapshotName: string,
+) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await context.newPage();
+  await openApp(page);
+  await page.getByRole("button", { name: moduleButton }).click();
+  await expect(page.locator(".workspace")).toHaveScreenshot(snapshotName, {
+    animations: "disabled",
+    caret: "hide",
+  });
+  await context.close();
+}
+
+function hasSnapshotBaseline(snapshotName: string) {
+  const stem = snapshotName.replace(/\.png$/i, "");
+  const file = path.join(process.cwd(), "tests/e2e/app.spec.ts-snapshots", `${stem}-${process.platform}.png`);
+  return fs.existsSync(file);
+}

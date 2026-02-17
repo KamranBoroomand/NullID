@@ -57,6 +57,22 @@ export async function downloadProfile(filename = "nullid-profile.json", options)
         entryCount: Object.keys(snapshot.entries).length,
     };
 }
+export function describeProfilePayload(input) {
+    if (!isPlainObject(input)) {
+        return { schemaVersion: 0, kind: "unknown", entryCount: 0, signed: false, legacy: false };
+    }
+    const entries = isPlainObject(input.entries) ? input.entries : {};
+    const signature = isPlainObject(input.signature) ? input.signature : undefined;
+    const schemaVersion = typeof input.schemaVersion === "number" ? input.schemaVersion : 0;
+    return {
+        schemaVersion,
+        kind: typeof input.kind === "string" ? input.kind : "profile",
+        entryCount: Object.keys(entries).length,
+        signed: Boolean(signature),
+        keyHint: typeof signature?.keyHint === "string" ? signature.keyHint : undefined,
+        legacy: schemaVersion === LEGACY_PROFILE_SCHEMA_VERSION,
+    };
+}
 export async function importProfileFile(file, options) {
     const text = await file.text();
     const parsed = JSON.parse(text);

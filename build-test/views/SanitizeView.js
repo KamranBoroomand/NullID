@@ -1,14 +1,16 @@
-import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-import { useMemo, useRef, useState } from "react";
+import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "./styles.css";
 import { usePersistentState } from "../hooks/usePersistentState";
 import { useToast } from "../components/ToastHost";
+import { ActionDialog } from "../components/ActionDialog";
 import { useClipboardPrefs, writeClipboard } from "../utils/clipboard";
 import { hashText } from "../utils/hash";
 import { encryptText } from "../utils/cryptoEnvelope";
 import { mergeSanitizePolicyConfig, normalizeWorkspacePolicyBaseline } from "../utils/policyBaseline";
-import { createPolicyPackSnapshot, describePolicyPackPayload, importPolicyPackPayload, mergePolicyPacks } from "../utils/policyPack";
+import { createPolicyPackSnapshot, describePolicyPackPayload, importPolicyPackPayload, mergePolicyPacks, } from "../utils/policyPack";
 import { applySanitizeRules, buildRulesState, getRuleKeys, getRuleLabel, runBatchSanitize, sanitizePresets, } from "../utils/sanitizeEngine";
+import { SHARED_KEY_HINT_PROFILE_KEY, readLegacyProfiles, removeProfileHint, rotateProfileHint, sanitizeKeyHint, upsertKeyHintProfile, } from "../utils/keyHintProfiles";
 const ruleKeys = getRuleKeys();
 const presetKeys = Object.keys(sanitizePresets);
 const defaultRules = Object.fromEntries(ruleKeys.map((key) => [key, true]));
@@ -22,12 +24,22 @@ export function SanitizeView({ onOpenGuide }) {
     const [jsonAware, setJsonAware] = usePersistentState("nullid:sanitize:json", true);
     const [customRules, setCustomRules] = usePersistentState("nullid:sanitize:custom", []);
     const [policyPacks, setPolicyPacks] = usePersistentState("nullid:sanitize:policy-packs", []);
-    const [keyHintProfiles, setKeyHintProfiles] = usePersistentState("nullid:sanitize:key-hints", []);
+    const [keyHintProfiles, setKeyHintProfiles] = usePersistentState(SHARED_KEY_HINT_PROFILE_KEY, []);
     const [selectedKeyHintProfileId, setSelectedKeyHintProfileId] = usePersistentState("nullid:sanitize:key-hint-selected", "");
     const [selectedPolicyId, setSelectedPolicyId] = useState("");
     const [policyName, setPolicyName] = useState("");
     const [keyProfileName, setKeyProfileName] = useState("");
     const [keyProfileHint, setKeyProfileHint] = useState("");
+    const [policyExportDialogOpen, setPolicyExportDialogOpen] = useState(false);
+    const [policyExportTarget, setPolicyExportTarget] = useState(null);
+    const [policyExportSigned, setPolicyExportSigned] = useState(false);
+    const [policyExportPassphrase, setPolicyExportPassphrase] = useState("");
+    const [policyExportKeyHint, setPolicyExportKeyHint] = useState("");
+    const [policyExportError, setPolicyExportError] = useState(null);
+    const [policyImportDialogOpen, setPolicyImportDialogOpen] = useState(false);
+    const [policyImportPassphrase, setPolicyImportPassphrase] = useState("");
+    const [policyImportError, setPolicyImportError] = useState(null);
+    const [pendingPolicyImport, setPendingPolicyImport] = useState(null);
     const [customRuleDraft, setCustomRuleDraft] = useState({
         id: "",
         pattern: "",
@@ -78,6 +90,14 @@ export function SanitizeView({ onOpenGuide }) {
     }, [customRules, jsonAware, log, preset, rulesState]);
     const selectedPolicy = useMemo(() => policyPacks.find((pack) => pack.id === selectedPolicyId) ?? null, [policyPacks, selectedPolicyId]);
     const selectedKeyHintProfile = useMemo(() => keyHintProfiles.find((profile) => profile.id === selectedKeyHintProfileId) ?? null, [keyHintProfiles, selectedKeyHintProfileId]);
+    useEffect(() => {
+        if (keyHintProfiles.length > 0)
+            return;
+        const legacy = readLegacyProfiles("nullid:sanitize:key-hints");
+        if (legacy.length > 0) {
+            setKeyHintProfiles(legacy);
+        }
+    }, [keyHintProfiles.length, setKeyHintProfiles]);
     const applyPreset = (key) => {
         setPreset(key);
         setLog(sanitizePresets[key].sample);
@@ -155,82 +175,100 @@ export function SanitizeView({ onOpenGuide }) {
         jsonAware,
         customRules,
     }), [customRules, jsonAware, rulesState]);
-    const exportPolicyPack = async (pack, forceSigned = false) => {
+    const openPolicyExportDialog = (pack, forceSigned = false) => {
         const sourcePacks = pack ? [pack] : policyPacks;
         if (sourcePacks.length === 0) {
             push("no policy packs to export", "danger");
             return;
         }
+        setPolicyExportTarget(pack ?? null);
+        setPolicyExportSigned(forceSigned);
+        setPolicyExportPassphrase("");
+        setPolicyExportKeyHint(selectedKeyHintProfile?.keyHint ?? "");
+        setPolicyExportError(null);
+        setPolicyExportDialogOpen(true);
+    };
+    const closePolicyExportDialog = () => {
+        setPolicyExportDialogOpen(false);
+        setPolicyExportPassphrase("");
+        setPolicyExportError(null);
+    };
+    const confirmPolicyExport = async () => {
+        const sourcePacks = policyExportTarget ? [policyExportTarget] : policyPacks;
+        if (sourcePacks.length === 0) {
+            setPolicyExportError("no policy packs to export");
+            return;
+        }
+        if (policyExportSigned && !policyExportPassphrase.trim()) {
+            setPolicyExportError("signing passphrase required");
+            return;
+        }
         try {
-            let signingPassphrase;
-            let keyHint;
-            if (forceSigned || confirm("Sign policy pack metadata with a passphrase?")) {
-                const pass = prompt("Signing passphrase:");
-                if (!pass) {
-                    push("policy export cancelled", "neutral");
-                    return;
-                }
-                signingPassphrase = pass;
-                const suggestedHint = selectedKeyHintProfile?.keyHint ?? "";
-                const hintPrompt = selectedKeyHintProfile
-                    ? `Optional key hint (${selectedKeyHintProfile.name}):`
-                    : "Optional key hint (for verification):";
-                keyHint = sanitizeKeyHint(prompt(hintPrompt, suggestedHint) ?? undefined);
-            }
-            const payload = await createPolicyPackSnapshot(sourcePacks, { signingPassphrase, keyHint });
-            const safe = sanitizeFileStem(pack?.name ?? "sanitize-policy-packs");
+            const payload = await createPolicyPackSnapshot(sourcePacks, {
+                signingPassphrase: policyExportSigned ? policyExportPassphrase : undefined,
+                keyHint: policyExportSigned ? sanitizeKeyHint(policyExportKeyHint) || undefined : undefined,
+            });
+            const safe = sanitizeFileStem(policyExportTarget?.name ?? "sanitize-policy-packs");
             const suffix = payload.signature ? "-signed" : "";
             downloadBlob(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }), `${safe}${suffix}.json`);
-            push(pack ? `policy exported${payload.signature ? " (signed)" : ""}` : `all policies exported${payload.signature ? " (signed)" : ""}`, "accent");
+            push(policyExportTarget
+                ? `policy exported${payload.signature ? " (signed)" : ""}`
+                : `all policies exported${payload.signature ? " (signed)" : ""}`, "accent");
+            closePolicyExportDialog();
         }
         catch (error) {
             console.error(error);
-            push("policy export failed", "danger");
+            setPolicyExportError(error instanceof Error ? error.message : "policy export failed");
         }
     };
-    const importPolicyPack = async (file) => {
+    const beginPolicyImport = async (file) => {
         if (!file)
             return;
         try {
             const text = await file.text();
-            const parsed = JSON.parse(text);
-            const descriptor = describePolicyPackPayload(parsed);
+            const payload = JSON.parse(text);
+            const descriptor = describePolicyPackPayload(payload);
             if (descriptor.kind !== "sanitize-policy-pack" || descriptor.packCount === 0) {
                 throw new Error("No valid policy packs found");
             }
-            let verificationPassphrase;
-            if (descriptor.signed) {
-                const proceed = confirm(`Policy pack is signed${descriptor.keyHint ? ` (hint: ${descriptor.keyHint})` : ""}. Verify before import?`);
-                if (!proceed) {
-                    push("policy import cancelled", "neutral");
-                    return;
-                }
-                verificationPassphrase = prompt("Verification passphrase:") ?? undefined;
-                if (!verificationPassphrase) {
-                    push("policy import cancelled", "neutral");
-                    return;
-                }
-            }
-            else {
-                const proceedUnsigned = confirm("Policy pack is unsigned. Import anyway?");
-                if (!proceedUnsigned) {
-                    push("policy import cancelled", "neutral");
-                    return;
-                }
-            }
-            const imported = await importPolicyPackPayload(parsed, {
-                verificationPassphrase,
-                requireVerified: descriptor.signed,
-            });
-            setPolicyPacks((prev) => mergePolicyPacks(prev, imported.packs));
-            setSelectedPolicyId(imported.packs[0].id);
-            setPolicyName(imported.packs[0].name);
-            const suffix = imported.legacy ? "legacy" : imported.signed ? imported.verified ? "signed+verified" : "signed" : "unsigned";
-            push(`imported ${imported.packs.length} policy pack(s) :: ${suffix}`, "accent");
+            setPendingPolicyImport({ payload, descriptor });
+            setPolicyImportPassphrase("");
+            setPolicyImportError(null);
+            setPolicyImportDialogOpen(true);
         }
         catch (error) {
             console.error(error);
             push("policy import failed", "danger");
+        }
+    };
+    const closePolicyImportDialog = () => {
+        setPolicyImportDialogOpen(false);
+        setPolicyImportPassphrase("");
+        setPolicyImportError(null);
+        setPendingPolicyImport(null);
+    };
+    const confirmPolicyImport = async () => {
+        if (!pendingPolicyImport)
+            return;
+        if (pendingPolicyImport.descriptor.signed && !policyImportPassphrase.trim()) {
+            setPolicyImportError("verification passphrase required for signed policy packs");
+            return;
+        }
+        try {
+            const imported = await importPolicyPackPayload(pendingPolicyImport.payload, {
+                verificationPassphrase: pendingPolicyImport.descriptor.signed ? policyImportPassphrase.trim() : undefined,
+                requireVerified: pendingPolicyImport.descriptor.signed,
+            });
+            setPolicyPacks((prev) => mergePolicyPacks(prev, imported.packs));
+            setSelectedPolicyId(imported.packs[0].id);
+            setPolicyName(imported.packs[0].name);
+            const suffix = imported.legacy ? "legacy" : imported.signed ? (imported.verified ? "signed+verified" : "signed") : "unsigned";
+            push(`imported ${imported.packs.length} policy pack(s) :: ${suffix}`, "accent");
+            closePolicyImportDialog();
+        }
+        catch (error) {
+            console.error(error);
+            setPolicyImportError(error instanceof Error ? error.message : "policy import failed");
         }
     };
     const importWorkspaceBaseline = async (file) => {
@@ -260,61 +298,33 @@ export function SanitizeView({ onOpenGuide }) {
         }
     };
     const saveKeyHintProfile = () => {
-        const name = keyProfileName.trim();
-        const keyHint = sanitizeKeyHint(keyProfileHint);
-        if (!name || !keyHint) {
-            push("profile name + key hint required", "danger");
+        const result = upsertKeyHintProfile(keyHintProfiles, keyProfileName, keyProfileHint);
+        if (!result.ok) {
+            push(result.message, "danger");
             return;
         }
-        const now = new Date().toISOString();
-        let nextSelected = "";
-        setKeyHintProfiles((prev) => {
-            const existing = prev.find((profile) => profile.name.toLowerCase() === name.toLowerCase());
-            if (existing) {
-                nextSelected = existing.id;
-                return prev.map((profile) => profile.id === existing.id
-                    ? {
-                        ...profile,
-                        name,
-                        keyHint,
-                        updatedAt: now,
-                    }
-                    : profile);
-            }
-            const created = {
-                id: crypto.randomUUID(),
-                name,
-                keyHint,
-                version: 1,
-                createdAt: now,
-                updatedAt: now,
-            };
-            nextSelected = created.id;
-            return [created, ...prev].slice(0, 20);
-        });
-        setSelectedKeyHintProfileId(nextSelected);
+        setKeyHintProfiles(result.profiles);
+        setSelectedKeyHintProfileId(result.selectedId);
+        setKeyProfileHint("");
+        setKeyProfileName("");
         push("key hint profile saved", "accent");
     };
     const rotateSelectedKeyHintProfile = () => {
         if (!selectedKeyHintProfile)
             return;
-        const now = new Date().toISOString();
-        const nextVersion = selectedKeyHintProfile.version + 1;
-        const nextHint = rotateKeyHint(selectedKeyHintProfile.keyHint, nextVersion);
-        setKeyHintProfiles((prev) => prev.map((profile) => profile.id === selectedKeyHintProfile.id
-            ? {
-                ...profile,
-                version: nextVersion,
-                keyHint: nextHint,
-                updatedAt: now,
-            }
-            : profile));
-        push(`key hint rotated → ${nextHint}`, "accent");
+        const result = rotateProfileHint(keyHintProfiles, selectedKeyHintProfile.id);
+        if (!result.ok) {
+            push(result.message, "danger");
+            return;
+        }
+        setKeyHintProfiles(result.profiles);
+        setPolicyExportKeyHint(result.hint);
+        push(`key hint rotated → ${result.hint}`, "accent");
     };
     const deleteSelectedKeyHintProfile = () => {
         if (!selectedKeyHintProfile)
             return;
-        setKeyHintProfiles((prev) => prev.filter((profile) => profile.id !== selectedKeyHintProfile.id));
+        setKeyHintProfiles((prev) => removeProfileHint(prev, selectedKeyHintProfile.id));
         setSelectedKeyHintProfileId("");
         push("key hint profile removed", "neutral");
     };
@@ -417,8 +427,8 @@ export function SanitizeView({ onOpenGuide }) {
             setIsExportingBundle(false);
         }
     };
-    return (_jsxs("div", { className: "workspace-scroll", children: [_jsx("div", { className: "guide-link", children: _jsx("button", { type: "button", className: "guide-link-button", onClick: () => onOpenGuide?.("sanitize"), children: "? guide" }) }), _jsxs("div", { className: "grid-two", children: [_jsxs("div", { className: "panel", "aria-label": "Sanitizer input", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Inbound log" }), _jsx("span", { className: "panel-subtext", children: "raw" })] }), _jsx("textarea", { className: "textarea", value: log, onChange: (event) => setLog(event.target.value), "aria-label": "Log input" }), _jsxs("div", { className: "controls-row", children: [_jsx("span", { className: "section-title", children: "Presets" }), _jsx("div", { className: "pill-buttons", role: "group", "aria-label": "Log presets", children: presetKeys.map((key) => (_jsx("button", { type: "button", className: preset === key ? "active" : "", onClick: () => applyPreset(key), children: sanitizePresets[key].label }, key))) })] })] }), _jsxs("div", { className: "panel", "aria-label": "Sanitized preview", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Preview" }), _jsx("span", { className: "panel-subtext", children: "diff" })] }), _jsxs("div", { className: "log-preview", role: "presentation", children: [_jsxs("div", { className: "log-line", children: [_jsx("span", { className: "log-marker", children: "-" }), _jsx("span", { className: "diff-remove", children: log })] }), _jsxs("div", { className: "log-line", children: [_jsx("span", { className: "log-marker", children: "+" }), _jsx("span", { className: "diff-add", style: { whiteSpace: wrapLines ? "pre-wrap" : "pre" }, children: highlightDiff(log, result.output) })] })] }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", onClick: () => writeClipboard(result.output, clipboardPrefs, (message, tone) => push(message, tone === "danger" ? "danger" : tone === "accent" ? "accent" : "neutral"), "copied"), disabled: !result.output, children: "copy sanitized" }), _jsx("button", { className: "button", type: "button", onClick: () => downloadBlob(new Blob([result.output], { type: "text/plain" }), "nullid-sanitized.log"), disabled: !result.output, children: "download sanitized" }), _jsxs("label", { className: "microcopy", style: { display: "flex", alignItems: "center", gap: "0.5rem" }, children: [_jsx("input", { type: "checkbox", checked: wrapLines, onChange: (event) => setWrapLines(event.target.checked), "aria-label": "Wrap long lines" }), "wrap long lines"] }), _jsxs("label", { className: "microcopy", style: { display: "flex", alignItems: "center", gap: "0.5rem" }, children: [_jsx("input", { type: "checkbox", checked: jsonAware, onChange: (event) => setJsonAware(event.target.checked), "aria-label": "Enable JSON redaction" }), "JSON-aware redaction"] })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: "Rules applied" }), _jsx("span", { className: "tag tag-accent", children: result.applied.length }), _jsxs("span", { className: "microcopy", children: ["lines changed: ", result.linesAffected] })] })] })] }), _jsxs("div", { className: "panel", "aria-label": "Rule toggles", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Rules" }), _jsx("span", { className: "panel-subtext", children: "toggle" })] }), _jsx("div", { className: "rule-grid", children: ruleKeys.map((ruleKey) => (_jsxs("label", { className: "rule-tile", children: [_jsx("input", { type: "checkbox", checked: rulesState[ruleKey], onChange: (event) => setRulesState((prev) => ({ ...prev, [ruleKey]: event.target.checked })), "aria-label": getRuleLabel(ruleKey) }), _jsx("span", { children: getRuleLabel(ruleKey) })] }, ruleKey))) }), _jsxs("div", { className: "note-box", children: [_jsx("div", { className: "section-title", children: "Report" }), _jsx("div", { className: "microcopy", children: result.report.length === 0 ? "no replacements yet" : result.report.map((line) => _jsx("div", { children: line }, line)) })] }), _jsxs("div", { className: "note-box", children: [_jsx("div", { className: "section-title", children: "Rule impact ranking" }), ruleImpact.length === 0 ? (_jsx("div", { className: "microcopy", children: "no replacements counted yet" })) : (_jsxs("table", { className: "table", children: [_jsx("thead", { children: _jsxs("tr", { children: [_jsx("th", { children: "rule" }), _jsx("th", { children: "count" })] }) }), _jsx("tbody", { children: ruleImpact.map((entry) => (_jsxs("tr", { children: [_jsx("td", { children: entry.label }), _jsx("td", { children: entry.count })] }, entry.label))) })] }))] }), _jsxs("div", { className: "note-box", children: [_jsx("div", { className: "section-title", children: "Custom rules" }), _jsxs("div", { className: "controls-row", style: { alignItems: "flex-end" }, children: [_jsxs("div", { style: { flex: 1, minWidth: "180px" }, children: [_jsx("label", { className: "microcopy", htmlFor: "custom-pattern", children: "Pattern (RegExp)" }), _jsx("input", { id: "custom-pattern", className: "input", value: customRuleDraft.pattern, onChange: (event) => setCustomRuleDraft((prev) => ({ ...prev, pattern: event.target.value })), placeholder: "token=([A-Za-z0-9._-]+)" })] }), _jsxs("div", { style: { minWidth: "140px" }, children: [_jsx("label", { className: "microcopy", htmlFor: "custom-flags", children: "Flags" }), _jsx("input", { id: "custom-flags", className: "input", value: customRuleDraft.flags, onChange: (event) => setCustomRuleDraft((prev) => ({ ...prev, flags: event.target.value })), placeholder: "gi" })] }), _jsxs("div", { style: { flex: 1, minWidth: "160px" }, children: [_jsx("label", { className: "microcopy", htmlFor: "custom-replacement", children: "Replacement" }), _jsx("input", { id: "custom-replacement", className: "input", value: customRuleDraft.replacement, onChange: (event) => setCustomRuleDraft((prev) => ({ ...prev, replacement: event.target.value })), placeholder: "[redacted]" })] }), _jsxs("div", { style: { minWidth: "150px" }, children: [_jsx("label", { className: "microcopy", htmlFor: "custom-scope", children: "Scope" }), _jsxs("select", { id: "custom-scope", className: "select", value: customRuleDraft.scope, onChange: (event) => setCustomRuleDraft((prev) => ({ ...prev, scope: event.target.value })), children: [_jsx("option", { value: "both", children: "text + json" }), _jsx("option", { value: "text", children: "text only" }), _jsx("option", { value: "json", children: "json only" })] })] }), _jsx("button", { className: "button", type: "button", onClick: addCustomRule, children: "add rule" })] }), customRuleError && _jsx("div", { className: "microcopy", style: { color: "var(--danger)" }, children: customRuleError }), customRules.length === 0 ? (_jsx("div", { className: "microcopy", children: "no custom rules" })) : (_jsx("ul", { className: "note-list", children: customRules.map((rule) => (_jsxs("li", { children: [_jsxs("div", { className: "note-title", children: ["/", rule.pattern, "/", rule.flags] }), _jsxs("div", { className: "note-body", children: ["\u2192 ", rule.replacement || "[empty]", " (", rule.scope, ")"] }), _jsx("button", { className: "button", type: "button", onClick: () => removeCustomRule(rule.id), children: "remove" })] }, rule.id))) }))] })] }), _jsxs("div", { className: "panel", "aria-label": "Policy simulation matrix", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Policy simulation matrix" }), _jsx("span", { className: "panel-subtext", children: "compare policy outcomes" })] }), _jsx("p", { className: "microcopy", children: "Runs multiple policy variants against current input so you can compare redaction depth before sharing." }), _jsxs("table", { className: "table", children: [_jsx("thead", { children: _jsxs("tr", { children: [_jsx("th", { children: "variant" }), _jsx("th", { children: "rules applied" }), _jsx("th", { children: "lines changed" }), _jsx("th", { children: "output chars" })] }) }), _jsx("tbody", { children: simulationRows.map((row) => (_jsxs("tr", { children: [_jsx("td", { children: row.label }), _jsx("td", { children: row.appliedRules }), _jsx("td", { children: row.linesAffected }), _jsx("td", { children: row.outputChars })] }, row.id))) })] })] }), _jsxs("div", { className: "grid-two", children: [_jsxs("div", { className: "panel", "aria-label": "Policy packs", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Policy packs" }), _jsx("span", { className: "panel-subtext", children: "local-only reusable configs" })] }), _jsxs("div", { className: "controls-row", children: [_jsx("input", { className: "input", placeholder: "policy name", value: policyName, onChange: (event) => setPolicyName(event.target.value), "aria-label": "Policy name" }), _jsx("button", { className: "button", type: "button", onClick: savePolicyPack, children: "save" })] }), _jsxs("div", { className: "controls-row", children: [_jsxs("select", { className: "select", "aria-label": "Saved policy packs", value: selectedPolicyId, onChange: (event) => setSelectedPolicyId(event.target.value), children: [_jsx("option", { value: "", children: "select policy..." }), policyPacks.map((pack) => (_jsx("option", { value: pack.id, children: pack.name }, pack.id)))] }), _jsx("button", { className: "button", type: "button", onClick: () => selectedPolicy && applyPolicyPack(selectedPolicy), disabled: !selectedPolicy, children: "apply" }), _jsx("button", { className: "button", type: "button", onClick: deletePolicyPack, disabled: !selectedPolicy, children: "delete" })] }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", onClick: () => void exportPolicyPack(selectedPolicy), disabled: !selectedPolicy, children: "export selected" }), _jsx("button", { className: "button", type: "button", onClick: () => void exportPolicyPack(selectedPolicy, true), disabled: !selectedPolicy, children: "export signed" }), _jsx("button", { className: "button", type: "button", onClick: () => void exportPolicyPack(null), disabled: policyPacks.length === 0, children: "export all" }), _jsx("button", { className: "button", type: "button", onClick: () => policyImportRef.current?.click(), children: "import" }), _jsx("button", { className: "button", type: "button", onClick: () => baselineImportRef.current?.click(), children: "import baseline" }), _jsx("input", { ref: policyImportRef, type: "file", accept: "application/json", style: { position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }, tabIndex: -1, onChange: (event) => {
-                                            void importPolicyPack(event.target.files?.[0] ?? null);
+    return (_jsxs("div", { className: "workspace-scroll", children: [_jsx("div", { className: "guide-link", children: _jsx("button", { type: "button", className: "guide-link-button", onClick: () => onOpenGuide?.("sanitize"), children: "? guide" }) }), _jsxs("div", { className: "grid-two", children: [_jsxs("div", { className: "panel", "aria-label": "Sanitizer input", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Inbound log" }), _jsx("span", { className: "panel-subtext", children: "raw" })] }), _jsx("textarea", { className: "textarea", value: log, onChange: (event) => setLog(event.target.value), "aria-label": "Log input" }), _jsxs("div", { className: "controls-row", children: [_jsx("span", { className: "section-title", children: "Presets" }), _jsx("div", { className: "pill-buttons", role: "group", "aria-label": "Log presets", children: presetKeys.map((key) => (_jsx("button", { type: "button", className: preset === key ? "active" : "", onClick: () => applyPreset(key), children: sanitizePresets[key].label }, key))) })] })] }), _jsxs("div", { className: "panel", "aria-label": "Sanitized preview", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Preview" }), _jsx("span", { className: "panel-subtext", children: "diff" })] }), _jsxs("div", { className: "log-preview", role: "presentation", children: [_jsxs("div", { className: "log-line", children: [_jsx("span", { className: "log-marker", children: "-" }), _jsx("span", { className: "diff-remove", children: log })] }), _jsxs("div", { className: "log-line", children: [_jsx("span", { className: "log-marker", children: "+" }), _jsx("span", { className: "diff-add", style: { whiteSpace: wrapLines ? "pre-wrap" : "pre" }, children: highlightDiff(log, result.output) })] })] }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", onClick: () => writeClipboard(result.output, clipboardPrefs, (message, tone) => push(message, tone === "danger" ? "danger" : tone === "accent" ? "accent" : "neutral"), "copied"), disabled: !result.output, children: "copy sanitized" }), _jsx("button", { className: "button", type: "button", onClick: () => downloadBlob(new Blob([result.output], { type: "text/plain" }), "nullid-sanitized.log"), disabled: !result.output, children: "download sanitized" }), _jsxs("label", { className: "microcopy", style: { display: "flex", alignItems: "center", gap: "0.5rem" }, children: [_jsx("input", { type: "checkbox", checked: wrapLines, onChange: (event) => setWrapLines(event.target.checked), "aria-label": "Wrap long lines" }), "wrap long lines"] }), _jsxs("label", { className: "microcopy", style: { display: "flex", alignItems: "center", gap: "0.5rem" }, children: [_jsx("input", { type: "checkbox", checked: jsonAware, onChange: (event) => setJsonAware(event.target.checked), "aria-label": "Enable JSON redaction" }), "JSON-aware redaction"] })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: "Rules applied" }), _jsx("span", { className: "tag tag-accent", children: result.applied.length }), _jsxs("span", { className: "microcopy", children: ["lines changed: ", result.linesAffected] })] })] })] }), _jsxs("div", { className: "panel", "aria-label": "Rule toggles", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Rules" }), _jsx("span", { className: "panel-subtext", children: "toggle" })] }), _jsx("div", { className: "rule-grid", children: ruleKeys.map((ruleKey) => (_jsxs("label", { className: "rule-tile", children: [_jsx("input", { type: "checkbox", checked: rulesState[ruleKey], onChange: (event) => setRulesState((prev) => ({ ...prev, [ruleKey]: event.target.checked })), "aria-label": getRuleLabel(ruleKey) }), _jsx("span", { children: getRuleLabel(ruleKey) })] }, ruleKey))) }), _jsxs("div", { className: "note-box", children: [_jsx("div", { className: "section-title", children: "Report" }), _jsx("div", { className: "microcopy", children: result.report.length === 0 ? "no replacements yet" : result.report.map((line) => _jsx("div", { children: line }, line)) })] }), _jsxs("div", { className: "note-box", children: [_jsx("div", { className: "section-title", children: "Rule impact ranking" }), ruleImpact.length === 0 ? (_jsx("div", { className: "microcopy", children: "no replacements counted yet" })) : (_jsxs("table", { className: "table", children: [_jsx("thead", { children: _jsxs("tr", { children: [_jsx("th", { children: "rule" }), _jsx("th", { children: "count" })] }) }), _jsx("tbody", { children: ruleImpact.map((entry) => (_jsxs("tr", { children: [_jsx("td", { children: entry.label }), _jsx("td", { children: entry.count })] }, entry.label))) })] }))] }), _jsxs("div", { className: "note-box", children: [_jsx("div", { className: "section-title", children: "Custom rules" }), _jsxs("div", { className: "controls-row", style: { alignItems: "flex-end" }, children: [_jsxs("div", { style: { flex: 1, minWidth: "180px" }, children: [_jsx("label", { className: "microcopy", htmlFor: "custom-pattern", children: "Pattern (RegExp)" }), _jsx("input", { id: "custom-pattern", className: "input", value: customRuleDraft.pattern, onChange: (event) => setCustomRuleDraft((prev) => ({ ...prev, pattern: event.target.value })), placeholder: "token=([A-Za-z0-9._-]+)" })] }), _jsxs("div", { style: { minWidth: "140px" }, children: [_jsx("label", { className: "microcopy", htmlFor: "custom-flags", children: "Flags" }), _jsx("input", { id: "custom-flags", className: "input", value: customRuleDraft.flags, onChange: (event) => setCustomRuleDraft((prev) => ({ ...prev, flags: event.target.value })), placeholder: "gi" })] }), _jsxs("div", { style: { flex: 1, minWidth: "160px" }, children: [_jsx("label", { className: "microcopy", htmlFor: "custom-replacement", children: "Replacement" }), _jsx("input", { id: "custom-replacement", className: "input", value: customRuleDraft.replacement, onChange: (event) => setCustomRuleDraft((prev) => ({ ...prev, replacement: event.target.value })), placeholder: "[redacted]" })] }), _jsxs("div", { style: { minWidth: "150px" }, children: [_jsx("label", { className: "microcopy", htmlFor: "custom-scope", children: "Scope" }), _jsxs("select", { id: "custom-scope", className: "select", value: customRuleDraft.scope, onChange: (event) => setCustomRuleDraft((prev) => ({ ...prev, scope: event.target.value })), children: [_jsx("option", { value: "both", children: "text + json" }), _jsx("option", { value: "text", children: "text only" }), _jsx("option", { value: "json", children: "json only" })] })] }), _jsx("button", { className: "button", type: "button", onClick: addCustomRule, children: "add rule" })] }), customRuleError && _jsx("div", { className: "microcopy", style: { color: "var(--danger)" }, children: customRuleError }), customRules.length === 0 ? (_jsx("div", { className: "microcopy", children: "no custom rules" })) : (_jsx("ul", { className: "note-list", children: customRules.map((rule) => (_jsxs("li", { children: [_jsxs("div", { className: "note-title", children: ["/", rule.pattern, "/", rule.flags] }), _jsxs("div", { className: "note-body", children: ["\u2192 ", rule.replacement || "[empty]", " (", rule.scope, ")"] }), _jsx("button", { className: "button", type: "button", onClick: () => removeCustomRule(rule.id), children: "remove" })] }, rule.id))) }))] })] }), _jsxs("div", { className: "panel", "aria-label": "Policy simulation matrix", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Policy simulation matrix" }), _jsx("span", { className: "panel-subtext", children: "compare policy outcomes" })] }), _jsx("p", { className: "microcopy", children: "Runs multiple policy variants against current input so you can compare redaction depth before sharing." }), _jsxs("table", { className: "table", children: [_jsx("thead", { children: _jsxs("tr", { children: [_jsx("th", { children: "variant" }), _jsx("th", { children: "rules applied" }), _jsx("th", { children: "lines changed" }), _jsx("th", { children: "output chars" })] }) }), _jsx("tbody", { children: simulationRows.map((row) => (_jsxs("tr", { children: [_jsx("td", { children: row.label }), _jsx("td", { children: row.appliedRules }), _jsx("td", { children: row.linesAffected }), _jsx("td", { children: row.outputChars })] }, row.id))) })] })] }), _jsxs("div", { className: "grid-two", children: [_jsxs("div", { className: "panel", "aria-label": "Policy packs", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Policy packs" }), _jsx("span", { className: "panel-subtext", children: "local-only reusable configs" })] }), _jsxs("div", { className: "controls-row", children: [_jsx("input", { className: "input", placeholder: "policy name", value: policyName, onChange: (event) => setPolicyName(event.target.value), "aria-label": "Policy name" }), _jsx("button", { className: "button", type: "button", onClick: savePolicyPack, children: "save" })] }), _jsxs("div", { className: "controls-row", children: [_jsxs("select", { className: "select", "aria-label": "Saved policy packs", value: selectedPolicyId, onChange: (event) => setSelectedPolicyId(event.target.value), children: [_jsx("option", { value: "", children: "select policy..." }), policyPacks.map((pack) => (_jsx("option", { value: pack.id, children: pack.name }, pack.id)))] }), _jsx("button", { className: "button", type: "button", onClick: () => selectedPolicy && applyPolicyPack(selectedPolicy), disabled: !selectedPolicy, children: "apply" }), _jsx("button", { className: "button", type: "button", onClick: deletePolicyPack, disabled: !selectedPolicy, children: "delete" })] }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", onClick: () => openPolicyExportDialog(selectedPolicy), disabled: !selectedPolicy, children: "export selected" }), _jsx("button", { className: "button", type: "button", onClick: () => openPolicyExportDialog(selectedPolicy, true), disabled: !selectedPolicy, children: "export signed" }), _jsx("button", { className: "button", type: "button", onClick: () => openPolicyExportDialog(null), disabled: policyPacks.length === 0, children: "export all" }), _jsx("button", { className: "button", type: "button", onClick: () => policyImportRef.current?.click(), children: "import" }), _jsx("button", { className: "button", type: "button", onClick: () => baselineImportRef.current?.click(), children: "import baseline" }), _jsx("input", { ref: policyImportRef, type: "file", accept: "application/json", style: { position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }, tabIndex: -1, onChange: (event) => {
+                                            void beginPolicyImport(event.target.files?.[0] ?? null);
                                             event.target.value = "";
                                         } }), _jsx("input", { ref: baselineImportRef, type: "file", accept: "application/json", style: { position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }, tabIndex: -1, onChange: (event) => {
                                             void importWorkspaceBaseline(event.target.files?.[0] ?? null);
@@ -426,15 +436,22 @@ export function SanitizeView({ onOpenGuide }) {
                                         } })] }), _jsx("div", { className: "microcopy", children: "Signed packs require verify-before-import. Baseline import accepts `nullid.policy.json` and merges with deterministic rules." }), _jsxs("div", { className: "note-box", children: [_jsx("div", { className: "section-title", children: "Signing key hints" }), _jsxs("div", { className: "controls-row", children: [_jsx("input", { className: "input", placeholder: "profile name", value: keyProfileName, onChange: (event) => setKeyProfileName(event.target.value), "aria-label": "Key hint profile name" }), _jsx("input", { className: "input", placeholder: "key hint (public label)", value: keyProfileHint, onChange: (event) => setKeyProfileHint(event.target.value), "aria-label": "Key hint value" }), _jsx("button", { className: "button", type: "button", onClick: saveKeyHintProfile, children: "save hint" })] }), _jsxs("div", { className: "controls-row", children: [_jsxs("select", { className: "select", "aria-label": "Saved key hint profiles", value: selectedKeyHintProfileId, onChange: (event) => setSelectedKeyHintProfileId(event.target.value), children: [_jsx("option", { value: "", children: "select key hint profile..." }), keyHintProfiles.map((profile) => (_jsxs("option", { value: profile.id, children: [profile.name, " \u00B7 ", profile.keyHint] }, profile.id)))] }), _jsx("button", { className: "button", type: "button", onClick: rotateSelectedKeyHintProfile, disabled: !selectedKeyHintProfile, children: "rotate hint" }), _jsx("button", { className: "button", type: "button", onClick: deleteSelectedKeyHintProfile, disabled: !selectedKeyHintProfile, children: "delete hint" })] }), _jsxs("div", { className: "microcopy", children: ["Hints are local labels only; signing/verification passphrases are never stored.", selectedKeyHintProfile ? ` Active: ${selectedKeyHintProfile.name} (v${selectedKeyHintProfile.version})` : ""] })] })] }), _jsxs("div", { className: "panel", "aria-label": "Batch sanitize", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Batch sanitize" }), _jsx("span", { className: "panel-subtext", children: "free local processing" })] }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", onClick: () => batchFileInputRef.current?.click(), disabled: isBatching, children: isBatching ? "processing..." : "select files" }), _jsx("input", { ref: batchFileInputRef, type: "file", multiple: true, accept: ".txt,.log,.json,text/*,application/json", style: { position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }, tabIndex: -1, onChange: (event) => {
                                             void runBatch(event.target.files);
                                             event.target.value = "";
-                                        } }), _jsx("button", { className: "button", type: "button", onClick: downloadBatchOutputs, disabled: batchResults.length === 0, children: "download outputs" }), _jsx("button", { className: "button", type: "button", onClick: exportBatchReport, disabled: batchResults.length === 0, children: "export report" })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: "files processed" }), _jsx("span", { className: "tag tag-accent", children: batchResults.length })] }), batchResults.length > 0 && (_jsxs("table", { className: "table", children: [_jsx("thead", { children: _jsxs("tr", { children: [_jsx("th", { children: "file" }), _jsx("th", { children: "lines changed" }), _jsx("th", { children: "size delta" })] }) }), _jsx("tbody", { children: batchResults.slice(0, 8).map((item) => (_jsxs("tr", { children: [_jsx("td", { children: item.name }), _jsx("td", { children: item.linesAffected }), _jsx("td", { children: item.outputChars - item.inputChars })] }, item.name))) })] }))] })] }), _jsxs("div", { className: "panel", "aria-label": "Safe share bundle", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Safe share bundle" }), _jsx("span", { className: "panel-subtext", children: "manifest + hash + sanitized output" })] }), _jsx("p", { className: "microcopy", children: "Generates a portable local bundle containing sanitized output, policy snapshot, and SHA-256 integrity hashes." }), _jsxs("div", { className: "controls-row", children: [_jsx("input", { className: "input", type: "password", placeholder: "optional passphrase to encrypt bundle", value: bundlePassphrase, onChange: (event) => setBundlePassphrase(event.target.value), "aria-label": "Bundle encryption passphrase" }), _jsx("button", { className: "button", type: "button", onClick: () => void exportShareBundle(), disabled: isExportingBundle || !result.output, children: isExportingBundle ? "exporting..." : bundlePassphrase ? "export encrypted bundle" : "export bundle" })] })] })] }));
-}
-function sanitizeKeyHint(value) {
-    const normalized = (value ?? "").trim();
-    return normalized ? normalized.slice(0, 64) : "";
-}
-function rotateKeyHint(current, nextVersion) {
-    const base = current.replace(/-v\d+$/i, "");
-    return `${base}-v${nextVersion}`;
+                                        } }), _jsx("button", { className: "button", type: "button", onClick: downloadBatchOutputs, disabled: batchResults.length === 0, children: "download outputs" }), _jsx("button", { className: "button", type: "button", onClick: exportBatchReport, disabled: batchResults.length === 0, children: "export report" })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: "files processed" }), _jsx("span", { className: "tag tag-accent", children: batchResults.length })] }), batchResults.length > 0 && (_jsxs("table", { className: "table", children: [_jsx("thead", { children: _jsxs("tr", { children: [_jsx("th", { children: "file" }), _jsx("th", { children: "lines changed" }), _jsx("th", { children: "size delta" })] }) }), _jsx("tbody", { children: batchResults.slice(0, 8).map((item) => (_jsxs("tr", { children: [_jsx("td", { children: item.name }), _jsx("td", { children: item.linesAffected }), _jsx("td", { children: item.outputChars - item.inputChars })] }, item.name))) })] }))] })] }), _jsxs("div", { className: "panel", "aria-label": "Safe share bundle", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Safe share bundle" }), _jsx("span", { className: "panel-subtext", children: "manifest + hash + sanitized output" })] }), _jsx("p", { className: "microcopy", children: "Generates a portable local bundle containing sanitized output, policy snapshot, and SHA-256 integrity hashes." }), _jsxs("div", { className: "controls-row", children: [_jsx("input", { className: "input", type: "password", placeholder: "optional passphrase to encrypt bundle", value: bundlePassphrase, onChange: (event) => setBundlePassphrase(event.target.value), "aria-label": "Bundle encryption passphrase" }), _jsx("button", { className: "button", type: "button", onClick: () => void exportShareBundle(), disabled: isExportingBundle || !result.output, children: isExportingBundle ? "exporting..." : bundlePassphrase ? "export encrypted bundle" : "export bundle" })] })] }), _jsxs(ActionDialog, { open: policyExportDialogOpen, title: policyExportTarget ? `Export policy: ${policyExportTarget.name}` : "Export policy packs", description: "Signed policy exports include integrity metadata and require verification passphrase on import.", confirmLabel: policyExportTarget ? "export policy" : "export policies", onCancel: closePolicyExportDialog, onConfirm: () => void confirmPolicyExport(), confirmDisabled: policyExportSigned && !policyExportPassphrase.trim(), children: [_jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Sign export metadata" }), _jsx("input", { type: "checkbox", checked: policyExportSigned, onChange: (event) => setPolicyExportSigned(event.target.checked), "aria-label": "Sign policy export metadata" })] }), policyExportSigned ? (_jsxs(_Fragment, { children: [_jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Signing passphrase" }), _jsx("input", { className: "action-dialog-input", type: "password", value: policyExportPassphrase, onChange: (event) => {
+                                            setPolicyExportPassphrase(event.target.value);
+                                            if (policyExportError)
+                                                setPolicyExportError(null);
+                                        }, "aria-label": "Policy signing passphrase", placeholder: "required when signing" })] }), _jsxs("div", { className: "action-dialog-row", children: [_jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Saved key hint" }), _jsxs("select", { className: "action-dialog-select", value: selectedKeyHintProfileId, onChange: (event) => {
+                                                    const nextId = event.target.value;
+                                                    setSelectedKeyHintProfileId(nextId);
+                                                    const profile = keyHintProfiles.find((entry) => entry.id === nextId);
+                                                    setPolicyExportKeyHint(profile?.keyHint ?? "");
+                                                }, "aria-label": "Policy key hint profile", children: [_jsx("option", { value: "", children: "custom key hint" }), keyHintProfiles.map((profile) => (_jsxs("option", { value: profile.id, children: [profile.name, " \u00B7 ", profile.keyHint] }, profile.id)))] })] }), _jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Key hint label" }), _jsx("input", { className: "action-dialog-input", value: policyExportKeyHint, onChange: (event) => setPolicyExportKeyHint(event.target.value), "aria-label": "Policy key hint", placeholder: "optional verification hint" })] })] }), _jsxs("p", { className: "action-dialog-note", children: ["Hints are local labels only; passphrases are never stored.", selectedKeyHintProfile ? ` Active: ${selectedKeyHintProfile.name} (v${selectedKeyHintProfile.version})` : ""] })] })) : (_jsx("p", { className: "action-dialog-note", children: "Unsigned packs can be imported, but authenticity verification is unavailable." })), policyExportError ? _jsx("p", { className: "action-dialog-error", children: policyExportError }) : null] }), _jsxs(ActionDialog, { open: policyImportDialogOpen, title: "Import policy pack", description: pendingPolicyImport
+                    ? `${pendingPolicyImport.descriptor.packCount} pack(s) · schema ${pendingPolicyImport.descriptor.schemaVersion || "unknown"}`
+                    : "Verify before import", confirmLabel: "import policy pack", onCancel: closePolicyImportDialog, onConfirm: () => void confirmPolicyImport(), children: [pendingPolicyImport?.descriptor.signed ? (_jsxs(_Fragment, { children: [_jsxs("p", { className: "action-dialog-note", children: ["Signed pack detected", pendingPolicyImport.descriptor.keyHint ? ` (hint: ${pendingPolicyImport.descriptor.keyHint})` : "", ". Verification is required before import."] }), _jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Verification passphrase" }), _jsx("input", { className: "action-dialog-input", type: "password", value: policyImportPassphrase, onChange: (event) => {
+                                            setPolicyImportPassphrase(event.target.value);
+                                            if (policyImportError)
+                                                setPolicyImportError(null);
+                                        }, "aria-label": "Policy verification passphrase", placeholder: "required for signed packs" })] })] })) : (_jsx("p", { className: "action-dialog-note", children: "Unsigned policy pack. Continue only if you trust the source." })), policyImportError ? _jsx("p", { className: "action-dialog-error", children: policyImportError }) : null] })] }));
 }
 function downloadBlob(blob, filename) {
     const url = URL.createObjectURL(blob);

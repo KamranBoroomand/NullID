@@ -32,6 +32,15 @@ export interface ProfileImportResult {
   legacy: boolean;
 }
 
+export interface ProfileDescriptor {
+  schemaVersion: number;
+  kind: string;
+  entryCount: number;
+  signed: boolean;
+  keyHint?: string;
+  legacy: boolean;
+}
+
 export async function collectProfile(options?: ProfileExportOptions): Promise<ProfileSnapshot> {
   const entries: Record<string, unknown> = {};
   for (let i = 0; i < localStorage.length; i += 1) {
@@ -85,6 +94,23 @@ export async function downloadProfile(filename = "nullid-profile.json", options?
   return {
     signed: Boolean(snapshot.signature),
     entryCount: Object.keys(snapshot.entries).length,
+  };
+}
+
+export function describeProfilePayload(input: unknown): ProfileDescriptor {
+  if (!isPlainObject(input)) {
+    return { schemaVersion: 0, kind: "unknown", entryCount: 0, signed: false, legacy: false };
+  }
+  const entries = isPlainObject(input.entries) ? input.entries : {};
+  const signature = isPlainObject(input.signature) ? input.signature : undefined;
+  const schemaVersion = typeof input.schemaVersion === "number" ? input.schemaVersion : 0;
+  return {
+    schemaVersion,
+    kind: typeof input.kind === "string" ? input.kind : "profile",
+    entryCount: Object.keys(entries).length,
+    signed: Boolean(signature),
+    keyHint: typeof signature?.keyHint === "string" ? signature.keyHint : undefined,
+    legacy: schemaVersion === LEGACY_PROFILE_SCHEMA_VERSION,
   };
 }
 

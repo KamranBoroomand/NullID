@@ -29,8 +29,17 @@ This roadmap tracks the major expansion areas required to make NullID a complete
 - [x] Expanded adversarial test corpus (malformed metadata, hostile regex payloads, envelope tamper cases).
 - [x] Formal security review checklist for release candidates.
 
-## Phase 5: Post-Phase Hardening (Planned)
-- [ ] Gap review + prioritization for next assurance track.
+## Phase 5: Post-Phase Hardening (Active)
+- [x] Metadata parsing hardening for malformed edge files and uncommon/vendor EXIF tags.
+- [x] Explicit signed export/import verification dialogs (no browser prompt/confirm dependency).
+- [x] Shared saved key-hint profiles reused across profile, policy pack, and vault signing flows.
+- [x] Visual regression snapshots for module-specific mobile layouts (sanitize, metadata, vault).
+- [x] Gap review + prioritization for next assurance track.
+
+## Phase 6: Complete Tool Rollout (Current)
+- [ ] Expand visual snapshot matrix to desktop + theme variants.
+- [ ] Add workflow-level visual regression gate with snapshot drift reporting.
+- [x] Extend signed workflow docs with key-hint profile operating conventions (`docs/signed-workflow-conventions.md`).
 
 ## Delivery Notes
 - Each phase is designed to remain fully offline-first.
