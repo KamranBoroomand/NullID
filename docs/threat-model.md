@@ -32,15 +32,21 @@
 - Control: AES-GCM authenticated encryption with AAD-bound envelope format (`NULLID:ENC:1`).
 
 3. Weak passphrase/KDF choices.
-- Control: default PBKDF2 profile plus stronger selectable profiles (`strong`, `paranoid`), explicit user-controlled tradeoff.
+- Control: default PBKDF2 profile plus stronger selectable profiles (`strong`, `paranoid`), password-hash lab with Argon2id/PBKDF2 options, and explicit weak-choice warnings.
 
 4. Data residue in clipboard/state.
-- Control: clipboard auto-clear and in-app auto-clear timers (best effort).
+- Control: clipboard auto-clear and in-app auto-clear timers (best effort), plus vault session-cookie signaling with strict cookie attributes where available.
 
-5. Build artifact substitution.
+5. Vault unlock brute-force attempts.
+- Control: optional unlock rate limiting and human-check challenge after repeated failures.
+
+6. Single-factor vault unlock exposure.
+- Control: optional local WebAuthn MFA challenge after passphrase validation.
+
+7. Build artifact substitution.
 - Control: deterministic manifest + `SHA256SUMS` verification and matrix reproducibility checks.
 
-6. Dependency visibility gaps.
+8. Dependency visibility gaps.
 - Control: deterministic lockfile-derived SBOM in `dist/sbom.json`.
 
 ## Out of Scope
@@ -51,6 +57,7 @@
 ## Residual Risks
 - Clipboard history managers may retain copies.
 - PBKDF2 remains CPU-hard but not memory-hard; high-risk deployments may require additional controls.
+- HttpOnly cookie enforcement remains a deployment/server responsibility.
 - Browser codec/parser behavior varies by platform and may reject or transform edge media.
 
 ## Next Hardening Steps

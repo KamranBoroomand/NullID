@@ -55,6 +55,11 @@ const checks = [
         hint: "PWA install/offline features require service workers; use a browser that supports them.",
     },
     {
+        key: "security-headers",
+        title: "CSP/referrer baseline",
+        hint: "Set CSP + response security headers at host/edge (`public/_headers` or `vercel.json`) and keep HTTPS enabled.",
+    },
+    {
         key: "image-codecs",
         title: "Image codec support (PNG/JPEG/WebP/AVIF)",
         hint: "Limited codec support reduces metadata cleaning export options.",
@@ -208,6 +213,23 @@ export function SelfTestView({ onOpenGuide }) {
         const supported = "serviceWorker" in navigator;
         update("service-worker", supported ? "pass" : "warn", supported ? "supported" : "unsupported");
     };
+    const runSecurityHeadersProbe = () => {
+        update("security-headers", "running");
+        const csp = document.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute("content") ?? "";
+        const referrer = document.querySelector('meta[name="referrer"]')?.getAttribute("content") ?? "";
+        const hasCsp = csp.includes("default-src");
+        const hasObjectSrc = csp.includes("object-src");
+        const hasReferrer = referrer === "no-referrer";
+        if (!hasCsp) {
+            update("security-headers", "fail", "CSP meta policy missing");
+            return;
+        }
+        if (!hasObjectSrc || !hasReferrer) {
+            update("security-headers", "warn", `csp=${hasCsp ? "yes" : "no"}, object-src=${hasObjectSrc ? "yes" : "no"}, referrer=${hasReferrer ? "yes" : "no"}`);
+            return;
+        }
+        update("security-headers", "pass", "CSP/referrer baseline detected");
+    };
     const runCodecProbe = async () => {
         update("image-codecs", "running");
         const support = await probeCanvasEncodeSupport();
@@ -223,6 +245,7 @@ export function SelfTestView({ onOpenGuide }) {
         runSecureContextProbe();
         runWebCryptoProbe();
         runServiceWorkerProbe();
+        runSecurityHeadersProbe();
         await Promise.all([runIndexedDbProbe(), runClipboardProbe(), runCodecProbe()]);
     };
     const runAll = async () => {
@@ -267,6 +290,8 @@ export function SelfTestView({ onOpenGuide }) {
             await runClipboardProbe();
         else if (key === "service-worker")
             runServiceWorkerProbe();
+        else if (key === "security-headers")
+            runSecurityHeadersProbe();
         else if (key === "image-codecs")
             await runCodecProbe();
         setLastRunAt(new Date().toISOString());

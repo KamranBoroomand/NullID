@@ -56,6 +56,12 @@ describe("password hashing", () => {
   });
 
   it("rejects invalid hash formats", () => {
-    assert.throws(() => parsePasswordHash("not-a-hash"), /unsupported/i);
+    let message = "";
+    try {
+      parsePasswordHash("not-a-hash");
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    assert.equal(/unsupported/i.test(message), true);
   });
 });

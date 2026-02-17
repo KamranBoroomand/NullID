@@ -70,6 +70,10 @@ function concatBytes(left: Uint8Array, right: Uint8Array): Uint8Array {
   return output;
 }
 
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
+
 function equalBytes(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
@@ -101,13 +105,13 @@ function createAssessment(options: PasswordHashOptions): PasswordHashChoiceAsses
 }
 
 async function derivePbkdf2(secret: string, salt: Uint8Array, iterations: number): Promise<Uint8Array> {
-  const keyMaterial = await crypto.subtle.importKey("raw", utf8ToBytes(secret).buffer as ArrayBuffer, "PBKDF2", false, ["deriveBits"]);
+  const keyMaterial = await crypto.subtle.importKey("raw", toArrayBuffer(utf8ToBytes(secret)), "PBKDF2", false, ["deriveBits"]);
   const bits = await crypto.subtle.deriveBits(
     {
       name: "PBKDF2",
       hash: "SHA-256",
       iterations,
-      salt: salt.buffer as ArrayBuffer,
+      salt: toArrayBuffer(salt),
     },
     keyMaterial,
     DEFAULT_DERIVED_BITS,
@@ -132,7 +136,7 @@ async function deriveArgon2id(
   };
   const keyMaterial = await subtle.importKey(
     "raw-secret",
-    utf8ToBytes(secret).buffer as ArrayBuffer,
+    toArrayBuffer(utf8ToBytes(secret)),
     "Argon2id",
     false,
     ["deriveBits"],
@@ -140,7 +144,7 @@ async function deriveArgon2id(
   const bits = await subtle.deriveBits(
     {
       name: "Argon2id",
-      nonce: salt.buffer as ArrayBuffer,
+      nonce: toArrayBuffer(salt),
       memory: options.memory,
       passes: options.passes,
       parallelism: options.parallelism,
@@ -169,12 +173,12 @@ export async function supportsArgon2id(): Promise<boolean> {
       ) => Promise<CryptoKey>;
       deriveBits: (algorithm: AlgorithmIdentifier, baseKey: CryptoKey, length: number) => Promise<ArrayBuffer>;
     };
-    const key = await subtle.importKey("raw-secret", utf8ToBytes("probe"), "Argon2id", false, ["deriveBits"]);
+    const key = await subtle.importKey("raw-secret", toArrayBuffer(utf8ToBytes("probe")), "Argon2id", false, ["deriveBits"]);
     const salt = randomBytes(16);
     await subtle.deriveBits(
       {
         name: "Argon2id",
-        nonce: salt.buffer as ArrayBuffer,
+        nonce: toArrayBuffer(salt),
         memory: MIN_ARGON2_MEMORY,
         passes: 1,
         parallelism: 1,

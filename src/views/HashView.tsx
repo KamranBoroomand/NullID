@@ -511,6 +511,9 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
               </div>
             </div>
           </div>
+          <div className="microcopy">
+            {tr("Digest tools are for integrity checks. For password storage, use Password Storage Hashing (Argon2id/PBKDF2) in :pw.")}
+          </div>
           <label className="section-title" htmlFor="hash-verify">
             {tr("Verify digest")}
           </label>

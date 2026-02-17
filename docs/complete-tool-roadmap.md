@@ -40,6 +40,9 @@ This roadmap tracks the major expansion areas required to make NullID a complete
 - [ ] Expand visual snapshot matrix to desktop + theme variants.
 - [ ] Add workflow-level visual regression gate with snapshot drift reporting.
 - [x] Extend signed workflow docs with key-hint profile operating conventions (`docs/signed-workflow-conventions.md`).
+- [x] Add password-storage hash lab with Argon2id/PBKDF2 + legacy compatibility warnings.
+- [x] Add vault unlock hardening controls (rate limiting, human check, optional MFA).
+- [x] Add static-host security header baseline files (`public/_headers`, `vercel.json`) and validation script.
 
 ## Delivery Notes
 - Each phase is designed to remain fully offline-first.

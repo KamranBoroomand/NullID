@@ -62,8 +62,9 @@ CLI commands include:
 - Text redaction: detector-based masking for common secrets/PII with overlap-safe conflict handling.
 - Log sanitization: presets and custom policies, structured-format support (`text/json/ndjson/csv/xml/yaml`), and safe-share bundle export.
 - Metadata inspection/cleanup: image metadata parsing with local clean re-encode flows; CLI support for PDF and Office cleanup.
-- Encryption and vault workflows: versioned `NULLID:ENC:1` envelopes using PBKDF2 + AES-GCM, plus encrypted local vault storage.
-- Secure UX affordances: panic lock (`Ctrl+Shift+L`), clipboard hygiene helpers, signed export/import verification dialogs.
+- Encryption and vault workflows: versioned `NULLID:ENC:1` envelopes with authenticated encryption, configurable KDF profiles, and encrypted local vault storage.
+- Password storage hashing lab: local salted hash generation/verification with `Argon2id` (recommended), `PBKDF2-SHA256` (compat), and legacy SHA options kept for migrations.
+- Secure UX affordances: panic lock (`Ctrl+Shift+L`), unlock rate limiting, optional human-check challenges, optional WebAuthn MFA for vault unlock, clipboard hygiene helpers, signed export/import verification dialogs, and session-cookie signaling.
 - Installable PWA: desktop/mobile support with offline app-shell caching.
 
 ## Tech Stack
@@ -168,6 +169,9 @@ Primary npm scripts:
 | `npm run preview` | `vite preview` | Preview production build locally. |
 | `npm run typecheck` | `tsc -b` | Run TypeScript project checks. |
 | `npm run lint` | `node scripts/lint.js` | Enforce offline policy (no runtime network calls in `src/`). |
+| `npm run audit:headers` | `node scripts/verify-security-headers.mjs` | Verify static-host header configs include required security baseline headers. |
+| `npm run audit:deps` | `npm audit --audit-level=high` | Run dependency vulnerability audit (network required). |
+| `npm run security:check` | `npm run audit:headers && npm run lint && npm run test` | Run local security checks (header baseline + no-network policy + unit tests). |
 | `npm run test` | `tsc -p tsconfig.test.json && node --test build-test/__tests__/*.js` | Compile and run utility tests. |
 | `npm run e2e` | `playwright test` | Run Playwright end-to-end tests. |
 | `npm run test:e2e:i18n-layout` | `playwright test tests/e2e/i18n-layout.spec.ts` | Run RU/FA layout integrity tests. |
@@ -178,6 +182,7 @@ Team references:
 - Pages workflow: `.github/workflows/pages.yml`
 - Reproducibility workflow: `.github/workflows/reproducibility.yml`
 - Signed release workflow: `.github/workflows/release-signed.yml`
+- Dependency monitoring: `.github/dependabot.yml`
 - Platform breadth notes: `docs/phase3-workflows.md`
 - Signed workflow conventions: `docs/signed-workflow-conventions.md`
 - Release checklist: `docs/release-security-checklist.md`
@@ -196,7 +201,9 @@ NullID deploys as static files.
    ```
 3. Publish `dist/` to any static host (GitHub Pages, Netlify, Vercel static, S3 + CDN, etc.).
 4. Serve over HTTPS so service workers and install prompts work correctly.
-5. For subpath hosting, set `VITE_BASE` at build time:
+5. Apply security headers (`Content-Security-Policy`, `X-Content-Type-Options`, etc.) using `public/_headers` or `vercel.json`.
+6. For server-backed deployments, set session cookies server-side with `HttpOnly`, `Secure`, and `SameSite=Strict`.
+7. For subpath hosting, set `VITE_BASE` at build time:
    ```bash
    SOURCE_DATE_EPOCH=1735689600 VITE_BASE=/your-repo-name/ npm run build
    ```
@@ -210,14 +217,17 @@ Reproducibility notes:
 ## Security Model and Limits
 - Offline-first by design: no runtime API client; lint checks scan for disallowed network primitives in `src/`.
 - Encryption envelope format is explicit and versioned (`NULLID:ENC:1`) with authenticated encryption (AES-GCM + AAD).
-- KDF settings are profile-driven (`compat`, `strong`, `paranoid`) with optional CLI overrides.
+- KDF settings are profile-driven (`compat`, `strong`, `paranoid`) with optional UI/CLI overrides and explicit weak-choice warnings.
 - Vault operations use passphrase-derived keys and canary verification.
+- Vault unlock can enforce local rate limiting, optional human checks, and optional WebAuthn MFA.
+- Session cookie signaling is available in-app with `SameSite=Strict` and `Secure` on HTTPS origins.
 - Build/release trust is reinforced by deterministic manifests, checksums, SBOM, and signed release provenance.
 
 Important limits:
 - NullID is not represented as an externally audited cryptography product.
 - Clipboard history managers and compromised local hosts can still expose data.
 - PBKDF2 is CPU-hard, not memory-hard; high-risk deployments may require additional controls.
+- `HttpOnly` cookie flags cannot be set from browser JavaScript and must be configured at the server/edge layer.
 
 Security references:
 - Threat model draft: `docs/threat-model.md`

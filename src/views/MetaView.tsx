@@ -9,11 +9,19 @@ import {
   type OutputMime,
 } from "../utils/imageFormats";
 import { detectImageFormat, readMetadataFields } from "../utils/metadataInspector";
+import {
+  analyzeMetadataFromBuffer,
+  sanitizePdfMetadata,
+  type MetadataAnalysisResult,
+  type MetadataRiskLevel,
+  type MetadataSanitizer,
+} from "../utils/metadataAdvanced";
 import type { ModuleKey } from "../components/ModuleList";
 import { useI18n } from "../i18n";
 
 type MetaField = { key: string; value: string };
 type OutputChoice = OutputMime | "auto";
+type AdvancedMode = MetadataSanitizer | "auto";
 
 interface CleanResult {
   cleanedBlob: Blob;
@@ -28,6 +36,7 @@ interface MetaViewProps {
 export function MetaView({ onOpenGuide }: MetaViewProps) {
   const { t, tr } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const advancedInputRef = useRef<HTMLInputElement>(null);
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState("none");
   const [beforeFields, setBeforeFields] = useState<MetaField[]>([]);
@@ -46,6 +55,15 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
   const [sizeDeltaBytes, setSizeDeltaBytes] = useState<number>(0);
   const [formatRows, setFormatRows] = useState<ImageFormatDiagnostic[]>([]);
   const [outputSupport, setOutputSupport] = useState<Record<OutputMime, boolean> | null>(null);
+  const [advancedFile, setAdvancedFile] = useState<File | null>(null);
+  const [advancedFileName, setAdvancedFileName] = useState("none");
+  const [advancedMode, setAdvancedMode] = useState<AdvancedMode>("auto");
+  const [advancedAnalysis, setAdvancedAnalysis] = useState<MetadataAnalysisResult | null>(null);
+  const [advancedMessage, setAdvancedMessage] = useState("drop any file for advanced metadata analysis");
+  const [advancedActions, setAdvancedActions] = useState<string[]>([]);
+  const [advancedCleanBlob, setAdvancedCleanBlob] = useState<Blob | null>(null);
+  const [advancedBeforeSha256, setAdvancedBeforeSha256] = useState("");
+  const [advancedAfterSha256, setAdvancedAfterSha256] = useState("");
 
   const refreshCleanResult = useCallback(
     async (file: File) => {
@@ -132,6 +150,95 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
     [],
   );
 
+  const handleAdvancedFile = useCallback(async (file?: File | null) => {
+    if (!file) return;
+
+    setAdvancedFile(file);
+    setAdvancedFileName(file.name);
+    setAdvancedAnalysis(null);
+    setAdvancedMessage("analyzing metadata…");
+    setAdvancedActions([]);
+    setAdvancedCleanBlob(null);
+    setAdvancedBeforeSha256("");
+    setAdvancedAfterSha256("");
+
+    try {
+      const shouldReadFull = file.size <= 24_000_000 || file.type.startsWith("image/") || file.type.includes("pdf");
+      const analysisBytes = shouldReadFull ? new Uint8Array(await file.arrayBuffer()) : await readHeadTailBytes(file, 1_000_000);
+      const analysis = analyzeMetadataFromBuffer(file.type || "", analysisBytes, file.name);
+      setAdvancedAnalysis(analysis);
+      setAdvancedBeforeSha256(await sha256Hex(file));
+      setAdvancedMessage(
+        shouldReadFull
+          ? `analysis ready (${analysis.risk} risk)`
+          : `analysis ready (${analysis.risk} risk, large-file sampled scan)`,
+      );
+    } catch (error) {
+      console.error(error);
+      const detail = error instanceof Error ? error.message : "advanced metadata analysis failed";
+      setAdvancedMessage(detail);
+    }
+  }, []);
+
+  const refreshAdvancedSanitize = useCallback(
+    async (file: File, analysis: MetadataAnalysisResult) => {
+      const resolvedMode = resolveAdvancedMode(advancedMode, analysis.recommendedSanitizer);
+      setAdvancedActions([]);
+      setAdvancedCleanBlob(null);
+      setAdvancedAfterSha256("");
+
+      if (resolvedMode === "browser-image") {
+        if (analysis.kind !== "image" || analysis.format === "heic") {
+          setAdvancedMessage("image re-encode unavailable for this format");
+          return;
+        }
+        try {
+          const supportedOutput = outputSupport ?? (await probeCanvasEncodeSupport());
+          if (!outputSupport) setOutputSupport(supportedOutput);
+          const cleaned = await renderCleanImage(file, 1, supportedOutput, "auto", 0.92);
+          setAdvancedCleanBlob(cleaned.cleanedBlob);
+          setAdvancedActions(
+            cleaned.removed.length > 0 ? cleaned.removed : ["image re-encode completed (metadata minimized)"],
+          );
+          setAdvancedAfterSha256(await sha256Hex(cleaned.cleanedBlob));
+          setAdvancedMessage("advanced sanitize ready");
+          return;
+        } catch (error) {
+          console.error(error);
+          const detail = error instanceof Error ? error.message : "image sanitize failed";
+          setAdvancedMessage(detail);
+          return;
+        }
+      }
+
+      if (resolvedMode === "browser-pdf") {
+        try {
+          const result = await sanitizePdfMetadata(file);
+          setAdvancedCleanBlob(result.cleanedBlob);
+          setAdvancedActions(result.actions.length > 0 ? result.actions : ["no visible PDF metadata fields found"]);
+          setAdvancedAfterSha256(await sha256Hex(result.cleanedBlob));
+          setAdvancedMessage(result.changed ? "advanced sanitize ready" : "no visible metadata rewrites were required");
+          return;
+        } catch (error) {
+          console.error(error);
+          const detail = error instanceof Error ? error.message : "pdf sanitize failed";
+          setAdvancedMessage(detail);
+          return;
+        }
+      }
+
+      if (resolvedMode === "mat2") {
+        setAdvancedMessage("external sanitization recommended (mat2/ffmpeg)");
+        setAdvancedActions(["in-browser sanitizer not available for this format"]);
+        return;
+      }
+
+      setAdvancedMessage("analysis-only mode enabled");
+      setAdvancedActions(["no sanitizer selected"]);
+    },
+    [advancedMode, outputSupport],
+  );
+
   const saveClean = async () => {
     if (!cleanBlob) return;
     const safeName = fileName.replace(/\.[^.]+$/, "") || "clean";
@@ -143,6 +250,44 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
     URL.revokeObjectURL(url);
   };
 
+  const saveAdvancedClean = useCallback(() => {
+    if (!advancedCleanBlob) return;
+    const safeName = advancedFileName.replace(/\.[^.]+$/, "") || "advanced-clean";
+    const ext =
+      advancedCleanBlob.type === "application/pdf"
+        ? "pdf"
+        : advancedCleanBlob.type
+          ? extensionFromMime(advancedCleanBlob.type)
+          : extensionFromFileName(advancedFileName);
+    downloadBlob(advancedCleanBlob, `${safeName}-clean.${ext}`);
+  }, [advancedCleanBlob, advancedFileName]);
+
+  const exportAdvancedReport = useCallback(() => {
+    if (!advancedFile || !advancedAnalysis) return;
+    const payload = {
+      file: advancedFile.name,
+      bytes: advancedFile.size,
+      sha256Before: advancedBeforeSha256 || null,
+      sha256After: advancedAfterSha256 || null,
+      mode: resolveAdvancedMode(advancedMode, advancedAnalysis.recommendedSanitizer),
+      analysis: advancedAnalysis,
+      actions: advancedActions,
+      generatedAt: new Date().toISOString(),
+    };
+    downloadBlob(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }), "nullid-metadata-analysis.json");
+  }, [advancedActions, advancedAfterSha256, advancedAnalysis, advancedBeforeSha256, advancedFile, advancedMode]);
+
+  const copyExternalCommand = useCallback(async () => {
+    if (!advancedAnalysis?.commandHint) return;
+    try {
+      await navigator.clipboard.writeText(advancedAnalysis.commandHint);
+      setAdvancedMessage("command copied");
+    } catch (error) {
+      console.error(error);
+      setAdvancedMessage("clipboard unavailable");
+    }
+  }, [advancedAnalysis]);
+
   const removedList = useMemo(() => removedFields.join(", "), [removedFields]);
   const compressionDeltaLabel = useMemo(() => {
     if (!sourceFile || !cleanBlob) return "n/a";
@@ -150,6 +295,11 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
     const sign = sizeDeltaBytes === 0 ? "" : sizeDeltaBytes > 0 ? "+" : "";
     return `${sign}${Math.round(sizeDeltaBytes / 1024)} KB (${ratio}% of original)`;
   }, [cleanBlob, sizeDeltaBytes, sourceFile]);
+  const advancedActionList = useMemo(() => advancedActions.join(", "), [advancedActions]);
+  const advancedResolvedMode = useMemo<MetadataSanitizer>(
+    () => (advancedAnalysis ? resolveAdvancedMode(advancedMode, advancedAnalysis.recommendedSanitizer) : "manual"),
+    [advancedAnalysis, advancedMode],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -179,6 +329,11 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
     if (!sourceFile || unsupportedReason) return;
     void refreshCleanResult(sourceFile);
   }, [outputChoice, quality, refreshCleanResult, resizePercent, sourceFile, unsupportedReason]);
+
+  useEffect(() => {
+    if (!advancedFile || !advancedAnalysis) return;
+    void refreshAdvancedSanitize(advancedFile, advancedAnalysis);
+  }, [advancedAnalysis, advancedFile, refreshAdvancedSanitize]);
 
   return (
     <div className="workspace-scroll">
@@ -336,6 +491,156 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
           </table>
         </div>
       </div>
+      <div className="panel" aria-label={tr("Advanced metadata analysis")}>
+        <div className="panel-heading">
+          <span>{tr("Advanced metadata analysis")}</span>
+          <span className="panel-subtext">{tr("documents + images + videos")}</span>
+        </div>
+        <div
+          className="dropzone"
+          role="button"
+          tabIndex={0}
+          aria-label={tr("Drop file for advanced metadata analysis")}
+          onClick={() => advancedInputRef.current?.click()}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              advancedInputRef.current?.click();
+            }
+          }}
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={(event) => {
+            event.preventDefault();
+            void handleAdvancedFile(event.dataTransfer.files?.[0] ?? null);
+          }}
+        >
+          <input
+            ref={advancedInputRef}
+            type="file"
+            accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.mkv,.avi,.mov,.mp4,.webm"
+            onChange={(event) => void handleAdvancedFile(event.target.files?.[0] ?? null)}
+            style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }}
+            tabIndex={-1}
+          />
+          <div className="section-title">{tr("drag any file")}</div>
+          <div className="microcopy">image / pdf / office / video / archive</div>
+        </div>
+        <div className="status-line">
+          <span>{tr("file")}</span>
+          <Chip label={advancedFileName} tone="muted" />
+          <Chip label={advancedMessage} tone="accent" />
+        </div>
+        <div className="controls-row">
+          <label className="section-title" htmlFor="advanced-meta-mode">
+            {tr("Sanitize mode")}
+          </label>
+          <select
+            id="advanced-meta-mode"
+            className="select"
+            value={advancedMode}
+            onChange={(event) => setAdvancedMode(event.target.value as AdvancedMode)}
+            aria-label={tr("Advanced sanitize mode")}
+          >
+            <option value="auto">auto</option>
+            <option value="browser-image">browser image clean</option>
+            <option value="browser-pdf">browser pdf clean</option>
+            <option value="mat2">mat2 / external clean</option>
+            <option value="manual">analysis only</option>
+          </select>
+          <button className="button" type="button" onClick={saveAdvancedClean} disabled={!advancedCleanBlob}>
+            {tr("download advanced clean")}
+          </button>
+          <button className="button" type="button" onClick={exportAdvancedReport} disabled={!advancedAnalysis}>
+            {tr("download analysis report")}
+          </button>
+          <button className="button" type="button" onClick={() => void copyExternalCommand()} disabled={!advancedAnalysis?.commandHint}>
+            {tr("copy command")}
+          </button>
+        </div>
+        <div className="status-line">
+          <span>{tr("risk")}</span>
+          <Chip label={advancedAnalysis?.risk ?? tr("pending")} tone={toneForRisk(advancedAnalysis?.risk)} />
+          <span className="microcopy">{advancedAnalysis ? `${advancedAnalysis.kind} :: ${advancedAnalysis.format}` : tr("pending")}</span>
+        </div>
+        <div className="status-line">
+          <span>{tr("sanitizer")}</span>
+          <Chip
+            label={advancedAnalysis ? formatSanitizerLabel(advancedResolvedMode) : tr("pending")}
+            tone={advancedAnalysis && advancedResolvedMode !== "manual" ? "accent" : "muted"}
+          />
+          <span className="microcopy">{advancedActionList || tr("none")}</span>
+        </div>
+        <div className="status-line">
+          <span>{tr("before sha256")}</span>
+          <span className="microcopy">{advancedBeforeSha256 || tr("pending")}</span>
+        </div>
+        <div className="status-line">
+          <span>{tr("after sha256")}</span>
+          <span className="microcopy">{advancedAfterSha256 || tr("pending")}</span>
+        </div>
+        {advancedAnalysis?.commandHint ? (
+          <div className="note-box">
+            <div className="section-title">{tr("External command hint")}</div>
+            <div className="microcopy">{advancedAnalysis.commandHint}</div>
+          </div>
+        ) : null}
+        {advancedAnalysis?.guidance?.length ? (
+          <div className="note-box">
+            <div className="section-title">{tr("Guidance")}</div>
+            <ul className="note-list">
+              {advancedAnalysis.guidance.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        <div className="section-title">{tr("Sensitive metadata signals")}</div>
+        <table className="table">
+          <thead>
+            <tr>
+              <th>{tr("type")}</th>
+              <th>{tr("severity")}</th>
+              <th>{tr("detail")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {!advancedAnalysis || advancedAnalysis.signals.length === 0 ? (
+              <tr>
+                <td colSpan={3} className="muted">
+                  {tr("no signals")}
+                </td>
+              </tr>
+            ) : (
+              advancedAnalysis.signals.map((signal) => (
+                <tr key={signal.id}>
+                  <td>{signal.label}</td>
+                  <td>{signal.severity}</td>
+                  <td>{signal.detail}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+        <div className="section-title">{tr("Detected fields")}</div>
+        <table className="table">
+          <tbody>
+            {!advancedAnalysis || advancedAnalysis.fields.length === 0 ? (
+              <tr>
+                <td className="muted" colSpan={2}>
+                  {tr("no fields")}
+                </td>
+              </tr>
+            ) : (
+              advancedAnalysis.fields.map((field, index) => (
+                <tr key={`${field.key}-${index}`}>
+                  <td>{field.key}</td>
+                  <td>{field.value}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
       <div className="panel" aria-label={tr("Metadata table")}>
         <div className="panel-heading">
           <span>{tr("Fields")}</span>
@@ -427,6 +732,51 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
       </div>
     </div>
   );
+}
+
+function resolveAdvancedMode(mode: AdvancedMode, recommended: MetadataSanitizer): MetadataSanitizer {
+  return mode === "auto" ? recommended : mode;
+}
+
+function toneForRisk(value?: MetadataRiskLevel) {
+  if (value === "high") return "danger" as const;
+  if (value === "medium") return "accent" as const;
+  return "muted" as const;
+}
+
+function formatSanitizerLabel(value: MetadataSanitizer) {
+  if (value === "browser-image") return "browser image clean";
+  if (value === "browser-pdf") return "browser pdf clean";
+  if (value === "mat2") return "mat2 / external clean";
+  return "analysis only";
+}
+
+function extensionFromFileName(name: string) {
+  const dot = name.lastIndexOf(".");
+  if (dot < 0 || dot === name.length - 1) return "bin";
+  return name.slice(dot + 1).toLowerCase();
+}
+
+function downloadBlob(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+async function readHeadTailBytes(file: File, sliceSize: number) {
+  if (file.size <= sliceSize * 2) {
+    return new Uint8Array(await file.arrayBuffer());
+  }
+
+  const head = new Uint8Array(await file.slice(0, sliceSize).arrayBuffer());
+  const tail = new Uint8Array(await file.slice(Math.max(0, file.size - sliceSize)).arrayBuffer());
+  const out = new Uint8Array(head.length + tail.length);
+  out.set(head, 0);
+  out.set(tail, head.length);
+  return out;
 }
 
 async function renderCleanImage(

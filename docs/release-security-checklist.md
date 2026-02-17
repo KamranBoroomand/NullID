@@ -5,10 +5,16 @@ Use this checklist for every release candidate before tag publication.
 ## 1) Pre-tag gates
 - [ ] Threat model deltas reviewed in `docs/threat-model.md`.
 - [ ] No new runtime network calls introduced (`npm run lint`).
+- [ ] Security header baseline passes (`npm run audit:headers`).
 - [ ] Unit tests pass (`npm run test`).
 - [ ] Type checks pass (`npm run typecheck`).
 - [ ] Build reproducibility check passes (`SOURCE_DATE_EPOCH=1735689600 npm run build:repro`).
 - [ ] Build outputs include `dist/sbom.json`, `dist/deploy-manifest.json`, and `dist/SHA256SUMS`.
+
+## 1.1) Runtime hardening checks
+- [ ] HTTPS enforced on production origin.
+- [ ] Session cookie policy documented for deployment (`HttpOnly`, `Secure`, `SameSite=Strict`).
+- [ ] Vault unlock hardening options reviewed (rate limiting, human check, optional MFA).
 
 ## 2) Adversarial regression gates
 - [ ] Envelope tamper cases fail decryption/authentication.
@@ -45,5 +51,6 @@ Reference test corpus: `src/__tests__/adversarialCorpus.test.ts`.
 
 ## 5) Sign-off
 - [ ] Security review completed by release owner.
+- [ ] Dependency updates reviewed (Dependabot and/or `npm audit` findings triaged).
 - [ ] Release notes include checksum + signature verification instructions.
 - [ ] Tag is published only after all checklist items are complete.

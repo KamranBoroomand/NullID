@@ -27,6 +27,20 @@ import {
   type KeyHintProfile,
 } from "../utils/keyHintProfiles";
 import { useI18n } from "../i18n";
+import {
+  DEFAULT_UNLOCK_POLICY,
+  applyUnlockFailure,
+  clearUnlockFailures,
+  createHumanCheckChallenge,
+  createUnlockThrottleState,
+  isUnlockBlocked,
+  shouldRequireHumanCheck,
+  verifyHumanCheck,
+  type HumanCheckChallenge,
+  type UnlockThrottleState,
+} from "../utils/unlockHardening";
+import { clearVaultSessionCookie, readVaultSessionCookie, setVaultSessionCookie, type SessionCookieResult } from "../utils/sessionSecurity";
+import { isLocalMfaSupported, registerLocalMfaCredential, verifyLocalMfaCredential, type LocalMfaCredential } from "../utils/localMfa";
 
 type DecryptedNote = { id: string; title: string; body: string; tags: string[]; createdAt: number; updatedAt: number };
 
@@ -71,6 +85,20 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [reportIncludeBodies, setReportIncludeBodies] = useState(false);
   const [wipeDialogOpen, setWipeDialogOpen] = useState(false);
+  const [unlockRateLimitEnabled, setUnlockRateLimitEnabled] = usePersistentState<boolean>("nullid:vault:unlock-rate-limit", true);
+  const [unlockHumanCheckEnabled, setUnlockHumanCheckEnabled] = usePersistentState<boolean>("nullid:vault:unlock-human-check", true);
+  const [unlockThrottle, setUnlockThrottle] = usePersistentState<UnlockThrottleState>(
+    "nullid:vault:unlock-throttle",
+    createUnlockThrottleState(),
+  );
+  const [unlockChallenge, setUnlockChallenge] = useState<HumanCheckChallenge>(() => createHumanCheckChallenge());
+  const [unlockChallengeInput, setUnlockChallengeInput] = useState("");
+  const [unlockBlockRemaining, setUnlockBlockRemaining] = useState(0);
+  const [sessionCookieEnabled, setSessionCookieEnabled] = usePersistentState<boolean>("nullid:vault:session-cookie-enabled", true);
+  const [sessionCookieState, setSessionCookieState] = useState<SessionCookieResult | null>(null);
+  const [mfaCredential, setMfaCredential] = usePersistentState<LocalMfaCredential | null>("nullid:vault:mfa-credential", null);
+  const [mfaBusy, setMfaBusy] = useState(false);
+  const [mfaLabelInput, setMfaLabelInput] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const encryptedImportRef = useRef<HTMLInputElement>(null);
   const formatTs = useCallback((value: number) => formatDateTime(value), [formatDateTime]);
@@ -120,6 +148,8 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
     const deadline = Date.now() + autoLockSeconds * 1000;
     setLockDeadlineMs(deadline);
     const timer = window.setTimeout(() => {
+      clearVaultSessionCookie();
+      setSessionCookieState(null);
       setUnlocked(false);
       setKey(null);
       setNotes([]);
@@ -165,6 +195,32 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
   }, [lockDeadlineMs, unlocked]);
 
   useEffect(() => {
+    if (!unlockRateLimitEnabled) {
+      setUnlockBlockRemaining(0);
+      return;
+    }
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((unlockThrottle.lockoutUntil - Date.now()) / 1000));
+      setUnlockBlockRemaining(remaining);
+    };
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [unlockRateLimitEnabled, unlockThrottle.lockoutUntil]);
+
+  useEffect(() => {
+    const active = readVaultSessionCookie();
+    if (active) {
+      setSessionCookieState({
+        active: true,
+        secure: window.isSecureContext || window.location.protocol === "https:",
+      });
+    } else {
+      setSessionCookieState(null);
+    }
+  }, []);
+
+  useEffect(() => {
     if (!unlocked) return;
     const handleActivity = () => resetLockTimer();
     const events: (keyof WindowEventMap)[] = ["mousemove", "keydown", "pointerdown", "scroll"];
@@ -174,8 +230,37 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
 
   const handleUnlock = useCallback(async () => {
     if (!passphrase) return;
+    const now = Date.now();
+    if (unlockRateLimitEnabled && isUnlockBlocked(unlockThrottle, now)) {
+      const remaining = Math.max(1, Math.ceil((unlockThrottle.lockoutUntil - now) / 1000));
+      push(`unlock temporarily blocked (${remaining}s remaining)`, "danger");
+      return;
+    }
+    if (unlockHumanCheckEnabled && shouldRequireHumanCheck(unlockThrottle, DEFAULT_UNLOCK_POLICY)) {
+      const humanCheckPass = verifyHumanCheck(unlockChallenge, unlockChallengeInput);
+      if (!humanCheckPass) {
+        const failedState = unlockRateLimitEnabled
+          ? applyUnlockFailure(unlockThrottle, Date.now(), DEFAULT_UNLOCK_POLICY)
+          : { ...unlockThrottle, failures: unlockThrottle.failures + 1 };
+        setUnlockThrottle(failedState);
+        setUnlockChallenge(createHumanCheckChallenge());
+        setUnlockChallengeInput("");
+        const cooldown = Math.max(0, Math.ceil((failedState.lockoutUntil - Date.now()) / 1000));
+        push(
+          cooldown > 0 ? `human check failed: retry after ${cooldown}s` : "human check failed",
+          "danger",
+        );
+        return;
+      }
+    }
     try {
       const derived = await unlockVault(passphrase);
+      if (mfaCredential) {
+        const mfaVerified = await verifyLocalMfaCredential(mfaCredential);
+        if (!mfaVerified) {
+          throw new Error("MFA verification failed");
+        }
+      }
       setKey(derived);
       setUnlocked(true);
       push("vault unlocked", "accent");
@@ -196,15 +281,55 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
       );
       setNotes(decrypted.sort((a, b) => b.updatedAt - a.updatedAt));
       resetLockTimer();
+      setUnlockThrottle(clearUnlockFailures());
+      setUnlockChallengeInput("");
+      setUnlockChallenge(createHumanCheckChallenge());
+      if (sessionCookieEnabled) {
+        const cookie = setVaultSessionCookie(autoLockSeconds);
+        setSessionCookieState(cookie);
+        if (cookie.warning) {
+          push(cookie.warning, cookie.secure ? "neutral" : "danger");
+        }
+      } else {
+        clearVaultSessionCookie();
+        setSessionCookieState(null);
+      }
     } catch (error) {
       console.error(error);
-      push("unlock failed: passphrase or data invalid", "danger");
+      const nextState = unlockRateLimitEnabled
+        ? applyUnlockFailure(unlockThrottle, Date.now(), DEFAULT_UNLOCK_POLICY)
+        : { ...unlockThrottle, failures: unlockThrottle.failures + 1 };
+      setUnlockThrottle(nextState);
+      if (unlockHumanCheckEnabled) {
+        setUnlockChallenge(createHumanCheckChallenge());
+        setUnlockChallengeInput("");
+      }
+      const cooldown = Math.max(0, Math.ceil((nextState.lockoutUntil - Date.now()) / 1000));
+      push(
+        cooldown > 0
+          ? `unlock failed: passphrase, MFA, or data invalid (retry in ${cooldown}s)`
+          : "unlock failed: passphrase, MFA, or data invalid",
+        "danger",
+      );
       setUnlocked(false);
       setKey(null);
       setNotes([]);
       setBackendInfo(getVaultBackendInfo());
     }
-  }, [passphrase, push, resetLockTimer]);
+  }, [
+    autoLockSeconds,
+    mfaCredential,
+    passphrase,
+    push,
+    resetLockTimer,
+    sessionCookieEnabled,
+    unlockChallenge,
+    unlockChallengeInput,
+    unlockHumanCheckEnabled,
+    unlockRateLimitEnabled,
+    unlockThrottle,
+    setUnlockThrottle,
+  ]);
 
   const handleSave = useCallback(async () => {
     if (!key || !title.trim() || !body.trim()) return;
@@ -262,6 +387,8 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
       window.clearTimeout(lockTimer);
       setLockTimer(null);
     }
+    clearVaultSessionCookie();
+    setSessionCookieState(null);
     setUnlocked(false);
     setKey(null);
     setLockDeadlineMs(null);
@@ -304,9 +431,43 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
 
   const handleWipe = useCallback(async () => {
     await wipeVault();
+    setMfaCredential(null);
+    setUnlockThrottle(clearUnlockFailures());
+    clearVaultSessionCookie();
+    setSessionCookieState(null);
     handleLock();
     push("vault wiped", "danger");
-  }, [handleLock, push]);
+  }, [handleLock, push, setMfaCredential, setUnlockThrottle]);
+
+  const handleEnableMfa = useCallback(async () => {
+    if (!unlocked) {
+      push("unlock vault before enabling MFA", "danger");
+      return;
+    }
+    if (!isLocalMfaSupported()) {
+      push("WebAuthn MFA is unavailable in this browser", "danger");
+      return;
+    }
+    setMfaBusy(true);
+    try {
+      const credential = await registerLocalMfaCredential(mfaLabelInput);
+      setMfaCredential(credential);
+      push("MFA enabled (WebAuthn)", "accent");
+      setMfaLabelInput("");
+    } catch (error) {
+      console.error(error);
+      const message = error instanceof Error ? error.message : "MFA enrollment failed";
+      push(message, "danger");
+    } finally {
+      setMfaBusy(false);
+    }
+  }, [mfaLabelInput, push, setMfaCredential, unlocked]);
+
+  const handleDisableMfa = useCallback(() => {
+    setMfaCredential(null);
+    setMfaLabelInput("");
+    push("MFA disabled", "neutral");
+  }, [push, setMfaCredential]);
 
   const openVaultExportDialog = useCallback(
     (mode: "plain" | "encrypted") => {
@@ -433,6 +594,8 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
       setBody("");
       setTags("");
       setActiveId(null);
+      clearVaultSessionCookie();
+      setSessionCookieState(null);
       const suffix = result.legacy ? "legacy" : result.signed ? (result.verified ? "signed+verified" : "signed") : "unsigned";
       push(
         `${vaultImportMode === "encrypted" ? "encrypted vault imported" : "vault imported"} (${result.noteCount} notes, ${suffix}); please unlock`,
@@ -534,10 +697,97 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
               {tr("lock")}
             </button>
           </div>
+          {unlockHumanCheckEnabled && shouldRequireHumanCheck(unlockThrottle, DEFAULT_UNLOCK_POLICY) && !unlocked ? (
+            <div className="controls-row">
+              <span className="section-title">Human check</span>
+              <span className="tag">{unlockChallenge.prompt}</span>
+              <input
+                className="input"
+                value={unlockChallengeInput}
+                onChange={(event) => setUnlockChallengeInput(event.target.value)}
+                placeholder="answer required"
+                aria-label="Unlock human check"
+              />
+            </div>
+          ) : null}
+          <div className="status-line">
+            <span>unlock hardening</span>
+            <Chip label={unlockRateLimitEnabled ? "rate-limit:on" : "rate-limit:off"} tone={unlockRateLimitEnabled ? "accent" : "muted"} />
+            <Chip label={unlockHumanCheckEnabled ? "human-check:on" : "human-check:off"} tone={unlockHumanCheckEnabled ? "accent" : "muted"} />
+            {unlockBlockRemaining > 0 ? <span className="microcopy">blocked for {formatNumber(unlockBlockRemaining)}s</span> : null}
+          </div>
           <div className="status-line">
             <span>{tr("passphrase strength")}</span>
             <span className={gradeTagClass(passphraseAssessment.grade)}>{gradeLabel(passphraseAssessment.grade)}</span>
             <span className="microcopy">{tr("effective")} ≈ {formatNumber(passphraseAssessment.effectiveEntropyBits)} {tr("bits")}</span>
+          </div>
+          <div className="controls-row">
+            <label className="microcopy" style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+              <input
+                type="checkbox"
+                checked={unlockRateLimitEnabled}
+                onChange={(event) => {
+                  setUnlockRateLimitEnabled(event.target.checked);
+                  if (!event.target.checked) {
+                    setUnlockThrottle(clearUnlockFailures());
+                  }
+                }}
+                aria-label="Enable unlock rate limit"
+              />
+              rate limit unlock attempts
+            </label>
+            <label className="microcopy" style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+              <input
+                type="checkbox"
+                checked={unlockHumanCheckEnabled}
+                onChange={(event) => {
+                  setUnlockHumanCheckEnabled(event.target.checked);
+                  setUnlockChallenge(createHumanCheckChallenge());
+                  setUnlockChallengeInput("");
+                }}
+                aria-label="Enable unlock human check"
+              />
+              require human check after repeated failures
+            </label>
+            <label className="microcopy" style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+              <input
+                type="checkbox"
+                checked={sessionCookieEnabled}
+                onChange={(event) => {
+                  setSessionCookieEnabled(event.target.checked);
+                  if (!event.target.checked) {
+                    clearVaultSessionCookie();
+                    setSessionCookieState(null);
+                  }
+                }}
+                aria-label="Enable session cookie"
+              />
+              issue session cookie on unlock
+            </label>
+          </div>
+          <div className="controls-row">
+            <span className="section-title">MFA</span>
+            <Chip label={mfaCredential ? "enabled" : "disabled"} tone={mfaCredential ? "accent" : "muted"} />
+            <input
+              className="input"
+              value={mfaLabelInput}
+              onChange={(event) => setMfaLabelInput(event.target.value)}
+              placeholder="MFA label (optional)"
+              aria-label="MFA label"
+              disabled={Boolean(mfaCredential) || !unlocked}
+            />
+            <button className="button" type="button" onClick={() => void handleEnableMfa()} disabled={Boolean(mfaCredential) || !unlocked || mfaBusy}>
+              {mfaBusy ? "working…" : "enable mfa"}
+            </button>
+            <button className="button" type="button" onClick={handleDisableMfa} disabled={!mfaCredential}>
+              disable mfa
+            </button>
+          </div>
+          <div className="microcopy">
+            {mfaCredential
+              ? `MFA credential active${mfaCredential.label ? ` (${mfaCredential.label})` : ""}.`
+              : "MFA is optional. Enable it to require a WebAuthn prompt after passphrase unlock."}
+            {!isLocalMfaSupported() ? " WebAuthn is unavailable in this browser/runtime." : ""}
           </div>
           <div className="controls-row">
             <button className="button" type="button" onClick={() => openVaultExportDialog("plain")} disabled={!unlocked || notes.length === 0}>
@@ -595,6 +845,14 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
             <span className="microcopy">{tr("notes")}: {formatNumber(notes.length)}</span>
             <Chip label={`storage: ${backendInfo.kind}`} tone={backendInfo.fallbackReason ? "danger" : "muted"} />
             {backendInfo.fallbackReason && <span className="microcopy">fallback: {backendInfo.fallbackReason}</span>}
+          </div>
+          <div className="status-line">
+            <span>session cookie</span>
+            <Chip label={sessionCookieState?.active ? "active" : "inactive"} tone={sessionCookieState?.active ? "accent" : "muted"} />
+            <span className="microcopy">
+              {sessionCookieState?.warning ??
+                "Uses SameSite=Strict and Secure (when HTTPS). HttpOnly must be set from server/edge."}
+            </span>
           </div>
           <div className="status-line">
             <span>{tr("auto-lock")}</span>

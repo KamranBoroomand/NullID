@@ -53,6 +53,16 @@ test("encrypt and decrypt text renders output", async ({ page }) => {
   await expect(page.getByText("roundtrip text")).toBeVisible();
 });
 
+test("password storage hash lab keeps legacy options but warns", async ({ page }) => {
+  await openApp(page);
+  await page.getByRole("button", { name: /Password & Passphrase/i }).click();
+  await page.getByLabel("Password hash algorithm").selectOption("sha256");
+  await expect(page.getByText("Fast SHA digests are legacy-only for password storage")).toBeVisible();
+  await page.getByLabel("Password input for hashing").fill("playwright-secret");
+  await page.getByRole("button", { name: /generate hash/i }).click();
+  await expect(page.getByLabel("Generated password hash")).not.toHaveValue("");
+});
+
 test("download envelope button triggers download", async ({ page }) => {
   await openApp(page);
   await page.getByRole("button", { name: /Encrypt \/ Decrypt/i }).click();

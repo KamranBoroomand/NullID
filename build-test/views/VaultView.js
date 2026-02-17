@@ -10,6 +10,9 @@ import { analyzeSecret, gradeLabel } from "../utils/passwordToolkit";
 import { usePersistentState } from "../hooks/usePersistentState";
 import { SHARED_KEY_HINT_PROFILE_KEY, readLegacyProfiles, sanitizeKeyHint, } from "../utils/keyHintProfiles";
 import { useI18n } from "../i18n";
+import { DEFAULT_UNLOCK_POLICY, applyUnlockFailure, clearUnlockFailures, createHumanCheckChallenge, createUnlockThrottleState, isUnlockBlocked, shouldRequireHumanCheck, verifyHumanCheck, } from "../utils/unlockHardening";
+import { clearVaultSessionCookie, readVaultSessionCookie, setVaultSessionCookie } from "../utils/sessionSecurity";
+import { isLocalMfaSupported, registerLocalMfaCredential, verifyLocalMfaCredential } from "../utils/localMfa";
 export function VaultView({ onOpenGuide }) {
     const { push } = useToast();
     const { t, tr, formatDateTime, formatNumber } = useI18n();
@@ -47,6 +50,17 @@ export function VaultView({ onOpenGuide }) {
     const [reportDialogOpen, setReportDialogOpen] = useState(false);
     const [reportIncludeBodies, setReportIncludeBodies] = useState(false);
     const [wipeDialogOpen, setWipeDialogOpen] = useState(false);
+    const [unlockRateLimitEnabled, setUnlockRateLimitEnabled] = usePersistentState("nullid:vault:unlock-rate-limit", true);
+    const [unlockHumanCheckEnabled, setUnlockHumanCheckEnabled] = usePersistentState("nullid:vault:unlock-human-check", true);
+    const [unlockThrottle, setUnlockThrottle] = usePersistentState("nullid:vault:unlock-throttle", createUnlockThrottleState());
+    const [unlockChallenge, setUnlockChallenge] = useState(() => createHumanCheckChallenge());
+    const [unlockChallengeInput, setUnlockChallengeInput] = useState("");
+    const [unlockBlockRemaining, setUnlockBlockRemaining] = useState(0);
+    const [sessionCookieEnabled, setSessionCookieEnabled] = usePersistentState("nullid:vault:session-cookie-enabled", true);
+    const [sessionCookieState, setSessionCookieState] = useState(null);
+    const [mfaCredential, setMfaCredential] = usePersistentState("nullid:vault:mfa-credential", null);
+    const [mfaBusy, setMfaBusy] = useState(false);
+    const [mfaLabelInput, setMfaLabelInput] = useState("");
     const fileInputRef = useRef(null);
     const encryptedImportRef = useRef(null);
     const formatTs = useCallback((value) => formatDateTime(value), [formatDateTime]);
@@ -85,6 +99,8 @@ export function VaultView({ onOpenGuide }) {
         const deadline = Date.now() + autoLockSeconds * 1000;
         setLockDeadlineMs(deadline);
         const timer = window.setTimeout(() => {
+            clearVaultSessionCookie();
+            setSessionCookieState(null);
             setUnlocked(false);
             setKey(null);
             setNotes([]);
@@ -125,6 +141,31 @@ export function VaultView({ onOpenGuide }) {
         return () => window.clearInterval(timer);
     }, [lockDeadlineMs, unlocked]);
     useEffect(() => {
+        if (!unlockRateLimitEnabled) {
+            setUnlockBlockRemaining(0);
+            return;
+        }
+        const tick = () => {
+            const remaining = Math.max(0, Math.ceil((unlockThrottle.lockoutUntil - Date.now()) / 1000));
+            setUnlockBlockRemaining(remaining);
+        };
+        tick();
+        const timer = window.setInterval(tick, 1000);
+        return () => window.clearInterval(timer);
+    }, [unlockRateLimitEnabled, unlockThrottle.lockoutUntil]);
+    useEffect(() => {
+        const active = readVaultSessionCookie();
+        if (active) {
+            setSessionCookieState({
+                active: true,
+                secure: window.isSecureContext || window.location.protocol === "https:",
+            });
+        }
+        else {
+            setSessionCookieState(null);
+        }
+    }, []);
+    useEffect(() => {
         if (!unlocked)
             return;
         const handleActivity = () => resetLockTimer();
@@ -135,8 +176,34 @@ export function VaultView({ onOpenGuide }) {
     const handleUnlock = useCallback(async () => {
         if (!passphrase)
             return;
+        const now = Date.now();
+        if (unlockRateLimitEnabled && isUnlockBlocked(unlockThrottle, now)) {
+            const remaining = Math.max(1, Math.ceil((unlockThrottle.lockoutUntil - now) / 1000));
+            push(`unlock temporarily blocked (${remaining}s remaining)`, "danger");
+            return;
+        }
+        if (unlockHumanCheckEnabled && shouldRequireHumanCheck(unlockThrottle, DEFAULT_UNLOCK_POLICY)) {
+            const humanCheckPass = verifyHumanCheck(unlockChallenge, unlockChallengeInput);
+            if (!humanCheckPass) {
+                const failedState = unlockRateLimitEnabled
+                    ? applyUnlockFailure(unlockThrottle, Date.now(), DEFAULT_UNLOCK_POLICY)
+                    : { ...unlockThrottle, failures: unlockThrottle.failures + 1 };
+                setUnlockThrottle(failedState);
+                setUnlockChallenge(createHumanCheckChallenge());
+                setUnlockChallengeInput("");
+                const cooldown = Math.max(0, Math.ceil((failedState.lockoutUntil - Date.now()) / 1000));
+                push(cooldown > 0 ? `human check failed: retry after ${cooldown}s` : "human check failed", "danger");
+                return;
+            }
+        }
         try {
             const derived = await unlockVault(passphrase);
+            if (mfaCredential) {
+                const mfaVerified = await verifyLocalMfaCredential(mfaCredential);
+                if (!mfaVerified) {
+                    throw new Error("MFA verification failed");
+                }
+            }
             setKey(derived);
             setUnlocked(true);
             push("vault unlocked", "accent");
@@ -155,16 +222,54 @@ export function VaultView({ onOpenGuide }) {
             }));
             setNotes(decrypted.sort((a, b) => b.updatedAt - a.updatedAt));
             resetLockTimer();
+            setUnlockThrottle(clearUnlockFailures());
+            setUnlockChallengeInput("");
+            setUnlockChallenge(createHumanCheckChallenge());
+            if (sessionCookieEnabled) {
+                const cookie = setVaultSessionCookie(autoLockSeconds);
+                setSessionCookieState(cookie);
+                if (cookie.warning) {
+                    push(cookie.warning, cookie.secure ? "neutral" : "danger");
+                }
+            }
+            else {
+                clearVaultSessionCookie();
+                setSessionCookieState(null);
+            }
         }
         catch (error) {
             console.error(error);
-            push("unlock failed: passphrase or data invalid", "danger");
+            const nextState = unlockRateLimitEnabled
+                ? applyUnlockFailure(unlockThrottle, Date.now(), DEFAULT_UNLOCK_POLICY)
+                : { ...unlockThrottle, failures: unlockThrottle.failures + 1 };
+            setUnlockThrottle(nextState);
+            if (unlockHumanCheckEnabled) {
+                setUnlockChallenge(createHumanCheckChallenge());
+                setUnlockChallengeInput("");
+            }
+            const cooldown = Math.max(0, Math.ceil((nextState.lockoutUntil - Date.now()) / 1000));
+            push(cooldown > 0
+                ? `unlock failed: passphrase, MFA, or data invalid (retry in ${cooldown}s)`
+                : "unlock failed: passphrase, MFA, or data invalid", "danger");
             setUnlocked(false);
             setKey(null);
             setNotes([]);
             setBackendInfo(getVaultBackendInfo());
         }
-    }, [passphrase, push, resetLockTimer]);
+    }, [
+        autoLockSeconds,
+        mfaCredential,
+        passphrase,
+        push,
+        resetLockTimer,
+        sessionCookieEnabled,
+        unlockChallenge,
+        unlockChallengeInput,
+        unlockHumanCheckEnabled,
+        unlockRateLimitEnabled,
+        unlockThrottle,
+        setUnlockThrottle,
+    ]);
     const handleSave = useCallback(async () => {
         if (!key || !title.trim() || !body.trim())
             return;
@@ -215,6 +320,8 @@ export function VaultView({ onOpenGuide }) {
             window.clearTimeout(lockTimer);
             setLockTimer(null);
         }
+        clearVaultSessionCookie();
+        setSessionCookieState(null);
         setUnlocked(false);
         setKey(null);
         setLockDeadlineMs(null);
@@ -255,9 +362,43 @@ export function VaultView({ onOpenGuide }) {
     }, [resetLockTimer, unlocked]);
     const handleWipe = useCallback(async () => {
         await wipeVault();
+        setMfaCredential(null);
+        setUnlockThrottle(clearUnlockFailures());
+        clearVaultSessionCookie();
+        setSessionCookieState(null);
         handleLock();
         push("vault wiped", "danger");
-    }, [handleLock, push]);
+    }, [handleLock, push, setMfaCredential, setUnlockThrottle]);
+    const handleEnableMfa = useCallback(async () => {
+        if (!unlocked) {
+            push("unlock vault before enabling MFA", "danger");
+            return;
+        }
+        if (!isLocalMfaSupported()) {
+            push("WebAuthn MFA is unavailable in this browser", "danger");
+            return;
+        }
+        setMfaBusy(true);
+        try {
+            const credential = await registerLocalMfaCredential(mfaLabelInput);
+            setMfaCredential(credential);
+            push("MFA enabled (WebAuthn)", "accent");
+            setMfaLabelInput("");
+        }
+        catch (error) {
+            console.error(error);
+            const message = error instanceof Error ? error.message : "MFA enrollment failed";
+            push(message, "danger");
+        }
+        finally {
+            setMfaBusy(false);
+        }
+    }, [mfaLabelInput, push, setMfaCredential, unlocked]);
+    const handleDisableMfa = useCallback(() => {
+        setMfaCredential(null);
+        setMfaLabelInput("");
+        push("MFA disabled", "neutral");
+    }, [push, setMfaCredential]);
     const openVaultExportDialog = useCallback((mode) => {
         setVaultExportMode(mode);
         setVaultExportPassphrase("");
@@ -371,6 +512,8 @@ export function VaultView({ onOpenGuide }) {
             setBody("");
             setTags("");
             setActiveId(null);
+            clearVaultSessionCookie();
+            setSessionCookieState(null);
             const suffix = result.legacy ? "legacy" : result.signed ? (result.verified ? "signed+verified" : "signed") : "unsigned";
             push(`${vaultImportMode === "encrypted" ? "encrypted vault imported" : "vault imported"} (${result.noteCount} notes, ${suffix}); please unlock`, vaultImportMode === "encrypted" ? "accent" : "neutral");
             closeVaultImportDialog();
@@ -435,7 +578,24 @@ export function VaultView({ onOpenGuide }) {
             window.removeEventListener("keydown", onPanic);
         };
     }, [handleLock, push, unlocked]);
-    return (_jsxs("div", { className: "workspace-scroll", children: [_jsx("div", { className: "guide-link", children: _jsx("button", { type: "button", className: "guide-link-button", onClick: () => onOpenGuide?.("vault"), children: t("guide.link") }) }), _jsxs("div", { className: "grid-two", children: [_jsxs("div", { className: "panel", "aria-label": tr("Vault controls"), children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: tr("Secure Notes") }), _jsx("span", { className: "panel-subtext", children: "AES-GCM + PBKDF2" })] }), _jsxs("div", { className: "controls-row", children: [_jsx("input", { className: "input", type: "password", placeholder: tr("passphrase"), value: passphrase, onChange: (event) => setPassphrase(event.target.value), "aria-label": tr("Vault key") }), _jsx("button", { className: "button", type: "button", onClick: handleUnlock, disabled: unlocked || !passphrase, children: tr("unlock") }), _jsx("button", { className: "button", type: "button", onClick: handleLock, disabled: !unlocked, children: tr("lock") })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: tr("passphrase strength") }), _jsx("span", { className: gradeTagClass(passphraseAssessment.grade), children: gradeLabel(passphraseAssessment.grade) }), _jsxs("span", { className: "microcopy", children: [tr("effective"), " \u2248 ", formatNumber(passphraseAssessment.effectiveEntropyBits), " ", tr("bits")] })] }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", onClick: () => openVaultExportDialog("plain"), disabled: !unlocked || notes.length === 0, children: tr("export (json)") }), _jsx("button", { className: "button", type: "button", onClick: () => openVaultExportDialog("encrypted"), disabled: !unlocked || notes.length === 0, children: tr("export encrypted") }), _jsx("button", { className: "button", type: "button", onClick: handleImport, children: tr("import") }), _jsx("button", { className: "button", type: "button", onClick: () => encryptedImportRef.current?.click(), children: tr("import encrypted") }), _jsx("input", { ref: fileInputRef, type: "file", accept: "application/json", tabIndex: -1, style: { position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }, onChange: async (event) => {
+    return (_jsxs("div", { className: "workspace-scroll", children: [_jsx("div", { className: "guide-link", children: _jsx("button", { type: "button", className: "guide-link-button", onClick: () => onOpenGuide?.("vault"), children: t("guide.link") }) }), _jsxs("div", { className: "grid-two", children: [_jsxs("div", { className: "panel", "aria-label": tr("Vault controls"), children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: tr("Secure Notes") }), _jsx("span", { className: "panel-subtext", children: "AES-GCM + PBKDF2" })] }), _jsxs("div", { className: "controls-row", children: [_jsx("input", { className: "input", type: "password", placeholder: tr("passphrase"), value: passphrase, onChange: (event) => setPassphrase(event.target.value), "aria-label": tr("Vault key") }), _jsx("button", { className: "button", type: "button", onClick: handleUnlock, disabled: unlocked || !passphrase, children: tr("unlock") }), _jsx("button", { className: "button", type: "button", onClick: handleLock, disabled: !unlocked, children: tr("lock") })] }), unlockHumanCheckEnabled && shouldRequireHumanCheck(unlockThrottle, DEFAULT_UNLOCK_POLICY) && !unlocked ? (_jsxs("div", { className: "controls-row", children: [_jsx("span", { className: "section-title", children: "Human check" }), _jsx("span", { className: "tag", children: unlockChallenge.prompt }), _jsx("input", { className: "input", value: unlockChallengeInput, onChange: (event) => setUnlockChallengeInput(event.target.value), placeholder: "answer required", "aria-label": "Unlock human check" })] })) : null, _jsxs("div", { className: "status-line", children: [_jsx("span", { children: "unlock hardening" }), _jsx(Chip, { label: unlockRateLimitEnabled ? "rate-limit:on" : "rate-limit:off", tone: unlockRateLimitEnabled ? "accent" : "muted" }), _jsx(Chip, { label: unlockHumanCheckEnabled ? "human-check:on" : "human-check:off", tone: unlockHumanCheckEnabled ? "accent" : "muted" }), unlockBlockRemaining > 0 ? _jsxs("span", { className: "microcopy", children: ["blocked for ", formatNumber(unlockBlockRemaining), "s"] }) : null] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: tr("passphrase strength") }), _jsx("span", { className: gradeTagClass(passphraseAssessment.grade), children: gradeLabel(passphraseAssessment.grade) }), _jsxs("span", { className: "microcopy", children: [tr("effective"), " \u2248 ", formatNumber(passphraseAssessment.effectiveEntropyBits), " ", tr("bits")] })] }), _jsxs("div", { className: "controls-row", children: [_jsxs("label", { className: "microcopy", style: { display: "flex", alignItems: "center", gap: "0.35rem" }, children: [_jsx("input", { type: "checkbox", checked: unlockRateLimitEnabled, onChange: (event) => {
+                                                    setUnlockRateLimitEnabled(event.target.checked);
+                                                    if (!event.target.checked) {
+                                                        setUnlockThrottle(clearUnlockFailures());
+                                                    }
+                                                }, "aria-label": "Enable unlock rate limit" }), "rate limit unlock attempts"] }), _jsxs("label", { className: "microcopy", style: { display: "flex", alignItems: "center", gap: "0.35rem" }, children: [_jsx("input", { type: "checkbox", checked: unlockHumanCheckEnabled, onChange: (event) => {
+                                                    setUnlockHumanCheckEnabled(event.target.checked);
+                                                    setUnlockChallenge(createHumanCheckChallenge());
+                                                    setUnlockChallengeInput("");
+                                                }, "aria-label": "Enable unlock human check" }), "require human check after repeated failures"] }), _jsxs("label", { className: "microcopy", style: { display: "flex", alignItems: "center", gap: "0.35rem" }, children: [_jsx("input", { type: "checkbox", checked: sessionCookieEnabled, onChange: (event) => {
+                                                    setSessionCookieEnabled(event.target.checked);
+                                                    if (!event.target.checked) {
+                                                        clearVaultSessionCookie();
+                                                        setSessionCookieState(null);
+                                                    }
+                                                }, "aria-label": "Enable session cookie" }), "issue session cookie on unlock"] })] }), _jsxs("div", { className: "controls-row", children: [_jsx("span", { className: "section-title", children: "MFA" }), _jsx(Chip, { label: mfaCredential ? "enabled" : "disabled", tone: mfaCredential ? "accent" : "muted" }), _jsx("input", { className: "input", value: mfaLabelInput, onChange: (event) => setMfaLabelInput(event.target.value), placeholder: "MFA label (optional)", "aria-label": "MFA label", disabled: Boolean(mfaCredential) || !unlocked }), _jsx("button", { className: "button", type: "button", onClick: () => void handleEnableMfa(), disabled: Boolean(mfaCredential) || !unlocked || mfaBusy, children: mfaBusy ? "working…" : "enable mfa" }), _jsx("button", { className: "button", type: "button", onClick: handleDisableMfa, disabled: !mfaCredential, children: "disable mfa" })] }), _jsxs("div", { className: "microcopy", children: [mfaCredential
+                                        ? `MFA credential active${mfaCredential.label ? ` (${mfaCredential.label})` : ""}.`
+                                        : "MFA is optional. Enable it to require a WebAuthn prompt after passphrase unlock.", !isLocalMfaSupported() ? " WebAuthn is unavailable in this browser/runtime." : ""] }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", onClick: () => openVaultExportDialog("plain"), disabled: !unlocked || notes.length === 0, children: tr("export (json)") }), _jsx("button", { className: "button", type: "button", onClick: () => openVaultExportDialog("encrypted"), disabled: !unlocked || notes.length === 0, children: tr("export encrypted") }), _jsx("button", { className: "button", type: "button", onClick: handleImport, children: tr("import") }), _jsx("button", { className: "button", type: "button", onClick: () => encryptedImportRef.current?.click(), children: tr("import encrypted") }), _jsx("input", { ref: fileInputRef, type: "file", accept: "application/json", tabIndex: -1, style: { position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }, onChange: async (event) => {
                                             const file = event.target.files?.[0];
                                             await beginVaultImport(file, "plain");
                                             event.target.value = "";
@@ -443,7 +603,8 @@ export function VaultView({ onOpenGuide }) {
                                             const file = event.target.files?.[0];
                                             await beginVaultImport(file, "encrypted");
                                             event.target.value = "";
-                                        } }), _jsx("button", { className: "button", type: "button", onClick: () => setWipeDialogOpen(true), style: { borderColor: "var(--danger)", color: "var(--danger)" }, children: tr("wipe") })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: tr("state") }), _jsx(Chip, { label: unlocked ? tr("unsealed") : tr("locked"), tone: unlocked ? "accent" : "muted" }), _jsxs("span", { className: "microcopy", children: [tr("notes"), ": ", formatNumber(notes.length)] }), _jsx(Chip, { label: `storage: ${backendInfo.kind}`, tone: backendInfo.fallbackReason ? "danger" : "muted" }), backendInfo.fallbackReason && _jsxs("span", { className: "microcopy", children: ["fallback: ", backendInfo.fallbackReason] })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: tr("auto-lock") }), _jsx("span", { className: "tag", children: unlocked ? `${formatNumber(lockRemaining)}s` : tr("locked") }), _jsx("span", { className: "microcopy", children: unlocked ? tr("timer resets on activity") : tr("unlock to start timer") })] }), _jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", htmlFor: "vault-search", children: tr("Search") }), _jsx("input", { id: "vault-search", className: "input", placeholder: tr("Filter title, body, or tags"), value: filter, onChange: (event) => setFilter(event.target.value), disabled: !unlocked })] }), _jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", htmlFor: "auto-lock", children: tr("Auto lock (seconds)") }), _jsx("input", { id: "auto-lock", className: "input", type: "number", min: 30, max: 1800, value: autoLockSeconds, onChange: (event) => setAutoLockSeconds(Math.min(1800, Math.max(30, Number(event.target.value)))), disabled: !unlocked })] })] }), _jsxs("div", { className: "panel", "aria-label": tr("Create note form"), children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: activeId ? tr("Edit note") : tr("Create note") }), _jsx("span", { className: "panel-subtext", children: tr("encrypted body") })] }), _jsx("label", { className: "section-title", htmlFor: "note-title", children: tr("Title") }), _jsx("input", { id: "note-title", className: "input", placeholder: tr("Incident draft"), "aria-label": tr("Note title"), disabled: !unlocked, value: title, onChange: (event) => setTitle(event.target.value) }), _jsx("label", { className: "section-title", htmlFor: "note-body", children: tr("Body") }), _jsx("textarea", { id: "note-body", className: "textarea", placeholder: tr("Encrypted note body..."), "aria-label": tr("Note body"), disabled: !unlocked, value: body, onChange: (event) => setBody(event.target.value) }), _jsx("label", { className: "section-title", htmlFor: "note-tags", children: tr("Tags (comma separated)") }), _jsx("input", { id: "note-tags", className: "input", placeholder: tr("incident, access, case-142"), "aria-label": tr("Note tags"), disabled: !unlocked, value: tags, onChange: (event) => setTags(event.target.value) }), _jsxs("div", { className: "controls-row", children: [_jsx("span", { className: "section-title", children: tr("Templates") }), _jsxs("div", { className: "pill-buttons", role: "group", "aria-label": tr("Vault note templates"), children: [_jsx("button", { type: "button", className: template === "blank" ? "active" : "", onClick: () => applyTemplate("blank"), children: tr("blank") }), _jsx("button", { type: "button", className: template === "incident" ? "active" : "", onClick: () => applyTemplate("incident"), children: tr("incident") }), _jsx("button", { type: "button", className: template === "credentials" ? "active" : "", onClick: () => applyTemplate("credentials"), children: tr("credentials") }), _jsx("button", { type: "button", className: template === "checklist" ? "active" : "", onClick: () => applyTemplate("checklist"), children: tr("checklist") })] })] }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", disabled: !unlocked, onClick: handleSave, children: activeId ? tr("update") : tr("store") }), _jsx("button", { className: "button", type: "button", disabled: !unlocked, onClick: () => {
+                                        } }), _jsx("button", { className: "button", type: "button", onClick: () => setWipeDialogOpen(true), style: { borderColor: "var(--danger)", color: "var(--danger)" }, children: tr("wipe") })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: tr("state") }), _jsx(Chip, { label: unlocked ? tr("unsealed") : tr("locked"), tone: unlocked ? "accent" : "muted" }), _jsxs("span", { className: "microcopy", children: [tr("notes"), ": ", formatNumber(notes.length)] }), _jsx(Chip, { label: `storage: ${backendInfo.kind}`, tone: backendInfo.fallbackReason ? "danger" : "muted" }), backendInfo.fallbackReason && _jsxs("span", { className: "microcopy", children: ["fallback: ", backendInfo.fallbackReason] })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: "session cookie" }), _jsx(Chip, { label: sessionCookieState?.active ? "active" : "inactive", tone: sessionCookieState?.active ? "accent" : "muted" }), _jsx("span", { className: "microcopy", children: sessionCookieState?.warning ??
+                                            "Uses SameSite=Strict and Secure (when HTTPS). HttpOnly must be set from server/edge." })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: tr("auto-lock") }), _jsx("span", { className: "tag", children: unlocked ? `${formatNumber(lockRemaining)}s` : tr("locked") }), _jsx("span", { className: "microcopy", children: unlocked ? tr("timer resets on activity") : tr("unlock to start timer") })] }), _jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", htmlFor: "vault-search", children: tr("Search") }), _jsx("input", { id: "vault-search", className: "input", placeholder: tr("Filter title, body, or tags"), value: filter, onChange: (event) => setFilter(event.target.value), disabled: !unlocked })] }), _jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", htmlFor: "auto-lock", children: tr("Auto lock (seconds)") }), _jsx("input", { id: "auto-lock", className: "input", type: "number", min: 30, max: 1800, value: autoLockSeconds, onChange: (event) => setAutoLockSeconds(Math.min(1800, Math.max(30, Number(event.target.value)))), disabled: !unlocked })] })] }), _jsxs("div", { className: "panel", "aria-label": tr("Create note form"), children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: activeId ? tr("Edit note") : tr("Create note") }), _jsx("span", { className: "panel-subtext", children: tr("encrypted body") })] }), _jsx("label", { className: "section-title", htmlFor: "note-title", children: tr("Title") }), _jsx("input", { id: "note-title", className: "input", placeholder: tr("Incident draft"), "aria-label": tr("Note title"), disabled: !unlocked, value: title, onChange: (event) => setTitle(event.target.value) }), _jsx("label", { className: "section-title", htmlFor: "note-body", children: tr("Body") }), _jsx("textarea", { id: "note-body", className: "textarea", placeholder: tr("Encrypted note body..."), "aria-label": tr("Note body"), disabled: !unlocked, value: body, onChange: (event) => setBody(event.target.value) }), _jsx("label", { className: "section-title", htmlFor: "note-tags", children: tr("Tags (comma separated)") }), _jsx("input", { id: "note-tags", className: "input", placeholder: tr("incident, access, case-142"), "aria-label": tr("Note tags"), disabled: !unlocked, value: tags, onChange: (event) => setTags(event.target.value) }), _jsxs("div", { className: "controls-row", children: [_jsx("span", { className: "section-title", children: tr("Templates") }), _jsxs("div", { className: "pill-buttons", role: "group", "aria-label": tr("Vault note templates"), children: [_jsx("button", { type: "button", className: template === "blank" ? "active" : "", onClick: () => applyTemplate("blank"), children: tr("blank") }), _jsx("button", { type: "button", className: template === "incident" ? "active" : "", onClick: () => applyTemplate("incident"), children: tr("incident") }), _jsx("button", { type: "button", className: template === "credentials" ? "active" : "", onClick: () => applyTemplate("credentials"), children: tr("credentials") }), _jsx("button", { type: "button", className: template === "checklist" ? "active" : "", onClick: () => applyTemplate("checklist"), children: tr("checklist") })] })] }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", disabled: !unlocked, onClick: handleSave, children: activeId ? tr("update") : tr("store") }), _jsx("button", { className: "button", type: "button", disabled: !unlocked, onClick: () => {
                                             setTitle("");
                                             setBody("");
                                             setTags("");
