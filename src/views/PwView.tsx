@@ -416,7 +416,8 @@ export function PwView({ onOpenGuide }: PwViewProps) {
           </div>
           <div className="note-box">
             <div className="microcopy">
-              {tr("effective entropy")} ≈ {formatNumber(passwordAssessment.effectiveEntropyBits)} {tr("bits")} · {tr("online crack")}: {passwordAssessment.crackTime.online}
+              {tr("effective entropy")} ≈ {formatNumber(passwordAssessment.effectiveEntropyBits)} {tr("bits")} · {tr("online crack")} (rate-limited median):{" "}
+              {passwordAssessment.crackTime.online}
             </div>
             {passwordAssessment.warnings.length > 0 ? (
               <ul className="note-list">
@@ -588,7 +589,8 @@ export function PwView({ onOpenGuide }: PwViewProps) {
           </div>
           <div className="note-box">
             <div className="microcopy">
-              {tr("bits/word")} ≈ {dictionary.bitsPerWord.toFixed(2)} · {tr("offline crack")}: {passphraseAssessment.crackTime.offline}
+              {tr("bits/word")} ≈ {dictionary.bitsPerWord.toFixed(2)} · {tr("offline crack")} (slow-KDF median):{" "}
+              {passphraseAssessment.crackTime.offline}
             </div>
             {passphraseAssessment.warnings.length > 0 ? (
               <ul className="note-list">
@@ -622,8 +624,21 @@ export function PwView({ onOpenGuide }: PwViewProps) {
           </div>
           <div className="note-box">
             <div className="microcopy">
-              {tr("online")}: {labAssessment.crackTime.online} · {tr("offline")}: {labAssessment.crackTime.offline}
+              {tr("online")} (rate-limited median): {labAssessment.crackTime.online} · {tr("offline")} (slow-KDF median):{" "}
+              {labAssessment.crackTime.offline}
             </div>
+            <ul className="note-list">
+              {labAssessment.crackTime.scenarios.map((scenario) => (
+                <li key={scenario.key}>
+                  {scenario.label}: median {scenario.median}, worst-case {scenario.worstCase} @ {formatGuessRate(scenario.guessesPerSecond)}
+                </li>
+              ))}
+            </ul>
+            <ul className="note-list">
+              {labAssessment.crackTime.assumptions.map((assumption) => (
+                <li key={assumption}>{assumption}</li>
+              ))}
+            </ul>
             <ul className="note-list">
               {labAssessment.warnings.length > 0 ? (
                 labAssessment.warnings.map((warning) => <li key={warning}>{warning}</li>)
@@ -912,4 +927,12 @@ function hashSafetyTagClass(safety: HashSafety): string {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function formatGuessRate(rate: number): string {
+  if (rate >= 1_000_000_000) return `${(rate / 1_000_000_000).toFixed(1)}B guesses/s`;
+  if (rate >= 1_000_000) return `${(rate / 1_000_000).toFixed(1)}M guesses/s`;
+  if (rate >= 1_000) return `${(rate / 1_000).toFixed(1)}K guesses/s`;
+  if (rate >= 1) return `${Math.round(rate)} guesses/s`;
+  return `${rate.toFixed(2)} guesses/s`;
 }

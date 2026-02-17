@@ -105,4 +105,18 @@ describe("password toolkit", () => {
         assert.equal(weak.effectiveEntropyBits < strong.effectiveEntropyBits, true);
         assert.equal(weak.warnings.length > 0, true);
     });
+    it("returns scenario-based crack-time estimates with consistent ordering", () => {
+        const weak = analyzeSecret("password123");
+        const strong = analyzeSecret("Q7$wLm2!kP9@rT5#");
+        const weakRateLimited = weak.crackTime.scenarios.find((entry) => entry.key === "online-rate-limited");
+        const weakUnthrottled = weak.crackTime.scenarios.find((entry) => entry.key === "online-unthrottled");
+        const weakSlowKdf = weak.crackTime.scenarios.find((entry) => entry.key === "offline-slow-kdf");
+        const weakFastHash = weak.crackTime.scenarios.find((entry) => entry.key === "offline-fast-hash");
+        assert.equal(Boolean(weakRateLimited && weakUnthrottled && weakSlowKdf && weakFastHash), true);
+        assert.equal((weakRateLimited?.medianLog10Seconds ?? 0) > (weakUnthrottled?.medianLog10Seconds ?? 0), true);
+        assert.equal((weakSlowKdf?.medianLog10Seconds ?? 0) > (weakFastHash?.medianLog10Seconds ?? 0), true);
+        const strongSlowKdf = strong.crackTime.scenarios.find((entry) => entry.key === "offline-slow-kdf");
+        assert.equal((strongSlowKdf?.medianLog10Seconds ?? 0) > (weakSlowKdf?.medianLog10Seconds ?? 0), true);
+        assert.equal(strong.crackTime.assumptions.length >= 3, true);
+    });
 });

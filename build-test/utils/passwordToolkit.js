@@ -167,6 +167,12 @@ const sequentialSources = [
     "0123456789",
     "qwertyuiopasdfghjklzxcvbnm",
 ];
+const crackScenarioConfigs = [
+    { key: "online-rate-limited", label: "online (rate-limited)", guessesPerSecond: 0.1 },
+    { key: "online-unthrottled", label: "online (no rate limit)", guessesPerSecond: 10 },
+    { key: "offline-slow-kdf", label: "offline (slow KDF)", guessesPerSecond: 100_000 },
+    { key: "offline-fast-hash", label: "offline (fast hash)", guessesPerSecond: 10_000_000_000 },
+];
 export function generatePassword(settings) {
     const pools = buildPools(settings);
     const selectedPools = pools.length > 0 ? pools : [lowercaseChars, uppercaseChars];
@@ -266,7 +272,7 @@ export function analyzeSecret(secret, theoreticalEntropyBits) {
             effectiveEntropyBits: 0,
             warnings: ["empty secret"],
             strengths: [],
-            crackTime: { online: "<1 second", offline: "<1 second" },
+            crackTime: buildCrackTimeReport(0),
         };
     }
     const warnings = [];
@@ -325,10 +331,7 @@ export function analyzeSecret(secret, theoreticalEntropyBits) {
         effectiveEntropyBits: effective,
         warnings,
         strengths,
-        crackTime: {
-            online: estimateCrackTime(effective, 100),
-            offline: estimateCrackTime(effective, 10_000_000_000),
-        },
+        crackTime: buildCrackTimeReport(effective),
     };
 }
 export function gradeLabel(grade) {
@@ -521,44 +524,69 @@ function mapEntropyToGrade(bits) {
         return "strong";
     return "elite";
 }
-function estimateCrackTime(bits, guessesPerSecond) {
-    if (bits <= 0)
-        return "<1 second";
-    const log10Seconds = bits * log10Two - Math.log10(guessesPerSecond);
-    return formatLogDuration(log10Seconds);
+function buildCrackTimeReport(bits) {
+    const scenarios = crackScenarioConfigs.map((config) => {
+        const log10Guesses = bits * log10Two;
+        const log10Rate = Math.log10(Math.max(config.guessesPerSecond, 1e-12));
+        const medianLog10Seconds = log10Guesses - log10Rate - log10Two;
+        const worstCaseLog10Seconds = log10Guesses - log10Rate;
+        return {
+            key: config.key,
+            label: config.label,
+            guessesPerSecond: config.guessesPerSecond,
+            median: formatLogDuration(medianLog10Seconds),
+            worstCase: formatLogDuration(worstCaseLog10Seconds),
+            medianLog10Seconds,
+            worstCaseLog10Seconds,
+        };
+    });
+    const online = scenarios.find((scenario) => scenario.key === "online-rate-limited")?.median ?? "<1 second";
+    const offline = scenarios.find((scenario) => scenario.key === "offline-slow-kdf")?.median ?? "<1 second";
+    return {
+        online,
+        offline,
+        scenarios,
+        assumptions: [
+            "median time assumes attacker finds the secret halfway through the search space",
+            "online estimates depend heavily on login rate limits, lockout, and MFA",
+            "offline fast-hash estimates are for unsafely stored passwords with fast digests",
+            "offline slow-KDF estimates align with PBKDF2/Argon2-style password storage",
+        ],
+    };
 }
 function formatLogDuration(log10Seconds) {
-    if (!Number.isFinite(log10Seconds) || log10Seconds > 30)
-        return "astronomical";
+    if (!Number.isFinite(log10Seconds))
+        return "unknown";
     if (log10Seconds < 0)
         return "<1 second";
-    if (log10Seconds < 12) {
-        const seconds = 10 ** log10Seconds;
-        return formatDuration(seconds);
+    const units = [
+        { name: "year", seconds: 31_557_600 },
+        { name: "day", seconds: 86_400 },
+        { name: "hour", seconds: 3_600 },
+        { name: "minute", seconds: 60 },
+        { name: "second", seconds: 1 },
+    ];
+    for (const unit of units) {
+        const log10Unit = Math.log10(unit.seconds);
+        if (log10Seconds < log10Unit)
+            continue;
+        const log10Value = log10Seconds - log10Unit;
+        if (log10Value > 8) {
+            return `~10^${log10Value.toFixed(1)} ${unit.name}${log10Value > 0 ? "s" : ""}`;
+        }
+        const value = 10 ** log10Value;
+        return `${formatCompactNumber(value)} ${unit.name}${value >= 2 ? "s" : ""}`;
     }
-    const log10Years = log10Seconds - Math.log10(31_557_600);
-    if (log10Years > 8) {
-        return `~10^${log10Years.toFixed(1)} years`;
-    }
-    const years = 10 ** log10Years;
-    return `~${Math.round(years).toLocaleString()} years`;
+    return "<1 second";
 }
-function formatDuration(seconds) {
-    if (seconds < 1)
-        return "<1 second";
-    if (seconds < 60)
-        return `${Math.ceil(seconds)} seconds`;
-    const minutes = seconds / 60;
-    if (minutes < 60)
-        return `${Math.ceil(minutes)} minutes`;
-    const hours = minutes / 60;
-    if (hours < 24)
-        return `${Math.ceil(hours)} hours`;
-    const days = hours / 24;
-    if (days < 365)
-        return `${Math.ceil(days)} days`;
-    const years = days / 365;
-    return `${Math.round(years).toLocaleString()} years`;
+function formatCompactNumber(value) {
+    if (!Number.isFinite(value))
+        return "unknown";
+    if (value < 10)
+        return value.toFixed(1).replace(/\.0$/u, "");
+    if (value < 1_000)
+        return Math.round(value).toLocaleString();
+    return value.toExponential(1).replace("e+", "e");
 }
 function randomIndex(max) {
     if (max <= 0)
