@@ -1,4 +1,5 @@
 import "./OnboardingTour.css";
+import { useI18n } from "../i18n";
 
 export interface OnboardingStep {
   id: string;
@@ -18,25 +19,26 @@ interface OnboardingTourProps {
 }
 
 export function OnboardingTour({ open, stepIndex, steps, onStepIndexChange, onSkip, onFinish }: OnboardingTourProps) {
+  const { t } = useI18n();
   if (!open || steps.length === 0) return null;
   const step = steps[Math.min(stepIndex, steps.length - 1)];
   const isFirst = stepIndex === 0;
   const isLast = stepIndex >= steps.length - 1;
 
   return (
-    <div className="tour-overlay" role="dialog" aria-modal="true" aria-label="Onboarding tour">
+    <div className="tour-overlay" role="dialog" aria-modal="true" aria-label={t("onboarding.dialog")}>
       <div className="tour-panel">
         <div className="tour-meta">
-          <span className="tour-step">{`step ${stepIndex + 1}/${steps.length}`}</span>
+          <span className="tour-step">{t("onboarding.step", { current: stepIndex + 1, total: steps.length })}</span>
           <button type="button" className="button" onClick={onSkip}>
-            skip
+            {t("onboarding.skip")}
           </button>
         </div>
         <h2 className="tour-title">{step.title}</h2>
         <p className="tour-body">{step.body}</p>
         <div className="tour-actions">
           <button type="button" className="button" onClick={() => onStepIndexChange(Math.max(0, stepIndex - 1))} disabled={isFirst}>
-            back
+            {t("onboarding.back")}
           </button>
           {step.actionLabel && step.onAction ? (
             <button type="button" className="button" onClick={step.onAction}>
@@ -45,11 +47,11 @@ export function OnboardingTour({ open, stepIndex, steps, onStepIndexChange, onSk
           ) : null}
           {isLast ? (
             <button type="button" className="button" onClick={onFinish}>
-              finish
+              {t("onboarding.finish")}
             </button>
           ) : (
             <button type="button" className="button" onClick={() => onStepIndexChange(stepIndex + 1)}>
-              next
+              {t("onboarding.next")}
             </button>
           )}
         </div>

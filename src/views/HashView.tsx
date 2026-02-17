@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Chip } from "../components/Chip";
 import { useToast } from "../components/ToastHost";
+import { useI18n } from "../i18n";
 import "./styles.css";
 import type { HashAlgorithm } from "../utils/hash";
 import { expectedHashLengths, hashFile, hashText, normalizeHashInput } from "../utils/hash";
@@ -28,6 +29,7 @@ type HashSource =
 
 export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewProps) {
   const { push } = useToast();
+  const { t } = useI18n();
   const [clipboardPrefs] = useClipboardPrefs();
   const [algorithm, setAlgorithm] = useState<HashAlgorithm>("SHA-256");
   const [displayFormat, setDisplayFormat] = useState<HashDisplayFormat>("hex");
@@ -395,7 +397,7 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
     <div className="workspace-scroll">
       <div className="guide-link">
         <button type="button" className="guide-link-button" onClick={() => onOpenGuide?.("hash")}>
-          ? guide
+          {t("guide.link")}
         </button>
       </div>
       <div className="grid-two">

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useI18n } from "../i18n";
 import "./ModuleList.css";
 
 export type ModuleKey =
@@ -25,6 +26,7 @@ interface ModuleListProps {
 }
 
 export function ModuleList({ modules, active, onSelect }: ModuleListProps) {
+  const { t } = useI18n();
   const buttonsRef = useRef<(HTMLButtonElement | null)[]>([]);
   const activeIndex = useMemo(() => Math.max(0, modules.findIndex((module) => module.key === active)), [active, modules]);
   const [focusIndex, setFocusIndex] = useState(activeIndex);
@@ -43,10 +45,10 @@ export function ModuleList({ modules, active, onSelect }: ModuleListProps) {
   return (
     <div className="module-list">
       <div className="module-header">
-        <div className="module-title">Tools</div>
-        <div className="module-subtitle">Navigate</div>
+        <div className="module-title">{t("app.tools")}</div>
+        <div className="module-subtitle">{t("app.navigate")}</div>
       </div>
-      <nav aria-label="Module list">
+      <nav aria-label={t("app.moduleList")}>
         <ul>
           {modules.map((module, index) => (
             <li key={module.key}>

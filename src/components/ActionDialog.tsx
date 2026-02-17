@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from "react";
+import { useI18n } from "../i18n";
 import "./ActionDialog.css";
 
 interface ActionDialogProps {
@@ -18,14 +19,15 @@ export function ActionDialog({
   open,
   title,
   description,
-  confirmLabel = "confirm",
-  cancelLabel = "cancel",
+  confirmLabel,
+  cancelLabel,
   confirmDisabled,
   danger = false,
   onConfirm,
   onCancel,
   children,
 }: ActionDialogProps) {
+  const { t } = useI18n();
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
@@ -60,10 +62,10 @@ export function ActionDialog({
         {children ? <div className="action-dialog-body">{children}</div> : null}
         <div className="action-dialog-actions">
           <button type="button" className="button" onClick={onCancel}>
-            {cancelLabel}
+            {cancelLabel ?? t("app.cancel")}
           </button>
           <button type="button" className={`button ${danger ? "action-dialog-danger" : ""}`} onClick={onConfirm} disabled={confirmDisabled}>
-            {confirmLabel}
+            {confirmLabel ?? t("app.confirm")}
           </button>
         </div>
       </div>

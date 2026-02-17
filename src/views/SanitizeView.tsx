@@ -30,6 +30,7 @@ import {
   type SanitizePolicyConfig,
 } from "../utils/sanitizeEngine";
 import type { ModuleKey } from "../components/ModuleList";
+import { useI18n } from "../i18n";
 import {
   SHARED_KEY_HINT_PROFILE_KEY,
   readLegacyProfiles,
@@ -50,6 +51,7 @@ const defaultRules = Object.fromEntries(ruleKeys.map((key) => [key, true])) as R
 
 export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
   const { push } = useToast();
+  const { t } = useI18n();
   const [clipboardPrefs] = useClipboardPrefs();
   const [log, setLog] = useState(sanitizePresets.nginx.sample);
   const [rulesState, setRulesState] = usePersistentState<RulesState>("nullid:sanitize:rules", defaultRules);
@@ -488,7 +490,7 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
     <div className="workspace-scroll">
       <div className="guide-link">
         <button type="button" className="guide-link-button" onClick={() => onOpenGuide?.("sanitize")}>
-          ? guide
+          {t("guide.link")}
         </button>
       </div>
       <div className="grid-two">

@@ -1,7 +1,9 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useI18n } from "../i18n";
 import "./ModuleList.css";
 export function ModuleList({ modules, active, onSelect }) {
+    const { t } = useI18n();
     const buttonsRef = useRef([]);
     const activeIndex = useMemo(() => Math.max(0, modules.findIndex((module) => module.key === active)), [active, modules]);
     const [focusIndex, setFocusIndex] = useState(activeIndex);
@@ -15,7 +17,7 @@ export function ModuleList({ modules, active, onSelect }) {
         setFocusIndex(nextIndex);
         buttonsRef.current[nextIndex]?.focus();
     };
-    return (_jsxs("div", { className: "module-list", children: [_jsxs("div", { className: "module-header", children: [_jsx("div", { className: "module-title", children: "Tools" }), _jsx("div", { className: "module-subtitle", children: "Navigate" })] }), _jsx("nav", { "aria-label": "Module list", children: _jsx("ul", { children: modules.map((module, index) => (_jsx("li", { children: _jsxs("button", { ref: (el) => {
+    return (_jsxs("div", { className: "module-list", children: [_jsxs("div", { className: "module-header", children: [_jsx("div", { className: "module-title", children: t("app.tools") }), _jsx("div", { className: "module-subtitle", children: t("app.navigate") })] }), _jsx("nav", { "aria-label": t("app.moduleList"), children: _jsx("ul", { children: modules.map((module, index) => (_jsx("li", { children: _jsxs("button", { ref: (el) => {
                                 buttonsRef.current[index] = el;
                             }, type: "button", className: `module-button ${active === module.key ? "active" : ""}`, onClick: () => {
                                 setFocusIndex(index);

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { usePersistentState } from "../hooks/usePersistentState";
 import { useToast } from "./ToastHost";
 import type { ModuleKey } from "./ModuleList";
+import { useI18n } from "../i18n";
 import "./FeedbackWidget.css";
 
 interface FeedbackEntry {
@@ -21,6 +22,7 @@ const storageKey = "nullid:feedback-log";
 
 export function FeedbackWidget({ activeModule }: FeedbackWidgetProps) {
   const { push } = useToast();
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [category, setCategory] = usePersistentState<FeedbackEntry["category"]>("nullid:feedback-category", "idea");
   const [priority, setPriority] = usePersistentState<FeedbackEntry["priority"]>("nullid:feedback-priority", "medium");
@@ -74,61 +76,61 @@ export function FeedbackWidget({ activeModule }: FeedbackWidgetProps) {
   return (
     <div className="feedback-widget">
       {open ? (
-        <div className="feedback-panel" aria-label="Feedback panel">
+        <div className="feedback-panel" aria-label={t("feedback.panel")}>
           <div className="feedback-header">
-            <span className="section-title">Feedback</span>
-            <button type="button" className="button" onClick={() => setOpen(false)} aria-label="Close feedback panel">
-              close
+            <span className="section-title">{t("feedback.title")}</span>
+            <button type="button" className="button" onClick={() => setOpen(false)} aria-label={t("feedback.close")}>
+              {t("feedback.close")}
             </button>
           </div>
           <div className="microcopy">
-            Stored locally only ({entryCount} saved). Use export to share.
+            {t("feedback.stored", { count: entryCount })}
           </div>
           <div className="controls-row">
             <select
               className="select"
               value={category}
               onChange={(event) => setCategory(event.target.value as FeedbackEntry["category"])}
-              aria-label="Feedback category"
+              aria-label={t("feedback.category")}
             >
-              <option value="idea">idea</option>
-              <option value="bug">bug</option>
-              <option value="ux">ux</option>
-              <option value="performance">performance</option>
+              <option value="idea">{t("feedback.idea")}</option>
+              <option value="bug">{t("feedback.bug")}</option>
+              <option value="ux">{t("feedback.ux")}</option>
+              <option value="performance">{t("feedback.performance")}</option>
             </select>
             <select
               className="select"
               value={priority}
               onChange={(event) => setPriority(event.target.value as FeedbackEntry["priority"])}
-              aria-label="Feedback priority"
+              aria-label={t("feedback.priority")}
             >
-              <option value="low">low</option>
-              <option value="medium">medium</option>
-              <option value="high">high</option>
+              <option value="low">{t("feedback.low")}</option>
+              <option value="medium">{t("feedback.medium")}</option>
+              <option value="high">{t("feedback.high")}</option>
             </select>
           </div>
           <textarea
             className="textarea"
             value={message}
             onChange={(event) => setMessage(event.target.value)}
-            placeholder={`Context: :${activeModule} (what worked, what broke, what should be added)`}
-            aria-label="Feedback message"
+            placeholder={t("feedback.context", { module: activeModule })}
+            aria-label={t("feedback.message")}
           />
           <div className="controls-row">
             <button className="button" type="button" onClick={handleSave} disabled={!canSave}>
-              save local
+              {t("feedback.save")}
             </button>
             <button className="button" type="button" onClick={handleExport} disabled={entryCount === 0}>
-              export json
+              {t("feedback.export")}
             </button>
             <button className="button" type="button" onClick={() => setMessage("")}>
-              clear draft
+              {t("feedback.clear")}
             </button>
           </div>
         </div>
       ) : (
-        <button type="button" className="button feedback-launcher" onClick={() => setOpen(true)} aria-label="Open feedback">
-          feedback
+        <button type="button" className="button feedback-launcher" onClick={() => setOpen(true)} aria-label={t("feedback.open")}>
+          {t("feedback.launcher")}
         </button>
       )}
     </div>

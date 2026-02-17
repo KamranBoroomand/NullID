@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./CommandPalette.css";
 import { useCommandHistory } from "../hooks/useCommandHistory";
+import { useI18n } from "../i18n";
 
 export interface CommandItem {
   id: string;
@@ -22,6 +23,7 @@ interface CommandPaletteProps {
 }
 
 export function CommandPalette({ open, commands, completions = [], historyKey = "palette", onClose, onSelect }: CommandPaletteProps) {
+  const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -132,7 +134,7 @@ export function CommandPalette({ open, commands, completions = [], historyKey = 
   if (!open) return null;
 
   return (
-    <div className="command-overlay" role="dialog" aria-modal="true" aria-label="Command palette">
+    <div className="command-overlay" role="dialog" aria-modal="true" aria-label={t("app.commandPalette")}>
       <div className="command-surface">
         <div className="command-field">
           <span aria-hidden="true">/</span>
@@ -140,13 +142,13 @@ export function CommandPalette({ open, commands, completions = [], historyKey = 
             ref={inputRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Type a command or tool…"
+            placeholder={t("app.commandInputPlaceholder")}
             onKeyDown={handleKeyDown}
-            aria-label="Search commands"
+            aria-label={t("app.searchCommands")}
           />
         </div>
-        <div className="command-results" role="listbox" aria-label="Commands">
-          {grouped.length === 0 && <div className="command-empty">No commands</div>}
+        <div className="command-results" role="listbox" aria-label={t("app.commandsList")}>
+          {grouped.length === 0 && <div className="command-empty">{t("app.noCommands")}</div>}
           {grouped.map(([group, items]) => (
             <div className="command-group" key={group}>
               <div className="command-group-title">{group}</div>
@@ -185,7 +187,7 @@ export function CommandPalette({ open, commands, completions = [], historyKey = 
           ))}
         </div>
       </div>
-      <button type="button" className="command-dismiss" aria-label="Close command palette" onClick={onClose} />
+      <button type="button" className="command-dismiss" aria-label={t("app.closeCommandPalette")} onClick={onClose} />
     </div>
   );
 }

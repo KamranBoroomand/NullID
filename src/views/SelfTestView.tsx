@@ -7,6 +7,7 @@ import { probeCanvasEncodeSupport } from "../utils/imageFormats";
 import { useToast } from "../components/ToastHost";
 import type { ModuleKey } from "../components/ModuleList";
 import { usePersistentState } from "../hooks/usePersistentState";
+import { useI18n } from "../i18n";
 
 interface SelfTestViewProps {
   onOpenGuide?: (key?: ModuleKey) => void;
@@ -79,6 +80,7 @@ const initialResults = Object.fromEntries(checkKeys.map((key) => [key, "idle"]))
 
 export function SelfTestView({ onOpenGuide }: SelfTestViewProps) {
   const { push } = useToast();
+  const { t, formatDateTime } = useI18n();
   const [results, setResults] = useState<Record<string, ExtendedResult>>(initialResults);
   const [details, setDetails] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("ready");
@@ -340,7 +342,7 @@ export function SelfTestView({ onOpenGuide }: SelfTestViewProps) {
     <div className="workspace-scroll">
       <div className="guide-link">
         <button type="button" className="guide-link-button" onClick={() => onOpenGuide?.("guide")}>
-          ? guide
+          {t("guide.link")}
         </button>
       </div>
       <div className="panel">
@@ -385,7 +387,7 @@ export function SelfTestView({ onOpenGuide }: SelfTestViewProps) {
           <span className="tag tag-accent">pass {summary.pass}</span>
           <span className="microcopy">health score {summary.healthScore}/100</span>
         </div>
-        <div className="microcopy">last run: {lastRunAt ? new Date(lastRunAt).toLocaleString() : "never"}</div>
+        <div className="microcopy">last run: {lastRunAt ? formatDateTime(lastRunAt) : "never"}</div>
         <ul className="note-list">
           {checks.map((item) => {
             const result = results[item.key] ?? "idle";

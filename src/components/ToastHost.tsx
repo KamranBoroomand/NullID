@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { useI18n } from "../i18n";
 import "./ToastHost.css";
 
 export type ToastTone = "accent" | "neutral" | "danger";
@@ -18,6 +19,7 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const { tr } = useI18n();
 
   const push = useCallback((message: string, tone: ToastTone = "neutral") => {
     const id = crypto.randomUUID();
@@ -37,7 +39,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <div className="toast-host" role="status" aria-live="polite">
         {toasts.map((toast) => (
           <div key={toast.id} className={`toast toast-${toast.tone}`}>
-            {toast.message}
+            {tr(toast.message)}
           </div>
         ))}
       </div>

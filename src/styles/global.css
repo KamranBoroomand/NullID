@@ -16,6 +16,18 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+html[dir="rtl"] body {
+  direction: rtl;
+}
+
+html[dir="rtl"] .module-key,
+html[dir="rtl"] .page-token,
+html[dir="rtl"] .chip,
+html[dir="rtl"] .tag {
+  direction: ltr;
+  unicode-bidi: plaintext;
+}
+
 html,
 body,
 #root {

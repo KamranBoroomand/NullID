@@ -39,4 +39,13 @@ describe("sanitize engine", () => {
         assert.equal(outputs[0].output.includes("[email]"), true);
         assert.equal(outputs[1].output.includes("[ip]"), true);
     });
+    it("masks Persian/Russian phone numbers and Iran national IDs", () => {
+        const state = buildRulesState(["maskPhoneIntl", "maskIranNationalId"]);
+        const input = "fa: ۰۹۱۲۳۴۵۶۷۸۹ id: ۱۰۰۰۰۰۰۰۰۱ ru: +7 (912) 345-67-89";
+        const result = applySanitizeRules(input, state, [], false);
+        assert.equal(result.output.includes("[phone]"), true);
+        assert.equal(result.output.includes("[iran-id]"), true);
+        assert.equal(result.applied.includes("maskPhoneIntl"), true);
+        assert.equal(result.applied.includes("maskIranNationalId"), true);
+    });
 });

@@ -6,6 +6,7 @@ import { useToast } from "../components/ToastHost";
 import { usePersistentState } from "../hooks/usePersistentState";
 import { resolveOverlaps } from "../utils/redaction";
 import { useClipboardPrefs, writeClipboard } from "../utils/clipboard";
+import { useI18n } from "../i18n";
 const detectors = [
     {
         key: "email",
@@ -17,9 +18,26 @@ const detectors = [
     {
         key: "phone",
         label: "Phone",
-        regex: /\b(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4}\b/g,
+        regex: /(?:\+|00)?[0-9\u06F0-\u06F9\u0660-\u0669][0-9\u06F0-\u06F9\u0660-\u0669().\-\s]{7,18}[0-9\u06F0-\u06F9\u0660-\u0669]/g,
         severity: "low",
         mask: "[phone]",
+        validate: isLikelyPhone,
+    },
+    {
+        key: "iran-id",
+        label: "Iran national ID",
+        regex: /(?<![0-9\u06F0-\u06F9\u0660-\u0669])[0-9\u06F0-\u06F9\u0660-\u0669]{10}(?![0-9\u06F0-\u06F9\u0660-\u0669])/g,
+        severity: "high",
+        mask: "[iran-id]",
+        validate: isValidIranNationalId,
+    },
+    {
+        key: "ru-phone",
+        label: "Russia phone",
+        regex: /(?:\+7|8)[\s(-]*[0-9\u06F0-\u06F9\u0660-\u0669]{3}[\s)-]*[0-9\u06F0-\u06F9\u0660-\u0669]{3}[\s-]*[0-9\u06F0-\u06F9\u0660-\u0669]{2}[\s-]*[0-9\u06F0-\u06F9\u0660-\u0669]{2}/g,
+        severity: "medium",
+        mask: "[ru-phone]",
+        validate: isLikelyPhone,
     },
     {
         key: "token",
@@ -82,6 +100,7 @@ const detectors = [
 ];
 export function RedactView({ onOpenGuide }) {
     const { push } = useToast();
+    const { t } = useI18n();
     const [clipboardPrefs] = useClipboardPrefs();
     const [input, setInput] = useState("");
     const [maskMode, setMaskMode] = usePersistentState("nullid:redact:mask", "full");
@@ -174,7 +193,7 @@ export function RedactView({ onOpenGuide }) {
         URL.revokeObjectURL(url);
         push("redaction report exported", "accent");
     };
-    return (_jsxs("div", { className: "workspace-scroll", children: [_jsx("div", { className: "guide-link", children: _jsx("button", { type: "button", className: "guide-link-button", onClick: () => onOpenGuide?.("redact"), children: "? guide" }) }), _jsxs("div", { className: "grid-two", children: [_jsxs("div", { className: "panel", "aria-label": "Redaction input", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Input" }), _jsx("span", { className: "panel-subtext", children: "paste text" })] }), _jsx("textarea", { className: "textarea", placeholder: "Drop text for redaction...", "aria-label": "Redaction input", value: input, onChange: (event) => setInput(event.target.value) }), _jsxs("div", { className: "controls-row", children: [_jsx("span", { className: "section-title", children: "Mask mode" }), _jsx("div", { className: "pill-buttons", role: "group", "aria-label": "Mask mode", children: ["full", "partial"].map((mode) => (_jsx("button", { type: "button", className: maskMode === mode ? "active" : "", onClick: () => setMaskMode(mode), children: mode }, mode))) })] }), _jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", htmlFor: "min-severity", children: "Min severity" }), _jsxs("select", { id: "min-severity", className: "select", value: minimumSeverity, onChange: (event) => setMinimumSeverity(event.target.value), "aria-label": "Minimum severity filter", children: [_jsx("option", { value: "low", children: "low" }), _jsx("option", { value: "medium", children: "medium" }), _jsx("option", { value: "high", children: "high" })] }), _jsx("label", { className: "section-title", htmlFor: "token-length", children: "Token min len" }), _jsx("input", { id: "token-length", className: "input", type: "number", min: 12, max: 64, value: minTokenLength, onChange: (event) => setMinTokenLength(clamp(Number(event.target.value) || 0, 12, 64)), "aria-label": "Minimum token detector length" }), _jsxs("label", { className: "microcopy", style: { display: "flex", alignItems: "center", gap: "0.35rem" }, children: [_jsx("input", { type: "checkbox", checked: preserveLength, onChange: (event) => setPreserveLength(event.target.checked), "aria-label": "Preserve replacement length" }), "preserve length in full mask"] })] })] }), _jsxs("div", { className: "panel", "aria-label": "Redaction output", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Output" }), _jsx("span", { className: "panel-subtext", children: "preview + apply" })] }), _jsx("div", { className: "redact-preview", "aria-label": "Highlight view", children: highlight(input, findings.matches) }), _jsx("textarea", { className: "textarea", readOnly: true, value: output || redacted, "aria-label": "Redacted output" }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", onClick: handleApply, children: "apply redaction" }), _jsx("button", { className: "button", type: "button", onClick: handleCopy, children: "copy" }), _jsx("button", { className: "button", type: "button", onClick: handleDownload, children: "download" }), _jsx("button", { className: "button", type: "button", onClick: exportFindingsReport, children: "export report" })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: "severity" }), _jsx(Chip, { label: findings.overall.toUpperCase(), tone: findings.overall === "high" ? "danger" : "accent" }), _jsxs("span", { className: "microcopy", children: [findings.total, " findings"] })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: "coverage" }), _jsxs("span", { className: "tag", children: [coverage, "% chars masked"] }), _jsxs("span", { className: "microcopy", children: ["high ", severityCounts.high, " \u00B7 medium ", severityCounts.medium, " \u00B7 low ", severityCounts.low] })] })] })] }), _jsxs("div", { className: "panel", "aria-label": "Findings table", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Findings" }), _jsx("span", { className: "panel-subtext", children: "type / count / severity" })] }), _jsx("div", { className: "controls-row", children: detectors.map((detector) => (_jsxs("label", { className: "microcopy", style: { display: "flex", alignItems: "center", gap: "0.35rem" }, children: [_jsx("input", { type: "checkbox", checked: detectorState[detector.key], onChange: (event) => setDetectorState((prev) => ({ ...prev, [detector.key]: event.target.checked })), "aria-label": `Toggle ${detector.label}` }), detector.label] }, detector.key))) }), _jsxs("table", { className: "table", children: [_jsx("thead", { children: _jsxs("tr", { children: [_jsx("th", { children: "type" }), _jsx("th", { children: "count" }), _jsx("th", { children: "severity" })] }) }), _jsxs("tbody", { children: [Object.entries(findings.counts).map(([key, count]) => (_jsxs("tr", { children: [_jsx("td", { children: key }), _jsx("td", { children: count }), _jsx("td", { children: _jsx("span", { className: `tag ${findings.severityMap[key] === "high" ? "tag-danger" : "tag-accent"}`, children: findings.severityMap[key] }) })] }, key))), findings.total === 0 && (_jsx("tr", { children: _jsx("td", { colSpan: 3, className: "muted", children: "no findings detected" }) }))] })] })] }), _jsxs("div", { className: "panel", "aria-label": "Custom rule", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Custom rule" }), _jsx("span", { className: "panel-subtext", children: "regex + label" })] }), _jsxs("div", { className: "controls-row", children: [_jsx("input", { className: "input", placeholder: "Regex pattern", value: customPattern, onChange: (event) => setCustomPattern(event.target.value), "aria-label": "Custom regex pattern" }), _jsx("input", { className: "input", placeholder: "Label", value: customLabel, onChange: (event) => setCustomLabel(event.target.value), "aria-label": "Custom regex label" }), _jsx("button", { className: "button", type: "button", onClick: applyCustomRule, children: "add" })] }), _jsx("div", { className: "microcopy", children: "Safe handling: regex runs locally; errors are reported without applying. Custom rules mask with their label." })] })] }));
+    return (_jsxs("div", { className: "workspace-scroll", children: [_jsx("div", { className: "guide-link", children: _jsx("button", { type: "button", className: "guide-link-button", onClick: () => onOpenGuide?.("redact"), children: t("guide.link") }) }), _jsxs("div", { className: "grid-two", children: [_jsxs("div", { className: "panel", "aria-label": "Redaction input", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Input" }), _jsx("span", { className: "panel-subtext", children: "paste text" })] }), _jsx("textarea", { className: "textarea", placeholder: "Drop text for redaction...", "aria-label": "Redaction input", value: input, onChange: (event) => setInput(event.target.value) }), _jsxs("div", { className: "controls-row", children: [_jsx("span", { className: "section-title", children: "Mask mode" }), _jsx("div", { className: "pill-buttons", role: "group", "aria-label": "Mask mode", children: ["full", "partial"].map((mode) => (_jsx("button", { type: "button", className: maskMode === mode ? "active" : "", onClick: () => setMaskMode(mode), children: mode }, mode))) })] }), _jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", htmlFor: "min-severity", children: "Min severity" }), _jsxs("select", { id: "min-severity", className: "select", value: minimumSeverity, onChange: (event) => setMinimumSeverity(event.target.value), "aria-label": "Minimum severity filter", children: [_jsx("option", { value: "low", children: "low" }), _jsx("option", { value: "medium", children: "medium" }), _jsx("option", { value: "high", children: "high" })] }), _jsx("label", { className: "section-title", htmlFor: "token-length", children: "Token min len" }), _jsx("input", { id: "token-length", className: "input", type: "number", min: 12, max: 64, value: minTokenLength, onChange: (event) => setMinTokenLength(clamp(Number(event.target.value) || 0, 12, 64)), "aria-label": "Minimum token detector length" }), _jsxs("label", { className: "microcopy", style: { display: "flex", alignItems: "center", gap: "0.35rem" }, children: [_jsx("input", { type: "checkbox", checked: preserveLength, onChange: (event) => setPreserveLength(event.target.checked), "aria-label": "Preserve replacement length" }), "preserve length in full mask"] })] })] }), _jsxs("div", { className: "panel", "aria-label": "Redaction output", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Output" }), _jsx("span", { className: "panel-subtext", children: "preview + apply" })] }), _jsx("div", { className: "redact-preview", "aria-label": "Highlight view", children: highlight(input, findings.matches) }), _jsx("textarea", { className: "textarea", readOnly: true, value: output || redacted, "aria-label": "Redacted output" }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", onClick: handleApply, children: "apply redaction" }), _jsx("button", { className: "button", type: "button", onClick: handleCopy, children: "copy" }), _jsx("button", { className: "button", type: "button", onClick: handleDownload, children: "download" }), _jsx("button", { className: "button", type: "button", onClick: exportFindingsReport, children: "export report" })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: "severity" }), _jsx(Chip, { label: findings.overall.toUpperCase(), tone: findings.overall === "high" ? "danger" : "accent" }), _jsxs("span", { className: "microcopy", children: [findings.total, " findings"] })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: "coverage" }), _jsxs("span", { className: "tag", children: [coverage, "% chars masked"] }), _jsxs("span", { className: "microcopy", children: ["high ", severityCounts.high, " \u00B7 medium ", severityCounts.medium, " \u00B7 low ", severityCounts.low] })] })] })] }), _jsxs("div", { className: "panel", "aria-label": "Findings table", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Findings" }), _jsx("span", { className: "panel-subtext", children: "type / count / severity" })] }), _jsx("div", { className: "controls-row", children: detectors.map((detector) => (_jsxs("label", { className: "microcopy", style: { display: "flex", alignItems: "center", gap: "0.35rem" }, children: [_jsx("input", { type: "checkbox", checked: detectorState[detector.key], onChange: (event) => setDetectorState((prev) => ({ ...prev, [detector.key]: event.target.checked })), "aria-label": `Toggle ${detector.label}` }), detector.label] }, detector.key))) }), _jsxs("table", { className: "table", children: [_jsx("thead", { children: _jsxs("tr", { children: [_jsx("th", { children: "type" }), _jsx("th", { children: "count" }), _jsx("th", { children: "severity" })] }) }), _jsxs("tbody", { children: [Object.entries(findings.counts).map(([key, count]) => (_jsxs("tr", { children: [_jsx("td", { children: key }), _jsx("td", { children: count }), _jsx("td", { children: _jsx("span", { className: `tag ${findings.severityMap[key] === "high" ? "tag-danger" : "tag-accent"}`, children: findings.severityMap[key] }) })] }, key))), findings.total === 0 && (_jsx("tr", { children: _jsx("td", { colSpan: 3, className: "muted", children: "no findings detected" }) }))] })] })] }), _jsxs("div", { className: "panel", "aria-label": "Custom rule", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Custom rule" }), _jsx("span", { className: "panel-subtext", children: "regex + label" })] }), _jsxs("div", { className: "controls-row", children: [_jsx("input", { className: "input", placeholder: "Regex pattern", value: customPattern, onChange: (event) => setCustomPattern(event.target.value), "aria-label": "Custom regex pattern" }), _jsx("input", { className: "input", placeholder: "Label", value: customLabel, onChange: (event) => setCustomLabel(event.target.value), "aria-label": "Custom regex label" }), _jsx("button", { className: "button", type: "button", onClick: applyCustomRule, children: "add" })] }), _jsx("div", { className: "microcopy", children: "Safe handling: regex runs locally; errors are reported without applying. Custom rules mask with their label." })] })] }));
 }
 function scan(text, rules, custom, options) {
     const counts = {};
@@ -258,6 +277,29 @@ function passesLuhn(value) {
         shouldDouble = !shouldDouble;
     }
     return sum % 10 === 0;
+}
+function isLikelyPhone(value) {
+    const digits = toAsciiDigits(value).replace(/[^0-9]/g, "");
+    return digits.length >= 10 && digits.length <= 15;
+}
+function isValidIranNationalId(value) {
+    const digits = toAsciiDigits(value).replace(/[^0-9]/g, "");
+    if (!/^\d{10}$/.test(digits))
+        return false;
+    if (/^(\d)\1{9}$/.test(digits))
+        return false;
+    const check = Number(digits[9]);
+    const sum = digits
+        .slice(0, 9)
+        .split("")
+        .reduce((acc, ch, index) => acc + Number(ch) * (10 - index), 0);
+    const remainder = sum % 11;
+    return (remainder < 2 && check === remainder) || (remainder >= 2 && check === 11 - remainder);
+}
+function toAsciiDigits(value) {
+    return value
+        .replace(/[۰-۹]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 1728))
+        .replace(/[٠-٩]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 1584));
 }
 function isValidIban(value) {
     const trimmed = value.replace(/\s+/g, "").toUpperCase();

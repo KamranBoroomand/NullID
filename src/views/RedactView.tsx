@@ -6,6 +6,7 @@ import { usePersistentState } from "../hooks/usePersistentState";
 import { resolveOverlaps, type RedactionMatch } from "../utils/redaction";
 import { useClipboardPrefs, writeClipboard } from "../utils/clipboard";
 import type { ModuleKey } from "../components/ModuleList";
+import { useI18n } from "../i18n";
 
 type MaskMode = "full" | "partial";
 type SeverityThreshold = "low" | "medium" | "high";
@@ -32,9 +33,26 @@ const detectors: Detector[] = [
   {
     key: "phone",
     label: "Phone",
-    regex: /\b(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4}\b/g,
+    regex: /(?:\+|00)?[0-9\u06F0-\u06F9\u0660-\u0669][0-9\u06F0-\u06F9\u0660-\u0669().\-\s]{7,18}[0-9\u06F0-\u06F9\u0660-\u0669]/g,
     severity: "low",
     mask: "[phone]",
+    validate: isLikelyPhone,
+  },
+  {
+    key: "iran-id",
+    label: "Iran national ID",
+    regex: /(?<![0-9\u06F0-\u06F9\u0660-\u0669])[0-9\u06F0-\u06F9\u0660-\u0669]{10}(?![0-9\u06F0-\u06F9\u0660-\u0669])/g,
+    severity: "high",
+    mask: "[iran-id]",
+    validate: isValidIranNationalId,
+  },
+  {
+    key: "ru-phone",
+    label: "Russia phone",
+    regex: /(?:\+7|8)[\s(-]*[0-9\u06F0-\u06F9\u0660-\u0669]{3}[\s)-]*[0-9\u06F0-\u06F9\u0660-\u0669]{3}[\s-]*[0-9\u06F0-\u06F9\u0660-\u0669]{2}[\s-]*[0-9\u06F0-\u06F9\u0660-\u0669]{2}/g,
+    severity: "medium",
+    mask: "[ru-phone]",
+    validate: isLikelyPhone,
   },
   {
     key: "token",
@@ -102,6 +120,7 @@ interface RedactViewProps {
 
 export function RedactView({ onOpenGuide }: RedactViewProps) {
   const { push } = useToast();
+  const { t } = useI18n();
   const [clipboardPrefs] = useClipboardPrefs();
   const [input, setInput] = useState("");
   const [maskMode, setMaskMode] = usePersistentState<MaskMode>("nullid:redact:mask", "full");
@@ -221,7 +240,7 @@ export function RedactView({ onOpenGuide }: RedactViewProps) {
     <div className="workspace-scroll">
       <div className="guide-link">
         <button type="button" className="guide-link-button" onClick={() => onOpenGuide?.("redact")}>
-          ? guide
+          {t("guide.link")}
         </button>
       </div>
       <div className="grid-two">
@@ -494,6 +513,30 @@ function passesLuhn(value: string) {
     shouldDouble = !shouldDouble;
   }
   return sum % 10 === 0;
+}
+
+function isLikelyPhone(value: string) {
+  const digits = toAsciiDigits(value).replace(/[^0-9]/g, "");
+  return digits.length >= 10 && digits.length <= 15;
+}
+
+function isValidIranNationalId(value: string) {
+  const digits = toAsciiDigits(value).replace(/[^0-9]/g, "");
+  if (!/^\d{10}$/.test(digits)) return false;
+  if (/^(\d)\1{9}$/.test(digits)) return false;
+  const check = Number(digits[9]);
+  const sum = digits
+    .slice(0, 9)
+    .split("")
+    .reduce((acc, ch, index) => acc + Number(ch) * (10 - index), 0);
+  const remainder = sum % 11;
+  return (remainder < 2 && check === remainder) || (remainder >= 2 && check === 11 - remainder);
+}
+
+function toAsciiDigits(value: string) {
+  return value
+    .replace(/[۰-۹]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 1728))
+    .replace(/[٠-٩]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 1584));
 }
 
 function isValidIban(value: string) {

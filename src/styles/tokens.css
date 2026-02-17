@@ -17,8 +17,8 @@
   --z-overlay: 1200;
   --shadow-soft: 0 10px 35px rgba(0, 0, 0, 0.12);
   --shadow-strong: 0 16px 55px rgba(0, 0, 0, 0.18);
-  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
-  --font-mono: "SFMono-Regular", "Menlo", "Consolas", "Roboto Mono", ui-monospace, monospace;
+  --font-sans: "Vazirmatn", "Noto Sans Arabic", "Noto Sans", "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "SFMono-Regular", "Vazirmatn", "Menlo", "Consolas", "Roboto Mono", ui-monospace, monospace;
 }
 
 [data-theme="dark"] {

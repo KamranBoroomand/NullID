@@ -26,6 +26,7 @@ import {
   sanitizeKeyHint,
   type KeyHintProfile,
 } from "../utils/keyHintProfiles";
+import { useI18n } from "../i18n";
 
 type DecryptedNote = { id: string; title: string; body: string; tags: string[]; createdAt: number; updatedAt: number };
 
@@ -35,6 +36,7 @@ interface VaultViewProps {
 
 export function VaultView({ onOpenGuide }: VaultViewProps) {
   const { push } = useToast();
+  const { t, formatDateTime } = useI18n();
   const [passphrase, setPassphrase] = useState("");
   const [unlocked, setUnlocked] = useState(false);
   const [key, setKey] = useState<CryptoKey | null>(null);
@@ -71,7 +73,7 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
   const [wipeDialogOpen, setWipeDialogOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const encryptedImportRef = useRef<HTMLInputElement>(null);
-  const formatTs = useCallback((value: number) => new Date(value).toLocaleString(), []);
+  const formatTs = useCallback((value: number) => formatDateTime(value), [formatDateTime]);
   const passphraseAssessment = useMemo(() => analyzeSecret(passphrase), [passphrase]);
   const selectedKeyHintProfile = useMemo(
     () => keyHintProfiles.find((profile) => profile.id === selectedKeyHintProfileId) ?? null,
@@ -507,7 +509,7 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
     <div className="workspace-scroll">
       <div className="guide-link">
         <button type="button" className="guide-link-button" onClick={() => onOpenGuide?.("vault")}>
-          ? guide
+          {t("guide.link")}
         </button>
       </div>
       <div className="grid-two">

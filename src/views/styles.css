@@ -117,7 +117,7 @@
 .table td {
   border-bottom: 1px solid var(--border-subtle);
   padding: 0.55rem;
-  text-align: left;
+  text-align: start;
 }
 
 .table th {

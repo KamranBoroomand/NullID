@@ -6,6 +6,7 @@ import { Chip } from "../components/Chip";
 import { useToast } from "../components/ToastHost";
 import type { ModuleKey } from "../components/ModuleList";
 import { analyzeSecret, gradeLabel, type SecretGrade } from "../utils/passwordToolkit";
+import { useI18n } from "../i18n";
 
 interface EncViewProps {
   onOpenGuide?: (key?: ModuleKey) => void;
@@ -13,6 +14,7 @@ interface EncViewProps {
 
 export function EncView({ onOpenGuide }: EncViewProps) {
   const { push } = useToast();
+  const { t } = useI18n();
   const [plain, setPlain] = useState("");
   const [encPass, setEncPass] = useState("");
   const [cipherText, setCipherText] = useState("");
@@ -239,7 +241,7 @@ export function EncView({ onOpenGuide }: EncViewProps) {
     <div className="workspace-scroll">
       <div className="guide-link">
         <button type="button" className="guide-link-button" onClick={() => onOpenGuide?.("enc")}>
-          ? guide
+          {t("guide.link")}
         </button>
       </div>
       <div className="grid-two">

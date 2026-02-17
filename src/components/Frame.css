@@ -29,7 +29,7 @@
 
 .frame-pane {
   background: linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 70%, transparent), var(--surface-0));
-  border-right: 1px solid var(--border-subtle);
+  border-inline-end: 1px solid var(--border-subtle);
   position: relative;
 }
 
@@ -66,8 +66,8 @@
 }
 
 .frame-content.is-stacked .frame-pane {
-  border-right: none;
-  border-bottom: 1px solid var(--border-subtle);
+  border-inline-end: none;
+  border-block-end: 1px solid var(--border-subtle);
 }
 
 .frame-compact .frame-shell {

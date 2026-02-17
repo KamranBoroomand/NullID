@@ -4,6 +4,7 @@ import { useToast } from "../components/ToastHost";
 import { usePersistentState } from "../hooks/usePersistentState";
 import { useClipboardPrefs, writeClipboard } from "../utils/clipboard";
 import type { ModuleKey } from "../components/ModuleList";
+import { useI18n } from "../i18n";
 import {
   analyzeSecret,
   estimatePassphraseEntropy,
@@ -26,6 +27,7 @@ interface PwViewProps {
 
 export function PwView({ onOpenGuide }: PwViewProps) {
   const { push } = useToast();
+  const { t } = useI18n();
   const [clipboardPrefs] = useClipboardPrefs();
   const [passwordSettings, setPasswordSettings] = usePersistentState<PasswordSettings>("nullid:pw-settings", {
     length: 22,
@@ -168,7 +170,7 @@ export function PwView({ onOpenGuide }: PwViewProps) {
     <div className="workspace-scroll">
       <div className="guide-link">
         <button type="button" className="guide-link-button" onClick={() => onOpenGuide?.("pw")}>
-          ? guide
+          {t("guide.link")}
         </button>
       </div>
       <div className="grid-two">

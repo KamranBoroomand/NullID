@@ -15,6 +15,7 @@ import { FeedbackWidget } from "./components/FeedbackWidget";
 import { OnboardingStep, OnboardingTour } from "./components/OnboardingTour";
 import type { HashViewActions } from "./views/HashView";
 import { ActionDialog } from "./components/ActionDialog";
+import { I18nProvider, useI18n } from "./i18n";
 import {
   SHARED_KEY_HINT_PROFILE_KEY,
   readLegacyProfiles,
@@ -34,17 +35,6 @@ const SelfTestView = lazy(() => import("./views/SelfTestView").then((module) => 
 const GuideView = lazy(() => import("./views/GuideView").then((module) => ({ default: module.GuideView })));
 
 type StatusTone = "neutral" | "accent" | "danger";
-const modules: ModuleDefinition[] = [
-  { key: "hash", title: "Hash & Verify", subtitle: "digests" },
-  { key: "redact", title: "Text Redaction", subtitle: "pii scrubbing" },
-  { key: "sanitize", title: "Log Sanitizer", subtitle: "diff preview" },
-  { key: "meta", title: "Metadata Inspector", subtitle: "exif" },
-  { key: "enc", title: "Encrypt / Decrypt", subtitle: "envelopes" },
-  { key: "pw", title: "Password & Passphrase", subtitle: "generator" },
-  { key: "vault", title: "Secure Notes", subtitle: "sealed" },
-  { key: "selftest", title: "Self-test", subtitle: "diagnostics" },
-  { key: "guide", title: "Guide", subtitle: "how-to" },
-];
 
 interface WorkspaceViewProps {
   active: ModuleKey;
@@ -71,6 +61,7 @@ function WorkspaceView({ active, onRegisterHashActions, onStatus, onOpenGuide }:
 
 function AppShell() {
   const { push } = useToast();
+  const { locale, setLocale, t } = useI18n();
   const [activeModule, setActiveModule] = usePersistentState<ModuleKey>("nullid:last-module", "hash");
   const [status, setStatus] = useState({ message: "ready", tone: "neutral" as StatusTone });
   const [theme, setTheme] = usePersistentState<ThemeMode>("nullid:theme", "light");
@@ -94,9 +85,23 @@ function AppShell() {
   const [profileImportPassphrase, setProfileImportPassphrase] = useState("");
   const [profileImportError, setProfileImportError] = useState<string | null>(null);
   const importProfileInputRef = useRef<HTMLInputElement>(null);
+  const modules = useMemo<ModuleDefinition[]>(
+    () => [
+      { key: "hash", title: t("module.hash.title"), subtitle: t("module.hash.subtitle") },
+      { key: "redact", title: t("module.redact.title"), subtitle: t("module.redact.subtitle") },
+      { key: "sanitize", title: t("module.sanitize.title"), subtitle: t("module.sanitize.subtitle") },
+      { key: "meta", title: t("module.meta.title"), subtitle: t("module.meta.subtitle") },
+      { key: "enc", title: t("module.enc.title"), subtitle: t("module.enc.subtitle") },
+      { key: "pw", title: t("module.pw.title"), subtitle: t("module.pw.subtitle") },
+      { key: "vault", title: t("module.vault.title"), subtitle: t("module.vault.subtitle") },
+      { key: "selftest", title: t("module.selftest.title"), subtitle: t("module.selftest.subtitle") },
+      { key: "guide", title: t("module.guide.title"), subtitle: t("module.guide.subtitle") },
+    ],
+    [t],
+  );
   const moduleLookup = useMemo(
     () => Object.fromEntries(modules.map((module) => [module.key, module])) as Record<ModuleKey, ModuleDefinition>,
-    [],
+    [modules],
   );
   const selectedKeyHintProfile = useMemo(
     () => keyHintProfiles.find((profile) => profile.id === selectedKeyHintProfileId) ?? null,
@@ -105,7 +110,7 @@ function AppShell() {
 
   const resolvedActiveModule = useMemo<ModuleKey>(
     () => (modules.some((module) => module.key === activeModule) ? activeModule : "guide"),
-    [activeModule],
+    [activeModule, modules],
   );
 
   useEffect(() => {
@@ -280,27 +285,27 @@ function AppShell() {
         id: `:${module.key}`,
         label: module.title,
         description: module.subtitle,
-        group: "Tools",
+        group: t("app.command.toolsGroup"),
         action: () => handleSelectModule(module.key),
       })),
-    [handleSelectModule],
+    [handleSelectModule, modules, t],
   );
 
   const contextualCommands: CommandItem[] = useMemo(() => {
     const base: CommandItem[] = [
       {
         id: "toggle-theme",
-        label: "Toggle theme",
-        description: "Switch between light and dark",
-        group: "System",
+        label: t("app.command.toggleTheme"),
+        description: t("app.command.switchTheme"),
+        group: t("app.command.systemGroup"),
         shortcut: "T",
         action: toggleTheme,
       },
       {
         id: "wipe",
-        label: "Wipe local data",
-        description: "Clear preferences and stored content",
-        group: "System",
+        label: t("app.command.wipe"),
+        description: t("app.command.clearPrefs"),
+        group: t("app.command.systemGroup"),
         action: async () => {
           localStorage.clear();
           await wipeVault();
@@ -311,26 +316,56 @@ function AppShell() {
       },
       {
         id: "export-profile",
-        label: "Export profile",
-        description: "Download preferences as JSON",
-        group: "System",
+        label: t("app.command.exportProfile"),
+        description: t("app.command.exportProfileDesc"),
+        group: t("app.command.systemGroup"),
         action: openProfileExportDialog,
       },
       {
         id: "import-profile",
-        label: "Import profile",
-        description: "Load preferences from JSON",
-        group: "System",
+        label: t("app.command.importProfile"),
+        description: t("app.command.importProfileDesc"),
+        group: t("app.command.systemGroup"),
         action: () => {
           importProfileInputRef.current?.click();
         },
       },
       {
         id: "onboarding",
-        label: "Run onboarding",
-        description: "Replay quick setup tour",
-        group: "System",
+        label: t("app.command.runOnboarding"),
+        description: t("app.command.runOnboardingDesc"),
+        group: t("app.command.systemGroup"),
         action: startOnboarding,
+      },
+      {
+        id: "language-en",
+        label: t("app.command.language.en"),
+        description: t("app.command.languageDesc"),
+        group: t("app.command.systemGroup"),
+        action: () => {
+          setLocale("en");
+          push(`language changed: ${t("locale.en")}`, "accent");
+        },
+      },
+      {
+        id: "language-fa",
+        label: t("app.command.language.fa"),
+        description: t("app.command.languageDesc"),
+        group: t("app.command.systemGroup"),
+        action: () => {
+          setLocale("fa");
+          push(`language changed: ${t("locale.fa")}`, "accent");
+        },
+      },
+      {
+        id: "language-ru",
+        label: t("app.command.language.ru"),
+        description: t("app.command.languageDesc"),
+        group: t("app.command.systemGroup"),
+        action: () => {
+          setLocale("ru");
+          push(`language changed: ${t("locale.ru")}`, "accent");
+        },
       },
     ];
 
@@ -338,26 +373,26 @@ function AppShell() {
       base.unshift(
         {
           id: "compare",
-          label: "Compare digest",
-          description: "Validate against provided hash",
-          group: "Hash actions",
+          label: t("app.command.compareDigest"),
+          description: t("app.command.compareDigestDesc"),
+          group: t("app.command.hashGroup"),
           shortcut: "Enter",
           action: hashActions?.compare ?? (() => {}),
           disabled: !hashActions,
         },
         {
           id: "clear-inputs",
-          label: "Clear inputs",
-          description: "Reset text, file, and verify fields",
-          group: "Hash actions",
+          label: t("app.command.clearInputs"),
+          description: t("app.command.clearInputsDesc"),
+          group: t("app.command.hashGroup"),
           action: hashActions?.clearInputs ?? (() => {}),
           disabled: !hashActions,
         },
         {
           id: "copy-digest",
-          label: "Copy digest",
-          description: "Copy computed hash to clipboard",
-          group: "Hash actions",
+          label: t("app.command.copyDigest"),
+          description: t("app.command.copyDigestDesc"),
+          group: t("app.command.hashGroup"),
           shortcut: "C",
           action: hashActions?.copyDigest ?? (() => {}),
           disabled: !hashActions,
@@ -366,7 +401,7 @@ function AppShell() {
     }
 
     return base;
-  }, [activeModule, hashActions, openProfileExportDialog, startOnboarding, toggleTheme]);
+  }, [activeModule, hashActions, openProfileExportDialog, push, setLocale, startOnboarding, t, toggleTheme]);
 
   const commandList = useMemo(() => [...navigationCommands, ...contextualCommands], [contextualCommands, navigationCommands]);
 
@@ -465,39 +500,39 @@ function AppShell() {
     () => [
       {
         id: "guide",
-        title: "Start with the Guide",
-        body: "Every tool has limits and safe defaults. The guide gives the shortest path to avoid common mistakes.",
-        actionLabel: "open guide",
+        title: t("app.onboarding.1.title"),
+        body: t("app.onboarding.1.body"),
+        actionLabel: t("app.onboarding.1.action"),
         onAction: () => goToGuide(),
       },
       {
         id: "password",
-        title: "Use the Strength Lab",
-        body: "The Password & Passphrase module now includes a larger dictionary, hardening toggles, and secret auditing.",
-        actionLabel: "open :pw",
+        title: t("app.onboarding.2.title"),
+        body: t("app.onboarding.2.body"),
+        actionLabel: t("app.onboarding.2.action"),
         onAction: () => handleSelectModule("pw"),
       },
       {
         id: "sanitize",
-        title: "Sanitize before sharing",
-        body: "Use the Log Sanitizer for policy packs, diff preview, and bundle exports when sharing logs externally.",
-        actionLabel: "open :sanitize",
+        title: t("app.onboarding.3.title"),
+        body: t("app.onboarding.3.body"),
+        actionLabel: t("app.onboarding.3.action"),
         onAction: () => handleSelectModule("sanitize"),
       },
       {
         id: "commands",
-        title: "Drive the app from commands",
-        body: "Press / or Cmd/Ctrl+K for fast navigation, profile export/import, and system actions.",
-        actionLabel: "open commands",
+        title: t("app.onboarding.4.title"),
+        body: t("app.onboarding.4.body"),
+        actionLabel: t("app.onboarding.4.action"),
         onAction: openPalette,
       },
       {
         id: "feedback",
-        title: "Track feedback locally",
-        body: "Use the feedback button at the bottom-left to save issues and ideas locally, then export as JSON.",
+        title: t("app.onboarding.5.title"),
+        body: t("app.onboarding.5.body"),
       },
     ],
-    [goToGuide, handleSelectModule, openPalette],
+    [goToGuide, handleSelectModule, openPalette, t],
   );
 
   return (
@@ -525,8 +560,10 @@ function AppShell() {
             pageToken={`:${resolvedActiveModule}`}
             status={status}
             theme={theme}
+            locale={locale}
             compact={isCompact}
             onToggleTheme={toggleTheme}
+            onLocaleChange={setLocale}
             onOpenCommands={openPalette}
             onWipe={() => {
               localStorage.clear();
@@ -698,10 +735,12 @@ function AppShell() {
 
 export default function App() {
   return (
-    <ToastProvider>
-      <ErrorBoundary>
-        <AppShell />
-      </ErrorBoundary>
-    </ToastProvider>
+    <I18nProvider>
+      <ToastProvider>
+        <ErrorBoundary>
+          <AppShell />
+        </ErrorBoundary>
+      </ToastProvider>
+    </I18nProvider>
   );
 }

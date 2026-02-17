@@ -1,7 +1,9 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useEffect } from "react";
+import { useI18n } from "../i18n";
 import "./ActionDialog.css";
-export function ActionDialog({ open, title, description, confirmLabel = "confirm", cancelLabel = "cancel", confirmDisabled, danger = false, onConfirm, onCancel, children, }) {
+export function ActionDialog({ open, title, description, confirmLabel, cancelLabel, confirmDisabled, danger = false, onConfirm, onCancel, children, }) {
+    const { t } = useI18n();
     useEffect(() => {
         if (!open)
             return;
@@ -20,5 +22,5 @@ export function ActionDialog({ open, title, description, confirmLabel = "confirm
             if (event.target === event.currentTarget) {
                 onCancel();
             }
-        }, children: _jsxs("div", { className: "action-dialog-panel", children: [_jsx("div", { className: "action-dialog-header", children: _jsx("h2", { children: title }) }), description ? _jsx("p", { className: "action-dialog-description", children: description }) : null, children ? _jsx("div", { className: "action-dialog-body", children: children }) : null, _jsxs("div", { className: "action-dialog-actions", children: [_jsx("button", { type: "button", className: "button", onClick: onCancel, children: cancelLabel }), _jsx("button", { type: "button", className: `button ${danger ? "action-dialog-danger" : ""}`, onClick: onConfirm, disabled: confirmDisabled, children: confirmLabel })] })] }) }));
+        }, children: _jsxs("div", { className: "action-dialog-panel", children: [_jsx("div", { className: "action-dialog-header", children: _jsx("h2", { children: title }) }), description ? _jsx("p", { className: "action-dialog-description", children: description }) : null, children ? _jsx("div", { className: "action-dialog-body", children: children }) : null, _jsxs("div", { className: "action-dialog-actions", children: [_jsx("button", { type: "button", className: "button", onClick: onCancel, children: cancelLabel ?? t("app.cancel") }), _jsx("button", { type: "button", className: `button ${danger ? "action-dialog-danger" : ""}`, onClick: onConfirm, disabled: confirmDisabled, children: confirmLabel ?? t("app.confirm") })] })] }) }));
 }

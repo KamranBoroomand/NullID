@@ -2,6 +2,8 @@ export type RuleKey =
   | "maskIp"
   | "maskIpv6"
   | "maskEmail"
+  | "maskPhoneIntl"
+  | "maskIranNationalId"
   | "scrubJwt"
   | "maskBearer"
   | "maskCard"
@@ -81,6 +83,16 @@ const rules: Rule[] = [
     apply: (input) => replaceWithCount(input, /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]"),
   },
   {
+    key: "maskIranNationalId",
+    label: "Mask Iran national ID",
+    apply: replaceIranNationalIds,
+  },
+  {
+    key: "maskPhoneIntl",
+    label: "Mask international phone numbers",
+    apply: replaceInternationalPhoneNumbers,
+  },
+  {
     key: "scrubJwt",
     label: "Scrub JWT",
     apply: (input) =>
@@ -145,26 +157,52 @@ export const sanitizePresets: Record<PresetKey, { label: string; description: st
     description: "IPs, cookies, UA, JWT",
     sample:
       `127.0.0.1 - - [14/Mar/2025:10:12:33 +0000] "POST /auth" 200 user=alice token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9 cookie=sessionid=abc123 ua=Mozilla/5.0`,
-    rules: ["maskIp", "maskIpv6", "stripCookies", "dropUA", "scrubJwt", "maskBearer", "maskUser", "normalizeTs", "maskAwsKey", "maskAwsSecret", "maskCard", "maskIban"],
+    rules: [
+      "maskIp",
+      "maskIpv6",
+      "maskPhoneIntl",
+      "maskIranNationalId",
+      "stripCookies",
+      "dropUA",
+      "scrubJwt",
+      "maskBearer",
+      "maskUser",
+      "normalizeTs",
+      "maskAwsKey",
+      "maskAwsSecret",
+      "maskCard",
+      "maskIban",
+    ],
   },
   apache: {
     label: "apache access",
     description: "IPs, emails, JWT",
     sample:
       `10.0.0.2 - bob@example.com [14/Mar/2025:11:12:33 +0000] "GET /admin" 403 512 "-" "Mozilla/5.0" token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9`,
-    rules: ["maskIp", "maskIpv6", "maskEmail", "scrubJwt", "maskBearer", "normalizeTs", "maskCard", "maskIban"],
+    rules: ["maskIp", "maskIpv6", "maskEmail", "maskPhoneIntl", "maskIranNationalId", "scrubJwt", "maskBearer", "normalizeTs", "maskCard", "maskIban"],
   },
   auth: {
     label: "auth log",
     description: "usernames + IPs",
     sample: `Mar 14 08:15:22 host sshd[1201]: Failed password for root from 203.0.113.10 port 22 ssh2`,
-    rules: ["maskIp", "maskIpv6", "maskUser"],
+    rules: ["maskIp", "maskIpv6", "maskPhoneIntl", "maskIranNationalId", "maskUser"],
   },
   json: {
     label: "JSON log",
     description: "drop secrets",
     sample: `{"ts":"2025-03-14T10:15:00Z","user":"alice","token":"abc.def.ghi","password":"hunter2","ip":"192.168.0.8"}`,
-    rules: ["maskIp", "maskIpv6", "stripJsonSecrets", "maskUser", "maskAwsKey", "maskAwsSecret", "maskCard", "maskIban"],
+    rules: [
+      "maskIp",
+      "maskIpv6",
+      "maskPhoneIntl",
+      "maskIranNationalId",
+      "stripJsonSecrets",
+      "maskUser",
+      "maskAwsKey",
+      "maskAwsSecret",
+      "maskCard",
+      "maskIban",
+    ],
   },
 };
 
@@ -394,6 +432,52 @@ function isValidIban(value: string) {
     remainder = (remainder * 10 + Number(converted[i])) % 97;
   }
   return remainder === 1;
+}
+
+function replaceInternationalPhoneNumbers(input: string) {
+  const regex = /(?:\+|00)?[0-9\u06F0-\u06F9\u0660-\u0669][0-9\u06F0-\u06F9\u0660-\u0669().\-\s]{7,18}[0-9\u06F0-\u06F9\u0660-\u0669]/g;
+  let count = 0;
+  const output = input.replace(regex, (match) => {
+    const digits = toAsciiDigits(match).replace(/[^0-9]/g, "");
+    if (digits.length >= 10 && digits.length <= 15) {
+      count += 1;
+      return "[phone]";
+    }
+    return match;
+  });
+  return { output, count };
+}
+
+function replaceIranNationalIds(input: string) {
+  const regex = /(^|[^0-9\u06F0-\u06F9\u0660-\u0669])([0-9\u06F0-\u06F9\u0660-\u0669]{10})(?=$|[^0-9\u06F0-\u06F9\u0660-\u0669])/g;
+  let count = 0;
+  const output = input.replace(regex, (match, prefix: string, candidate: string) => {
+    if (isValidIranNationalId(candidate)) {
+      count += 1;
+      return `${prefix}[iran-id]`;
+    }
+    return match;
+  });
+  return { output, count };
+}
+
+function isValidIranNationalId(value: string) {
+  const digits = toAsciiDigits(value).replace(/[^0-9]/g, "");
+  if (!/^\d{10}$/.test(digits)) return false;
+  if (/^(\d)\1{9}$/.test(digits)) return false;
+  const check = Number(digits[9]);
+  const sum = digits
+    .slice(0, 9)
+    .split("")
+    .reduce((acc, ch, index) => acc + Number(ch) * (10 - index), 0);
+  const remainder = sum % 11;
+  return (remainder < 2 && check === remainder) || (remainder >= 2 && check === 11 - remainder);
+}
+
+function toAsciiDigits(value: string) {
+  return value
+    .replace(/[۰-۹]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 1728))
+    .replace(/[٠-٩]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 1584));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

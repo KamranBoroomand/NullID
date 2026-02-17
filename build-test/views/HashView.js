@@ -2,12 +2,14 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Chip } from "../components/Chip";
 import { useToast } from "../components/ToastHost";
+import { useI18n } from "../i18n";
 import "./styles.css";
 import { expectedHashLengths, hashFile, hashText, normalizeHashInput } from "../utils/hash";
 import { useClipboardPrefs, writeClipboard } from "../utils/clipboard";
 import { usePersistentState } from "../hooks/usePersistentState";
 export function HashView({ onRegisterActions, onStatus, onOpenGuide }) {
     const { push } = useToast();
+    const { t } = useI18n();
     const [clipboardPrefs] = useClipboardPrefs();
     const [algorithm, setAlgorithm] = useState("SHA-256");
     const [displayFormat, setDisplayFormat] = useState("hex");
@@ -351,7 +353,7 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }) {
         const kibPerSec = (lastInputBytes / 1024) / (lastDurationMs / 1000);
         return `${kibPerSec.toFixed(1)} KiB/s`;
     }, [lastDurationMs, lastInputBytes]);
-    return (_jsxs("div", { className: "workspace-scroll", children: [_jsx("div", { className: "guide-link", children: _jsx("button", { type: "button", className: "guide-link-button", onClick: () => onOpenGuide?.("hash"), children: "? guide" }) }), _jsxs("div", { className: "grid-two", children: [_jsxs("div", { className: "panel", "aria-label": "Hash inputs", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Hash input" }), _jsx("span", { className: "panel-subtext", children: "text or file" })] }), _jsx("label", { className: "section-title", htmlFor: "hash-text", children: "Text" }), _jsx("textarea", { id: "hash-text", className: "textarea", placeholder: "Type or paste text to hash", value: textValue, onCompositionStart: () => setIsComposing(true), onCompositionEnd: (event) => {
+    return (_jsxs("div", { className: "workspace-scroll", children: [_jsx("div", { className: "guide-link", children: _jsx("button", { type: "button", className: "guide-link-button", onClick: () => onOpenGuide?.("hash"), children: t("guide.link") }) }), _jsxs("div", { className: "grid-two", children: [_jsxs("div", { className: "panel", "aria-label": "Hash inputs", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Hash input" }), _jsx("span", { className: "panel-subtext", children: "text or file" })] }), _jsx("label", { className: "section-title", htmlFor: "hash-text", children: "Text" }), _jsx("textarea", { id: "hash-text", className: "textarea", placeholder: "Type or paste text to hash", value: textValue, onCompositionStart: () => setIsComposing(true), onCompositionEnd: (event) => {
                                     setIsComposing(false);
                                     handleTextChange(event.currentTarget.value);
                                 }, onChange: (event) => handleTextChange(event.target.value), "aria-label": "Text to hash" }), _jsxs("div", { className: "dropzone", role: "button", tabIndex: 0, "aria-label": "Drop file to hash", onClick: () => fileInputRef.current?.click(), onKeyDown: (event) => {

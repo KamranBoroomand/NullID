@@ -4,7 +4,9 @@ import "./styles.css";
 import { Chip } from "../components/Chip";
 import { chooseExportMime, probeCanvasEncodeSupport, probeImageFormatDiagnostics, } from "../utils/imageFormats";
 import { detectImageFormat, readMetadataFields } from "../utils/metadataInspector";
+import { useI18n } from "../i18n";
 export function MetaView({ onOpenGuide }) {
+    const { t } = useI18n();
     const fileInputRef = useRef(null);
     const [sourceFile, setSourceFile] = useState(null);
     const [fileName, setFileName] = useState("none");
@@ -156,7 +158,7 @@ export function MetaView({ onOpenGuide }) {
             return;
         void refreshCleanResult(sourceFile);
     }, [outputChoice, quality, refreshCleanResult, resizePercent, sourceFile, unsupportedReason]);
-    return (_jsxs("div", { className: "workspace-scroll", children: [_jsx("div", { className: "guide-link", children: _jsx("button", { type: "button", className: "guide-link-button", onClick: () => onOpenGuide?.("meta"), children: "? guide" }) }), _jsxs("div", { className: "grid-two", children: [_jsxs("div", { className: "panel", "aria-label": "Metadata input", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Metadata Inspector" }), _jsx("span", { className: "panel-subtext", children: "drop image" })] }), _jsxs("div", { className: "dropzone", role: "button", tabIndex: 0, "aria-label": "Drop file for inspection", onClick: () => fileInputRef.current?.click(), onKeyDown: (event) => {
+    return (_jsxs("div", { className: "workspace-scroll", children: [_jsx("div", { className: "guide-link", children: _jsx("button", { type: "button", className: "guide-link-button", onClick: () => onOpenGuide?.("meta"), children: t("guide.link") }) }), _jsxs("div", { className: "grid-two", children: [_jsxs("div", { className: "panel", "aria-label": "Metadata input", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: "Metadata Inspector" }), _jsx("span", { className: "panel-subtext", children: "drop image" })] }), _jsxs("div", { className: "dropzone", role: "button", tabIndex: 0, "aria-label": "Drop file for inspection", onClick: () => fileInputRef.current?.click(), onKeyDown: (event) => {
                                     if (event.key === "Enter" || event.key === " ") {
                                         event.preventDefault();
                                         fileInputRef.current?.click();

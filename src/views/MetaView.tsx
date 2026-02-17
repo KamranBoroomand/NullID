@@ -10,6 +10,7 @@ import {
 } from "../utils/imageFormats";
 import { detectImageFormat, readMetadataFields } from "../utils/metadataInspector";
 import type { ModuleKey } from "../components/ModuleList";
+import { useI18n } from "../i18n";
 
 type MetaField = { key: string; value: string };
 type OutputChoice = OutputMime | "auto";
@@ -25,6 +26,7 @@ interface MetaViewProps {
 }
 
 export function MetaView({ onOpenGuide }: MetaViewProps) {
+  const { t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState("none");
@@ -182,7 +184,7 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
     <div className="workspace-scroll">
       <div className="guide-link">
         <button type="button" className="guide-link-button" onClick={() => onOpenGuide?.("meta")}>
-          ? guide
+          {t("guide.link")}
         </button>
       </div>
       <div className="grid-two">
