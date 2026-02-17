@@ -1,5 +1,6 @@
 import { jsx as _jsx } from "react/jsx-runtime";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { guidePhraseTranslations } from "./content/guidePhraseTranslations";
 const STORAGE_KEY = "nullid:locale";
 const FALLBACK_LOCALE = "en";
 const localeMeta = {
@@ -900,6 +901,7 @@ const phraseTranslations = {
     "Common mistakes & limits": { fa: "اشتباهات رایج و محدودیت‌ها", ru: "Типовые ошибки и ограничения" },
     "Privacy notes": { fa: "نکات حریم خصوصی", ru: "Заметки по приватности" },
     guide: { fa: "راهنما", ru: "гайд" },
+    ...guidePhraseTranslations,
 };
 const I18nContext = createContext(null);
 function interpolate(template, values) {

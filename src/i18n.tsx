@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { guidePhraseTranslations } from "./content/guidePhraseTranslations";
 
 export type AppLocale = "en" | "fa" | "ru";
 
@@ -961,6 +962,7 @@ const phraseTranslations: Record<string, { fa: string; ru: string }> = {
   "Common mistakes & limits": { fa: "اشتباهات رایج و محدودیت‌ها", ru: "Типовые ошибки и ограничения" },
   "Privacy notes": { fa: "نکات حریم خصوصی", ru: "Заметки по приватности" },
   guide: { fa: "راهنما", ru: "гайд" },
+  ...guidePhraseTranslations,
 };
 
 const I18nContext = createContext<I18nContextValue | null>(null);

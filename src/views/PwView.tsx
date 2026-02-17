@@ -20,6 +20,15 @@ import {
   type PasswordSettings,
   type SecretGrade,
 } from "../utils/passwordToolkit";
+import {
+  PASSWORD_HASH_DEFAULTS,
+  assessPasswordHashChoice,
+  hashPassword,
+  supportsArgon2id,
+  verifyPassword,
+  type HashSafety,
+  type PasswordHashAlgorithm,
+} from "../utils/passwordHashing";
 
 interface PwViewProps {
   onOpenGuide?: (key?: ModuleKey) => void;
@@ -56,6 +65,31 @@ export function PwView({ onOpenGuide }: PwViewProps) {
   const [batchCount, setBatchCount] = usePersistentState<number>("nullid:pw-batch-count", 6);
   const [batchRows, setBatchRows] = useState<CandidateRow[]>([]);
   const [labInput, setLabInput] = usePersistentState<string>("nullid:pw-lab-input", "");
+  const [hashAlgorithm, setHashAlgorithm] = usePersistentState<PasswordHashAlgorithm>("nullid:pw-hash:algorithm", "argon2id");
+  const [hashSaltBytes, setHashSaltBytes] = usePersistentState<number>("nullid:pw-hash:salt", PASSWORD_HASH_DEFAULTS.saltBytes);
+  const [hashPbkdf2Iterations, setHashPbkdf2Iterations] = usePersistentState<number>(
+    "nullid:pw-hash:pbkdf2-iterations",
+    PASSWORD_HASH_DEFAULTS.pbkdf2Iterations,
+  );
+  const [hashArgon2Memory, setHashArgon2Memory] = usePersistentState<number>(
+    "nullid:pw-hash:argon2-memory",
+    PASSWORD_HASH_DEFAULTS.argon2Memory,
+  );
+  const [hashArgon2Passes, setHashArgon2Passes] = usePersistentState<number>(
+    "nullid:pw-hash:argon2-passes",
+    PASSWORD_HASH_DEFAULTS.argon2Passes,
+  );
+  const [hashArgon2Parallelism, setHashArgon2Parallelism] = usePersistentState<number>(
+    "nullid:pw-hash:argon2-parallelism",
+    PASSWORD_HASH_DEFAULTS.argon2Parallelism,
+  );
+  const [hashInput, setHashInput] = useState("");
+  const [hashVerifyInput, setHashVerifyInput] = useState("");
+  const [hashOutput, setHashOutput] = useState("");
+  const [hashBusy, setHashBusy] = useState(false);
+  const [hashError, setHashError] = useState<string | null>(null);
+  const [hashVerifyState, setHashVerifyState] = useState<"idle" | "match" | "mismatch" | "error">("idle");
+  const [argon2Available, setArgon2Available] = useState<boolean | null>(null);
   const passwordToggleKeys: Array<"upper" | "lower" | "digits" | "symbols"> = ["upper", "lower", "digits", "symbols"];
 
   useEffect(() => {
@@ -66,11 +100,35 @@ export function PwView({ onOpenGuide }: PwViewProps) {
     setPhrase(generatePassphrase(passphraseSettings));
   }, [passphraseSettings]);
 
+  useEffect(() => {
+    void (async () => {
+      try {
+        const available = await supportsArgon2id();
+        setArgon2Available(available);
+      } catch (error) {
+        console.error(error);
+        setArgon2Available(false);
+      }
+    })();
+  }, []);
+
   const passwordEntropy = useMemo(() => estimatePasswordEntropy(passwordSettings), [passwordSettings]);
   const passphraseEntropy = useMemo(() => estimatePassphraseEntropy(passphraseSettings), [passphraseSettings]);
   const passwordAssessment = useMemo(() => analyzeSecret(password, passwordEntropy), [password, passwordEntropy]);
   const passphraseAssessment = useMemo(() => analyzeSecret(phrase, passphraseEntropy), [phrase, passphraseEntropy]);
   const labAssessment = useMemo(() => analyzeSecret(labInput), [labInput]);
+  const hashChoiceAssessment = useMemo(
+    () =>
+      assessPasswordHashChoice({
+        algorithm: hashAlgorithm,
+        saltBytes: hashSaltBytes,
+        pbkdf2Iterations: hashPbkdf2Iterations,
+        argon2Memory: hashArgon2Memory,
+        argon2Passes: hashArgon2Passes,
+        argon2Parallelism: hashArgon2Parallelism,
+      }),
+    [hashAlgorithm, hashArgon2Memory, hashArgon2Parallelism, hashArgon2Passes, hashPbkdf2Iterations, hashSaltBytes],
+  );
   const dictionary = useMemo(
     () => getPassphraseDictionaryStats(passphraseSettings.dictionaryProfile),
     [passphraseSettings.dictionaryProfile],
@@ -165,6 +223,57 @@ export function PwView({ onOpenGuide }: PwViewProps) {
       (message, tone) => push(message, tone === "danger" ? "danger" : tone === "accent" ? "accent" : "neutral"),
       successMessage,
     );
+
+  const handlePasswordHash = async () => {
+    if (!hashInput.trim()) {
+      push("enter a password to hash", "danger");
+      return;
+    }
+    setHashBusy(true);
+    try {
+      const result = await hashPassword(hashInput, {
+        algorithm: hashAlgorithm,
+        saltBytes: clamp(hashSaltBytes, 8, 64),
+        pbkdf2Iterations: clamp(hashPbkdf2Iterations, 100_000, 2_000_000),
+        argon2Memory: clamp(hashArgon2Memory, 8_192, 262_144),
+        argon2Passes: clamp(hashArgon2Passes, 1, 8),
+        argon2Parallelism: clamp(hashArgon2Parallelism, 1, 4),
+      });
+      setHashOutput(result.encoded);
+      setHashError(null);
+      setHashVerifyState("idle");
+      push(result.assessment.safety === "weak" ? "hash generated (legacy mode)" : "password hash generated", result.assessment.safety === "weak" ? "danger" : "accent");
+    } catch (error) {
+      console.error(error);
+      const message = error instanceof Error ? error.message : "password hash failed";
+      setHashError(message);
+      push(message, "danger");
+    } finally {
+      setHashBusy(false);
+    }
+  };
+
+  const handleVerifyHash = async () => {
+    if (!hashOutput.trim() || !hashVerifyInput) {
+      setHashVerifyState("error");
+      push("hash output and candidate password are required", "danger");
+      return;
+    }
+    setHashBusy(true);
+    try {
+      const matched = await verifyPassword(hashVerifyInput, hashOutput.trim());
+      setHashVerifyState(matched ? "match" : "mismatch");
+      push(matched ? "password match" : "password mismatch", matched ? "accent" : "danger");
+    } catch (error) {
+      console.error(error);
+      setHashVerifyState("error");
+      const message = error instanceof Error ? error.message : "verification failed";
+      setHashError(message);
+      push(message, "danger");
+    } finally {
+      setHashBusy(false);
+    }
+  };
 
   return (
     <div className="workspace-scroll">
@@ -605,6 +714,186 @@ export function PwView({ onOpenGuide }: PwViewProps) {
           </table>
         </div>
       </div>
+      <div className="panel" aria-label={tr("Password storage hash lab")}>
+        <div className="panel-heading">
+          <span>{tr("Password Storage Hashing")}</span>
+          <span className="panel-subtext">{tr("salted records with cost factors")}</span>
+        </div>
+        <div className="controls-row">
+          <label className="section-title" htmlFor="pw-hash-algo">
+            {tr("Algorithm")}
+          </label>
+          <select
+            id="pw-hash-algo"
+            className="select"
+            value={hashAlgorithm}
+            onChange={(event) => {
+              setHashAlgorithm(event.target.value as PasswordHashAlgorithm);
+              setHashVerifyState("idle");
+            }}
+            aria-label={tr("Password hash algorithm")}
+          >
+            <option value="argon2id">Argon2id (recommended)</option>
+            <option value="pbkdf2-sha256">PBKDF2-SHA256 (compat)</option>
+            <option value="sha512">SHA-512 (legacy)</option>
+            <option value="sha256">SHA-256 (legacy)</option>
+          </select>
+          <label className="section-title" htmlFor="pw-hash-salt">
+            {tr("Salt bytes")}
+          </label>
+          <input
+            id="pw-hash-salt"
+            className="input"
+            type="number"
+            min={8}
+            max={64}
+            value={hashSaltBytes}
+            onChange={(event) => setHashSaltBytes(clamp(Number(event.target.value) || 0, 8, 64))}
+            aria-label={tr("Hash salt bytes")}
+          />
+        </div>
+        {hashAlgorithm === "pbkdf2-sha256" ? (
+          <div className="controls-row">
+            <label className="section-title" htmlFor="pw-hash-pbkdf2-iterations">
+              {tr("PBKDF2 iterations")}
+            </label>
+            <input
+              id="pw-hash-pbkdf2-iterations"
+              className="input"
+              type="number"
+              min={100000}
+              max={2000000}
+              step={50000}
+              value={hashPbkdf2Iterations}
+              onChange={(event) => setHashPbkdf2Iterations(clamp(Number(event.target.value) || 0, 100_000, 2_000_000))}
+              aria-label={tr("PBKDF2 iterations")}
+            />
+          </div>
+        ) : null}
+        {hashAlgorithm === "argon2id" ? (
+          <div className="controls-row">
+            <label className="section-title" htmlFor="pw-hash-argon2-memory">
+              {tr("Argon2 memory (KiB)")}
+            </label>
+            <input
+              id="pw-hash-argon2-memory"
+              className="input"
+              type="number"
+              min={8192}
+              max={262144}
+              step={2048}
+              value={hashArgon2Memory}
+              onChange={(event) => setHashArgon2Memory(clamp(Number(event.target.value) || 0, 8_192, 262_144))}
+              aria-label={tr("Argon2 memory")}
+            />
+            <label className="section-title" htmlFor="pw-hash-argon2-passes">
+              {tr("Passes")}
+            </label>
+            <input
+              id="pw-hash-argon2-passes"
+              className="input"
+              type="number"
+              min={1}
+              max={8}
+              value={hashArgon2Passes}
+              onChange={(event) => setHashArgon2Passes(clamp(Number(event.target.value) || 0, 1, 8))}
+              aria-label={tr("Argon2 passes")}
+            />
+            <label className="section-title" htmlFor="pw-hash-argon2-parallelism">
+              {tr("Parallelism")}
+            </label>
+            <input
+              id="pw-hash-argon2-parallelism"
+              className="input"
+              type="number"
+              min={1}
+              max={4}
+              value={hashArgon2Parallelism}
+              onChange={(event) => setHashArgon2Parallelism(clamp(Number(event.target.value) || 0, 1, 4))}
+              aria-label={tr("Argon2 parallelism")}
+            />
+          </div>
+        ) : null}
+        <textarea
+          className="textarea"
+          value={hashInput}
+          onChange={(event) => setHashInput(event.target.value)}
+          placeholder={tr("Password input for hashing (local only)")}
+          aria-label={tr("Password input for hashing")}
+        />
+        <div className="controls-row">
+          <button className="button" type="button" onClick={() => void handlePasswordHash()} disabled={hashBusy || !hashInput.trim()}>
+            {hashBusy ? tr("working…") : tr("generate hash")}
+          </button>
+          <button className="button" type="button" onClick={() => copySecret(hashOutput, "hash copied")} disabled={!hashOutput}>
+            {tr("copy hash")}
+          </button>
+          <button
+            className="button"
+            type="button"
+            onClick={() => {
+              setHashInput("");
+              setHashVerifyInput("");
+              setHashOutput("");
+              setHashError(null);
+              setHashVerifyState("idle");
+            }}
+          >
+            {tr("clear")}
+          </button>
+        </div>
+        <textarea
+          className="textarea"
+          value={hashOutput}
+          readOnly
+          placeholder={tr("Generated password hash record")}
+          aria-label={tr("Generated password hash")}
+        />
+        <div className="controls-row">
+          <input
+            className="input"
+            type="password"
+            value={hashVerifyInput}
+            onChange={(event) => setHashVerifyInput(event.target.value)}
+            placeholder={tr("Password candidate for verification")}
+            aria-label={tr("Password candidate")}
+          />
+          <button className="button" type="button" onClick={() => void handleVerifyHash()} disabled={!hashOutput || !hashVerifyInput || hashBusy}>
+            {tr("verify")}
+          </button>
+        </div>
+        <div className="status-line">
+          <span>{tr("safety")}</span>
+          <span className={hashSafetyTagClass(hashChoiceAssessment.safety)}>
+            {hashChoiceAssessment.safety === "strong" ? tr("strong") : hashChoiceAssessment.safety === "fair" ? tr("fair") : tr("weak")}
+          </span>
+          <span className={hashVerifyState === "match" ? "tag tag-accent" : hashVerifyState === "mismatch" || hashVerifyState === "error" ? "tag tag-danger" : "tag"}>
+            {hashVerifyState === "match"
+              ? tr("verified")
+              : hashVerifyState === "mismatch"
+                ? tr("mismatch")
+                : hashVerifyState === "error"
+                  ? tr("error")
+                  : tr("idle")}
+          </span>
+          {argon2Available === false && hashAlgorithm === "argon2id" ? (
+            <span className="microcopy">{tr("Argon2id is not available in this runtime. Choose PBKDF2 or use a browser with Argon2id support.")}</span>
+          ) : null}
+        </div>
+        {hashChoiceAssessment.warnings.length > 0 ? (
+          <ul className="note-list">
+            {hashChoiceAssessment.warnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        ) : (
+          <div className="microcopy">{tr("Current hash profile meets the recommended baseline.")}</div>
+        )}
+        {hashError ? <div className="microcopy" style={{ color: "var(--danger)" }}>{hashError}</div> : null}
+        <div className="microcopy">
+          {tr("Legacy SHA options are kept for compatibility only. Prefer Argon2id for new password storage records.")}
+        </div>
+      </div>
     </div>
   );
 }
@@ -612,6 +901,12 @@ export function PwView({ onOpenGuide }: PwViewProps) {
 function gradeTagClass(grade: SecretGrade): string {
   if (grade === "critical" || grade === "weak") return "tag tag-danger";
   if (grade === "fair") return "tag";
+  return "tag tag-accent";
+}
+
+function hashSafetyTagClass(safety: HashSafety): string {
+  if (safety === "weak") return "tag tag-danger";
+  if (safety === "fair") return "tag";
   return "tag tag-accent";
 }
 
