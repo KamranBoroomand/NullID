@@ -408,7 +408,7 @@ function AppShell() {
         {
             id: "feedback",
             title: "Track feedback locally",
-            body: "Use the feedback button at the bottom-right to save issues and ideas locally, then export as JSON.",
+            body: "Use the feedback button at the bottom-left to save issues and ideas locally, then export as JSON.",
         },
     ], [goToGuide, handleSelectModule, openPalette]);
     return (_jsxs("div", { className: `app-surface ${isCompact ? "is-compact" : ""}`, children: [_jsx("input", { ref: importProfileInputRef, type: "file", accept: "application/json", style: { position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }, tabIndex: -1, onChange: async (event) => {

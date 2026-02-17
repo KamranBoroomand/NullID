@@ -141,6 +141,7 @@ Team enforcement helpers:
 - Reuse CI templates from `.github/workflow-templates/nullid-pr-sanitize.yml` and `.github/workflow-templates/nullid-artifact-checks.yml`.
 - Platform-breadth workflow reference: `docs/phase3-workflows.md`.
 - Signed release + provenance workflow: `.github/workflows/release-signed.yml`.
+- Pages workflow runs validation/build checks on PRs and only deploys on `main` push.
 - Signed export/import operating conventions: `docs/signed-workflow-conventions.md`.
 - Release-candidate security checklist: `docs/release-security-checklist.md`.
 

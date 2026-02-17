@@ -494,7 +494,7 @@ function AppShell() {
       {
         id: "feedback",
         title: "Track feedback locally",
-        body: "Use the feedback button at the bottom-right to save issues and ideas locally, then export as JSON.",
+        body: "Use the feedback button at the bottom-left to save issues and ideas locally, then export as JSON.",
       },
     ],
     [goToGuide, handleSelectModule, openPalette],
