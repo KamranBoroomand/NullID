@@ -44,8 +44,9 @@ interface WorkspaceViewProps {
 }
 
 function WorkspaceView({ active, onRegisterHashActions, onStatus, onOpenGuide }: WorkspaceViewProps) {
+  const { tr } = useI18n();
   return (
-    <Suspense fallback={<div className="workspace-loading">loading module...</div>}>
+    <Suspense fallback={<div className="workspace-loading">{tr("loading module...")}</div>}>
       {active === "hash" ? <HashView onRegisterActions={onRegisterHashActions} onStatus={onStatus} onOpenGuide={onOpenGuide} /> : null}
       {active === "redact" ? <RedactView onOpenGuide={onOpenGuide} /> : null}
       {active === "sanitize" ? <SanitizeView onOpenGuide={onOpenGuide} /> : null}
@@ -61,7 +62,9 @@ function WorkspaceView({ active, onRegisterHashActions, onStatus, onOpenGuide }:
 
 function AppShell() {
   const { push } = useToast();
-  const { locale, setLocale, t } = useI18n();
+  const { locale, setLocale, t, tr } = useI18n();
+  const buildId = import.meta.env.VITE_BUILD_ID?.trim();
+  const buildMarker = buildId ? `Version: ${buildId.slice(0, 7)}` : import.meta.env.PROD ? "Version: Release" : "Version: Local";
   const [activeModule, setActiveModule] = usePersistentState<ModuleKey>("nullid:last-module", "hash");
   const [status, setStatus] = useState({ message: "ready", tone: "neutral" as StatusTone });
   const [theme, setTheme] = usePersistentState<ThemeMode>("nullid:theme", "light");
@@ -552,6 +555,7 @@ function AppShell() {
       <Frame
         stacked={isStacked}
         compact={isCompact}
+        buildMarker={buildMarker}
         modulePane={<ModuleList modules={modules} active={resolvedActiveModule} onSelect={handleSelectModule} />}
         header={
           <GlobalHeader
@@ -593,26 +597,26 @@ function AppShell() {
       />
       <ActionDialog
         open={profileExportOpen}
-        title="Export profile snapshot"
-        description="Export local nullid:* settings as JSON. Signed exports require a verification passphrase on import."
-        confirmLabel="export profile"
+        title={tr("Export profile snapshot")}
+        description={tr("Export local nullid:* settings as JSON. Signed exports require a verification passphrase on import.")}
+        confirmLabel={tr("export profile")}
         onCancel={closeProfileExportDialog}
         onConfirm={() => void confirmProfileExport()}
         confirmDisabled={profileExportSign && !profileExportPassphrase.trim()}
       >
         <label className="action-dialog-field">
-          <span>Sign metadata</span>
+          <span>{tr("Sign metadata")}</span>
           <input
             type="checkbox"
             checked={profileExportSign}
             onChange={(event) => setProfileExportSign(event.target.checked)}
-            aria-label="Sign profile metadata"
+            aria-label={tr("Sign profile metadata")}
           />
         </label>
         {profileExportSign ? (
           <>
             <label className="action-dialog-field">
-              <span>Signing passphrase</span>
+              <span>{tr("Signing passphrase")}</span>
               <input
                 className="action-dialog-input"
                 type="password"
@@ -621,13 +625,13 @@ function AppShell() {
                   setProfileExportPassphrase(event.target.value);
                   if (profileExportError) setProfileExportError(null);
                 }}
-                aria-label="Profile signing passphrase"
-                placeholder="required when signing"
+                aria-label={tr("Profile signing passphrase")}
+                placeholder={tr("required when signing")}
               />
             </label>
             <div className="action-dialog-row">
               <label className="action-dialog-field">
-                <span>Saved key hint</span>
+                <span>{tr("Saved key hint")}</span>
                 <select
                   className="action-dialog-select"
                   value={selectedKeyHintProfileId}
@@ -637,9 +641,9 @@ function AppShell() {
                     const profile = keyHintProfiles.find((entry) => entry.id === nextId);
                     setProfileExportKeyHint(profile?.keyHint ?? "");
                   }}
-                  aria-label="Saved key hint profile"
+                  aria-label={tr("Saved key hint profile")}
                 >
-                  <option value="">custom key hint</option>
+                  <option value="">{tr("custom key hint")}</option>
                   {keyHintProfiles.map((profile) => (
                     <option key={profile.id} value={profile.id}>
                       {profile.name} · {profile.keyHint}
@@ -648,60 +652,60 @@ function AppShell() {
                 </select>
               </label>
               <label className="action-dialog-field">
-                <span>Key hint label</span>
+                <span>{tr("Key hint label")}</span>
                 <input
                   className="action-dialog-input"
                   value={profileExportKeyHint}
                   onChange={(event) => setProfileExportKeyHint(event.target.value)}
-                  aria-label="Profile key hint"
-                  placeholder="optional recipient-visible hint"
+                  aria-label={tr("Profile key hint")}
+                  placeholder={tr("optional recipient-visible hint")}
                 />
               </label>
             </div>
             <div className="action-dialog-row">
               <label className="action-dialog-field">
-                <span>Save key hint profile as</span>
+                <span>{tr("Save key hint profile as")}</span>
                 <input
                   className="action-dialog-input"
                   value={keyHintProfileName}
                   onChange={(event) => setKeyHintProfileName(event.target.value)}
-                  aria-label="Key hint profile name"
+                  aria-label={tr("Key hint profile name")}
                   placeholder="team-signing-key"
                 />
               </label>
               <button type="button" className="button" onClick={saveProfileHint} disabled={!profileExportKeyHint.trim()}>
-                save hint
+                {tr("save hint")}
               </button>
             </div>
             <p className="action-dialog-note">
-              Key hints are local labels only. Passphrases are not persisted.
+              {tr("Key hints are local labels only. Passphrases are not persisted.")}
               {selectedKeyHintProfile ? ` Active: ${selectedKeyHintProfile.name} (v${selectedKeyHintProfile.version})` : ""}
             </p>
           </>
         ) : (
-          <p className="action-dialog-note">Unsigned profile exports can still be imported, but signature verification is unavailable.</p>
+          <p className="action-dialog-note">{tr("Unsigned profile exports can still be imported, but signature verification is unavailable.")}</p>
         )}
         {profileExportError ? <p className="action-dialog-error">{profileExportError}</p> : null}
       </ActionDialog>
       <ActionDialog
         open={profileImportOpen}
-        title="Import profile snapshot"
+        title={tr("Import profile snapshot")}
         description={
           profileImportDescriptor
             ? `${profileImportDescriptor.entryCount} entries · ${profileImportDescriptor.legacy ? "legacy" : `schema ${profileImportDescriptor.schemaVersion}`}`
-            : "Select import settings"
+            : tr("Select import settings")
         }
-        confirmLabel="import profile"
+        confirmLabel={tr("import profile")}
         onCancel={closeProfileImportDialog}
         onConfirm={() => void confirmProfileImport()}
       >
         {profileImportDescriptor?.signed ? (
           <>
             <p className="action-dialog-note">
-              Signed profile detected{profileImportDescriptor.keyHint ? ` (hint: ${profileImportDescriptor.keyHint})` : ""}. Verification is required before import.
+              {tr("Signed profile detected")}{profileImportDescriptor.keyHint ? ` (${tr("hint")}: ${profileImportDescriptor.keyHint})` : ""}. {tr("Verification is required before import.")}
             </p>
             <label className="action-dialog-field">
-              <span>Verification passphrase</span>
+              <span>{tr("Verification passphrase")}</span>
               <input
                 className="action-dialog-input"
                 type="password"
@@ -710,13 +714,13 @@ function AppShell() {
                   setProfileImportPassphrase(event.target.value);
                   if (profileImportError) setProfileImportError(null);
                 }}
-                aria-label="Profile verification passphrase"
-                placeholder="required for signed profile"
+                aria-label={tr("Profile verification passphrase")}
+                placeholder={tr("required for signed profile")}
               />
             </label>
           </>
         ) : (
-          <p className="action-dialog-note">Unsigned profile snapshot. Continue only if you trust the source.</p>
+          <p className="action-dialog-note">{tr("Unsigned profile snapshot. Continue only if you trust the source.")}</p>
         )}
         {profileImportError ? <p className="action-dialog-error">{profileImportError}</p> : null}
       </ActionDialog>

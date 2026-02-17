@@ -26,7 +26,7 @@ interface MetaViewProps {
 }
 
 export function MetaView({ onOpenGuide }: MetaViewProps) {
-  const { t } = useI18n();
+  const { t, tr } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState("none");
@@ -188,16 +188,16 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
         </button>
       </div>
       <div className="grid-two">
-        <div className="panel" aria-label="Metadata input">
+        <div className="panel" aria-label={tr("Metadata input")}>
           <div className="panel-heading">
-            <span>Metadata Inspector</span>
-            <span className="panel-subtext">drop image</span>
+            <span>{tr("Metadata Inspector")}</span>
+            <span className="panel-subtext">{tr("drop image")}</span>
           </div>
           <div
             className="dropzone"
             role="button"
             tabIndex={0}
-            aria-label="Drop file for inspection"
+            aria-label={tr("Drop file for inspection")}
             onClick={() => fileInputRef.current?.click()}
             onKeyDown={(event) => {
               if (event.key === "Enter" || event.key === " ") {
@@ -219,26 +219,26 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
               style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }}
               tabIndex={-1}
             />
-            <div className="section-title">drag image</div>
+            <div className="section-title">{tr("drag image")}</div>
             <div className="microcopy">jpeg / png / webp / avif / gif / bmp / tiff</div>
           </div>
           <div className="status-line">
-            <span>file</span>
+            <span>{tr("file")}</span>
             <Chip label={fileName} tone="muted" />
             <Chip label={message} tone="accent" />
           </div>
         </div>
-        <div className="panel" aria-label="Clean export">
+        <div className="panel" aria-label={tr("Clean export")}>
           <div className="panel-heading">
-            <span>Clean export</span>
-            <span className="panel-subtext">strip EXIF</span>
+            <span>{tr("Clean export")}</span>
+            <span className="panel-subtext">{tr("strip EXIF")}</span>
           </div>
           <p className="microcopy">
             Images are re-encoded via canvas to drop metadata. Compatibility diagnostics below show decode and export readiness by format.
           </p>
           <div className="controls-row">
             <label className="section-title" htmlFor="resize-percent">
-              Strip + resize
+              {tr("Strip + resize")}
             </label>
             <select
               id="resize-percent"
@@ -252,7 +252,7 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
               <option value={50}>50%</option>
             </select>
             <label className="section-title" htmlFor="meta-output-format">
-              Output format
+              {tr("Output format")}
             </label>
             <select
               id="meta-output-format"
@@ -268,7 +268,7 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
               <option value="image/avif">avif</option>
             </select>
             <label className="section-title" htmlFor="meta-quality">
-              Quality
+              {tr("Quality")}
             </label>
             <input
               id="meta-quality"
@@ -278,7 +278,7 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
               max={100}
               value={quality}
               onChange={(event) => setQuality(Math.min(100, Math.max(50, Number(event.target.value))))}
-              aria-label="Output quality percent"
+              aria-label={tr("Output quality percent")}
             />
           </div>
           <div className="controls-row">
@@ -287,36 +287,36 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
               type="button"
               onClick={() => void saveClean()}
               disabled={!cleanBlob || Boolean(unsupportedReason)}
-              aria-label="Download cleaned image"
+              aria-label={tr("Download cleaned image")}
             >
-              download clean
+              {tr("download clean")}
             </button>
-            {unsupportedReason ? <Chip label="unsupported" tone="danger" /> : <Chip label="ready" tone="accent" />}
+            {unsupportedReason ? <Chip label={tr("unsupported")} tone="danger" /> : <Chip label={tr("ready")} tone="accent" />}
           </div>
           <div className="status-line">
-            <span>removed</span>
-            <span className="microcopy">{removedList || "none"}</span>
+            <span>{tr("removed")}</span>
+            <span className="microcopy">{removedList || tr("none")}</span>
           </div>
           <div className="status-line">
-            <span>size delta</span>
+            <span>{tr("size delta")}</span>
             <span className="tag">{compressionDeltaLabel}</span>
-            <span className="microcopy">{cleanBlob ? `clean ${Math.ceil(cleanBlob.size / 1024)} KB` : "pending"}</span>
+            <span className="microcopy">{cleanBlob ? `${tr("clean")} ${Math.ceil(cleanBlob.size / 1024)} KB` : tr("pending")}</span>
           </div>
-          <div className="section-title">Compatibility diagnostics</div>
+          <div className="section-title">{tr("Compatibility diagnostics")}</div>
           <table className="table">
             <thead>
               <tr>
-                <th>format</th>
-                <th>decode</th>
-                <th>encode</th>
-                <th>clean export</th>
+                <th>{tr("format")}</th>
+                <th>{tr("decode")}</th>
+                <th>{tr("encode")}</th>
+                <th>{tr("clean export")}</th>
               </tr>
             </thead>
             <tbody>
               {formatRows.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="muted">
-                    probing browser support...
+                    {tr("probing browser support...")}
                   </td>
                 </tr>
               ) : (
@@ -336,59 +336,59 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
           </table>
         </div>
       </div>
-      <div className="panel" aria-label="Metadata table">
+      <div className="panel" aria-label={tr("Metadata table")}>
         <div className="panel-heading">
-          <span>Fields</span>
-          <span className="panel-subtext">before / after</span>
+          <span>{tr("Fields")}</span>
+          <span className="panel-subtext">{tr("before / after")}</span>
         </div>
         <div className="note-box">
-          <div className="section-title">Forensic fingerprint</div>
+          <div className="section-title">{tr("Forensic fingerprint")}</div>
           <div className="status-line">
-            <span>before sha256</span>
-            <span className="microcopy">{beforeSha256 || "pending"}</span>
+            <span>{tr("before sha256")}</span>
+            <span className="microcopy">{beforeSha256 || tr("pending")}</span>
           </div>
           <div className="status-line">
-            <span>after sha256</span>
-            <span className="microcopy">{afterSha256 || "pending"}</span>
+            <span>{tr("after sha256")}</span>
+            <span className="microcopy">{afterSha256 || tr("pending")}</span>
           </div>
           <div className="status-line">
-            <span>match</span>
+            <span>{tr("match")}</span>
             <Chip
-              label={beforeSha256 && afterSha256 ? (beforeSha256 === afterSha256 ? "unchanged" : "changed") : "pending"}
+              label={beforeSha256 && afterSha256 ? (beforeSha256 === afterSha256 ? tr("unchanged") : tr("changed")) : tr("pending")}
               tone={beforeSha256 && afterSha256 ? (beforeSha256 === afterSha256 ? "muted" : "accent") : "muted"}
             />
           </div>
         </div>
         <div className="grid-two">
           <div>
-            <div className="section-title">Previews</div>
+            <div className="section-title">{tr("Previews")}</div>
             <div className="grid-two">
               <div className="note-box">
-                <div className="microcopy">Before</div>
+                <div className="microcopy">{tr("Before")}</div>
                 {beforePreview ? (
                   <img src={beforePreview} alt="Before preview" className="image-preview" />
                 ) : (
-                  <div className="microcopy">no file</div>
+                  <div className="microcopy">{tr("no file")}</div>
                 )}
               </div>
               <div className="note-box">
-                <div className="microcopy">After (cleaned)</div>
+                <div className="microcopy">{tr("After (cleaned)")}</div>
                 {afterPreview ? (
                   <img src={afterPreview} alt="After preview" className="image-preview" />
                 ) : (
-                  <div className="microcopy">not generated</div>
+                  <div className="microcopy">{tr("not generated")}</div>
                 )}
               </div>
             </div>
           </div>
           <div>
-            <div className="section-title">Before cleaning</div>
+            <div className="section-title">{tr("Before cleaning")}</div>
             <table className="table">
               <tbody>
                 {beforeFields.length === 0 ? (
                   <tr>
                     <td className="muted" colSpan={2}>
-                      no fields
+                      {tr("no fields")}
                     </td>
                   </tr>
                 ) : (
@@ -403,13 +403,13 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
             </table>
           </div>
           <div>
-            <div className="section-title">After cleaning</div>
+            <div className="section-title">{tr("After cleaning")}</div>
             <table className="table">
               <tbody>
                 {afterFields.length === 0 ? (
                   <tr>
                     <td className="muted" colSpan={2}>
-                      stripped (expected minimal metadata after re-encode)
+                      {tr("stripped (expected minimal metadata after re-encode)")}
                     </td>
                   </tr>
                 ) : (

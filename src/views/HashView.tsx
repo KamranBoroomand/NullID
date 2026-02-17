@@ -29,7 +29,7 @@ type HashSource =
 
 export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewProps) {
   const { push } = useToast();
-  const { t } = useI18n();
+  const { t, tr, formatNumber } = useI18n();
   const [clipboardPrefs] = useClipboardPrefs();
   const [algorithm, setAlgorithm] = useState<HashAlgorithm>("SHA-256");
   const [displayFormat, setDisplayFormat] = useState<HashDisplayFormat>("hex");
@@ -401,18 +401,18 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
         </button>
       </div>
       <div className="grid-two">
-        <div className="panel" aria-label="Hash inputs">
+        <div className="panel" aria-label={tr("Hash inputs")}>
           <div className="panel-heading">
-            <span>Hash input</span>
-            <span className="panel-subtext">text or file</span>
+            <span>{tr("Hash input")}</span>
+            <span className="panel-subtext">{tr("text or file")}</span>
           </div>
           <label className="section-title" htmlFor="hash-text">
-            Text
+            {tr("Text")}
           </label>
           <textarea
             id="hash-text"
             className="textarea"
-            placeholder="Type or paste text to hash"
+            placeholder={tr("Type or paste text to hash")}
             value={textValue}
             onCompositionStart={() => setIsComposing(true)}
             onCompositionEnd={(event) => {
@@ -420,12 +420,12 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
               handleTextChange(event.currentTarget.value);
             }}
             onChange={(event) => handleTextChange(event.target.value)}
-            aria-label="Text to hash"
+            aria-label={tr("Text to hash")}
           />
           <div className="dropzone"
             role="button"
             tabIndex={0}
-            aria-label="Drop file to hash"
+            aria-label={tr("Drop file to hash")}
             onClick={() => fileInputRef.current?.click()}
             onKeyDown={(event) => {
               if (event.key === "Enter" || event.key === " ") {
@@ -442,61 +442,61 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
             <input
               ref={fileInputRef}
               type="file"
-              aria-label="Pick file"
+              aria-label={tr("Pick file")}
               onChange={(event) => void handleFile(event.target.files?.[0] ?? null)}
               style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }}
               tabIndex={-1}
             />
-            <div className="section-title">Drop or select file</div>
-            <div className="microcopy">progressive chunk hashing</div>
-            {isBusy && <div className="microcopy">progress {progress}%</div>}
-            {isHashing && <div className="microcopy">Hashing...</div>}
+            <div className="section-title">{tr("Drop or select file")}</div>
+            <div className="microcopy">{tr("progressive chunk hashing")}</div>
+            {isBusy && <div className="microcopy">{tr("progress")} {progress}%</div>}
+            {isHashing && <div className="microcopy">{tr("Hashing...")}</div>}
           </div>
           <div className="status-line">
-            <span>source</span>
+            <span>{tr("source")}</span>
             <Chip label={fileName} tone="muted" />
-            {isBusy && <Chip label="hashing…" tone="accent" />}
+            {isBusy && <Chip label={tr("hashing…")} tone="accent" />}
           </div>
         </div>
-        <div className="panel" aria-label="Hash output">
+        <div className="panel" aria-label={tr("Hash output")}>
           <div className="panel-heading">
-            <span>Digest</span>
+            <span>{tr("Digest")}</span>
             <span className="panel-subtext">{algorithm.toLowerCase()}</span>
           </div>
           <div className="controls-row">
-            <input className="input" value={digestDisplay} readOnly aria-label="Computed hash" />
+            <input className="input" value={digestDisplay} readOnly aria-label={tr("Computed hash")} />
             <button className="button" type="button" onClick={copyDigest} disabled={!result}>
-              copy
+              {tr("copy")}
             </button>
             <button className="button" type="button" onClick={copyShaLine} disabled={!result || algorithm !== "SHA-256"}>
-              sha256sum line
+              {tr("sha256sum line")}
             </button>
             <button className="button" type="button" onClick={exportDigestManifest} disabled={!result}>
-              export manifest
+              {tr("export manifest")}
             </button>
           </div>
           <div className="controls-row">
             <div>
               <label className="section-title" htmlFor="hash-algo">
-                Algorithm
+                {tr("Algorithm")}
               </label>
               <select
                 id="hash-algo"
                 className="select"
                 value={algorithm}
                 onChange={(event) => setAlgorithm(event.target.value as HashAlgorithm)}
-                aria-label="Select hash algorithm"
+                aria-label={tr("Select hash algorithm")}
               >
                 <option value="SHA-256">SHA-256</option>
                 <option value="SHA-512">SHA-512</option>
-                <option value="SHA-1">SHA-1 (legacy/insecure)</option>
+                <option value="SHA-1">{tr("SHA-1 (legacy/insecure)")}</option>
               </select>
             </div>
             <div>
               <div className="section-title" aria-hidden="true">
-                Output
+                {tr("Output")}
               </div>
-              <div className="pill-buttons" role="group" aria-label="Output format">
+              <div className="pill-buttons" role="group" aria-label={tr("Output format")}>
                 {(["hex", "base64", "sha256sum"] as HashDisplayFormat[]).map((format) => (
                   <button
                     key={format}
@@ -512,16 +512,16 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
             </div>
           </div>
           <label className="section-title" htmlFor="hash-verify">
-            Verify digest
+            {tr("Verify digest")}
           </label>
           <div className="controls-row">
             <input
               id="hash-verify"
               className="input"
-              placeholder="Paste hash to verify"
+              placeholder={tr("Paste hash to verify")}
               value={verifyValue}
               onChange={(event) => handleVerifyChange(event.target.value)}
-              aria-label="Hash to verify"
+              aria-label={tr("Hash to verify")}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
                   event.preventDefault();
@@ -530,21 +530,21 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
               }}
             />
             <button className="button" type="button" onClick={() => compare(verifyValue)} disabled={!verifyValue}>
-              compare
+              {tr("compare")}
             </button>
           </div>
           <div className="controls-row">
             <label className="section-title" htmlFor="hash-compare-file">
-              Compare against file
+              {tr("Compare against file")}
             </label>
             <button className="button" type="button" onClick={() => fileCompareRef.current?.click()} disabled={!result}>
-              select file
+              {tr("select file")}
             </button>
             <input
               ref={fileCompareRef}
               id="hash-compare-file"
               type="file"
-              aria-label="Pick file to compare hash"
+              aria-label={tr("Pick file to compare hash")}
               tabIndex={-1}
               style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }}
               onChange={async (event) => {
@@ -571,88 +571,88 @@ export function HashView({ onRegisterActions, onStatus, onOpenGuide }: HashViewP
             />
           </div>
           <div className="status-line">
-            <span>Result</span>
+            <span>{tr("Result")}</span>
             <Chip
               label={
                 comparison === "match"
-                  ? "MATCH"
+                  ? tr("MATCH")
                   : comparison === "mismatch"
-                    ? "MISMATCH"
+                    ? tr("MISMATCH")
                     : comparison === "invalid"
-                      ? "INVALID"
-                      : "PENDING"
+                      ? tr("INVALID")
+                      : tr("PENDING")
               }
               tone={comparisonTone}
             />
-            <span className="microcopy">{result ? "digest ready" : "awaiting input"}</span>
+            <span className="microcopy">{result ? tr("digest ready") : tr("awaiting input")}</span>
           </div>
           <div className="status-line">
-            <span>Perf</span>
-            <span className="tag">{lastDurationMs ? `${lastDurationMs}ms` : "pending"}</span>
+            <span>{tr("Perf")}</span>
+            <span className="tag">{lastDurationMs ? `${formatNumber(lastDurationMs)}ms` : tr("pending")}</span>
             <span className="microcopy">
-              {throughput ? `${throughput} · ${Math.ceil((lastInputBytes ?? 0) / 1024)} KiB` : "hash telemetry after first run"}
+              {throughput ? `${throughput} · ${formatNumber(Math.ceil((lastInputBytes ?? 0) / 1024))} KiB` : tr("hash telemetry after first run")}
             </span>
           </div>
           <div className="status-line">
-            <span>File compare</span>
+            <span>{tr("File compare")}</span>
             <Chip
               label={
                 fileComparison === "match"
-                  ? "FILES MATCH"
+                  ? tr("FILES MATCH")
                   : fileComparison === "mismatch"
-                    ? "FILES DIFFER"
+                    ? tr("FILES DIFFER")
                     : fileComparison === "pending"
-                      ? "CHECKING"
-                      : "IDLE"
+                      ? tr("CHECKING")
+                      : tr("IDLE")
               }
               tone={fileComparison === "match" ? "accent" : fileComparison === "mismatch" ? "danger" : "muted"}
             />
-            <span className="microcopy">against: {fileCompareName}</span>
+            <span className="microcopy">{tr("against:")} {fileCompareName}</span>
           </div>
         </div>
       </div>
-      <div className="panel" aria-label="Batch hash lab">
+      <div className="panel" aria-label={tr("Batch hash lab")}>
         <div className="panel-heading">
-          <span>Batch Hash Lab</span>
-          <span className="panel-subtext">line-by-line integrity</span>
+          <span>{tr("Batch Hash Lab")}</span>
+          <span className="panel-subtext">{tr("line-by-line integrity")}</span>
         </div>
         <div className="controls-row">
           <select
             className="select"
             value={batchAlgorithm}
             onChange={(event) => setBatchAlgorithm(event.target.value as HashAlgorithm)}
-            aria-label="Batch hash algorithm"
+            aria-label={tr("Batch hash algorithm")}
           >
             <option value="SHA-256">SHA-256</option>
             <option value="SHA-512">SHA-512</option>
-            <option value="SHA-1">SHA-1 (legacy/insecure)</option>
+            <option value="SHA-1">{tr("SHA-1 (legacy/insecure)")}</option>
           </select>
           <button className="button" type="button" onClick={() => void runBatchHash()} disabled={isBatching}>
-            {isBatching ? "hashing..." : "hash lines"}
+            {isBatching ? tr("hashing...") : tr("hash lines")}
           </button>
           <button className="button" type="button" onClick={exportBatchManifest} disabled={batchRows.length === 0}>
-            export batch
+            {tr("export batch")}
           </button>
         </div>
         <textarea
           className="textarea"
           value={batchInput}
           onChange={(event) => setBatchInput(event.target.value)}
-          placeholder="Paste one value per line (up to 120 lines)"
-          aria-label="Batch hash input"
+          placeholder={tr("Paste one value per line (up to 120 lines)")}
+          aria-label={tr("Batch hash input")}
         />
         <table className="table">
           <thead>
             <tr>
               <th>#</th>
-              <th>input</th>
-              <th>digest (hex)</th>
+              <th>{tr("input")}</th>
+              <th>{tr("digest (hex)")}</th>
             </tr>
           </thead>
           <tbody>
             {batchRows.length === 0 ? (
               <tr>
-                <td colSpan={3} className="muted">run batch hashing to populate</td>
+                <td colSpan={3} className="muted">{tr("run batch hashing to populate")}</td>
               </tr>
             ) : (
               batchRows.slice(0, 10).map((row) => (

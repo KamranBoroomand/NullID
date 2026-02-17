@@ -51,7 +51,7 @@ const defaultRules = Object.fromEntries(ruleKeys.map((key) => [key, true])) as R
 
 export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
   const { push } = useToast();
-  const { t } = useI18n();
+  const { t, tr, formatNumber } = useI18n();
   const [clipboardPrefs] = useClipboardPrefs();
   const [log, setLog] = useState(sanitizePresets.nginx.sample);
   const [rulesState, setRulesState] = usePersistentState<RulesState>("nullid:sanitize:rules", defaultRules);
@@ -494,10 +494,10 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
         </button>
       </div>
       <div className="grid-two">
-        <div className="panel" aria-label="Sanitizer input">
+        <div className="panel" aria-label={tr("Sanitizer input")}>
           <div className="panel-heading">
-            <span>Inbound log</span>
-            <span className="panel-subtext">raw</span>
+            <span>{tr("Inbound log")}</span>
+            <span className="panel-subtext">{tr("raw")}</span>
           </div>
           <textarea
             className="textarea"
@@ -506,8 +506,8 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
             aria-label="Log input"
           />
           <div className="controls-row">
-            <span className="section-title">Presets</span>
-            <div className="pill-buttons" role="group" aria-label="Log presets">
+            <span className="section-title">{tr("Presets")}</span>
+            <div className="pill-buttons" role="group" aria-label={tr("Log presets")}>
               {presetKeys.map((key) => (
                 <button key={key} type="button" className={preset === key ? "active" : ""} onClick={() => applyPreset(key)}>
                   {sanitizePresets[key].label}
@@ -516,9 +516,9 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
             </div>
           </div>
         </div>
-        <div className="panel" aria-label="Sanitized preview">
+        <div className="panel" aria-label={tr("Sanitized preview")}>
           <div className="panel-heading">
-            <span>Preview</span>
+            <span>{tr("Preview")}</span>
             <span className="panel-subtext">diff</span>
           </div>
           <div className="log-preview" role="presentation">
@@ -547,7 +547,7 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
               }
               disabled={!result.output}
             >
-              copy sanitized
+              {tr("copy sanitized")}
             </button>
             <button
               className="button"
@@ -555,38 +555,38 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
               onClick={() => downloadBlob(new Blob([result.output], { type: "text/plain" }), "nullid-sanitized.log")}
               disabled={!result.output}
             >
-              download sanitized
+              {tr("download sanitized")}
             </button>
             <label className="microcopy" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
               <input
                 type="checkbox"
                 checked={wrapLines}
                 onChange={(event) => setWrapLines(event.target.checked)}
-                aria-label="Wrap long lines"
+                aria-label={tr("Wrap long lines")}
               />
-              wrap long lines
+              {tr("wrap long lines")}
             </label>
             <label className="microcopy" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
               <input
                 type="checkbox"
                 checked={jsonAware}
                 onChange={(event) => setJsonAware(event.target.checked)}
-                aria-label="Enable JSON redaction"
+                aria-label={tr("Enable JSON redaction")}
               />
-              JSON-aware redaction
+              {tr("JSON-aware redaction")}
             </label>
           </div>
           <div className="status-line">
-            <span>Rules applied</span>
+            <span>{tr("Rules applied")}</span>
             <span className="tag tag-accent">{result.applied.length}</span>
-            <span className="microcopy">lines changed: {result.linesAffected}</span>
+            <span className="microcopy">{tr("lines changed:")} {formatNumber(result.linesAffected)}</span>
           </div>
         </div>
       </div>
-      <div className="panel" aria-label="Rule toggles">
+      <div className="panel" aria-label={tr("Rule toggles")}>
         <div className="panel-heading">
-          <span>Rules</span>
-          <span className="panel-subtext">toggle</span>
+          <span>{tr("Rules")}</span>
+          <span className="panel-subtext">{tr("toggle")}</span>
         </div>
         <div className="rule-grid">
           {ruleKeys.map((ruleKey) => (
@@ -711,8 +711,8 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
 
       <div className="panel" aria-label="Policy simulation matrix">
         <div className="panel-heading">
-          <span>Policy simulation matrix</span>
-          <span className="panel-subtext">compare policy outcomes</span>
+          <span>{tr("Policy simulation matrix")}</span>
+          <span className="panel-subtext">{tr("compare policy outcomes")}</span>
         </div>
         <p className="microcopy">
           Runs multiple policy variants against current input so you can compare redaction depth before sharing.
@@ -740,21 +740,21 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
       </div>
 
       <div className="grid-two">
-        <div className="panel" aria-label="Policy packs">
+        <div className="panel" aria-label={tr("Policy packs")}>
           <div className="panel-heading">
-            <span>Policy packs</span>
-            <span className="panel-subtext">local-only reusable configs</span>
+            <span>{tr("Policy packs")}</span>
+            <span className="panel-subtext">{tr("local-only reusable configs")}</span>
           </div>
           <div className="controls-row">
             <input
               className="input"
-              placeholder="policy name"
+              placeholder={tr("policy name")}
               value={policyName}
               onChange={(event) => setPolicyName(event.target.value)}
-              aria-label="Policy name"
+              aria-label={tr("Policy name")}
             />
             <button className="button" type="button" onClick={savePolicyPack}>
-              save
+              {tr("save")}
             </button>
           </div>
           <div className="controls-row">
@@ -764,7 +764,7 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
               value={selectedPolicyId}
               onChange={(event) => setSelectedPolicyId(event.target.value)}
             >
-              <option value="">select policy...</option>
+              <option value="">{tr("select policy...")}</option>
               {policyPacks.map((pack) => (
                 <option key={pack.id} value={pack.id}>
                   {pack.name}
@@ -772,27 +772,27 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
               ))}
             </select>
             <button className="button" type="button" onClick={() => selectedPolicy && applyPolicyPack(selectedPolicy)} disabled={!selectedPolicy}>
-              apply
+              {tr("apply")}
             </button>
             <button className="button" type="button" onClick={deletePolicyPack} disabled={!selectedPolicy}>
-              delete
+              {tr("delete")}
             </button>
           </div>
           <div className="controls-row">
             <button className="button" type="button" onClick={() => openPolicyExportDialog(selectedPolicy)} disabled={!selectedPolicy}>
-              export selected
+              {tr("export selected")}
             </button>
             <button className="button" type="button" onClick={() => openPolicyExportDialog(selectedPolicy, true)} disabled={!selectedPolicy}>
-              export signed
+              {tr("export signed")}
             </button>
             <button className="button" type="button" onClick={() => openPolicyExportDialog(null)} disabled={policyPacks.length === 0}>
-              export all
+              {tr("export all")}
             </button>
             <button className="button" type="button" onClick={() => policyImportRef.current?.click()}>
-              import
+              {tr("import")}
             </button>
             <button className="button" type="button" onClick={() => baselineImportRef.current?.click()}>
-              import baseline
+              {tr("import baseline")}
             </button>
             <input
               ref={policyImportRef}
@@ -869,14 +869,14 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
           </div>
         </div>
 
-        <div className="panel" aria-label="Batch sanitize">
+        <div className="panel" aria-label={tr("Batch sanitize")}>
           <div className="panel-heading">
-            <span>Batch sanitize</span>
-            <span className="panel-subtext">free local processing</span>
+            <span>{tr("Batch sanitize")}</span>
+            <span className="panel-subtext">{tr("free local processing")}</span>
           </div>
           <div className="controls-row">
             <button className="button" type="button" onClick={() => batchFileInputRef.current?.click()} disabled={isBatching}>
-              {isBatching ? "processing..." : "select files"}
+              {isBatching ? tr("processing...") : tr("select files")}
             </button>
             <input
               ref={batchFileInputRef}
@@ -891,15 +891,15 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
               }}
             />
             <button className="button" type="button" onClick={downloadBatchOutputs} disabled={batchResults.length === 0}>
-              download outputs
+              {tr("download outputs")}
             </button>
             <button className="button" type="button" onClick={exportBatchReport} disabled={batchResults.length === 0}>
-              export report
+              {tr("export report")}
             </button>
           </div>
           <div className="status-line">
-            <span>files processed</span>
-            <span className="tag tag-accent">{batchResults.length}</span>
+            <span>{tr("files processed")}</span>
+            <span className="tag tag-accent">{formatNumber(batchResults.length)}</span>
           </div>
           {batchResults.length > 0 && (
             <table className="table">
@@ -926,8 +926,8 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
 
       <div className="panel" aria-label="Safe share bundle">
         <div className="panel-heading">
-          <span>Safe share bundle</span>
-          <span className="panel-subtext">manifest + hash + sanitized output</span>
+          <span>{tr("Safe share bundle")}</span>
+          <span className="panel-subtext">{tr("manifest + hash + sanitized output")}</span>
         </div>
         <p className="microcopy">
           Generates a portable local bundle containing sanitized output, policy snapshot, and SHA-256 integrity hashes.
@@ -936,13 +936,13 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
           <input
             className="input"
             type="password"
-            placeholder="optional passphrase to encrypt bundle"
+            placeholder={tr("optional passphrase to encrypt bundle")}
             value={bundlePassphrase}
             onChange={(event) => setBundlePassphrase(event.target.value)}
-            aria-label="Bundle encryption passphrase"
+            aria-label={tr("Bundle encryption passphrase")}
           />
           <button className="button" type="button" onClick={() => void exportShareBundle()} disabled={isExportingBundle || !result.output}>
-            {isExportingBundle ? "exporting..." : bundlePassphrase ? "export encrypted bundle" : "export bundle"}
+            {isExportingBundle ? tr("exporting...") : bundlePassphrase ? tr("export encrypted bundle") : tr("export bundle")}
           </button>
         </div>
       </div>

@@ -36,7 +36,7 @@ interface VaultViewProps {
 
 export function VaultView({ onOpenGuide }: VaultViewProps) {
   const { push } = useToast();
-  const { t, formatDateTime } = useI18n();
+  const { t, tr, formatDateTime, formatNumber } = useI18n();
   const [passphrase, setPassphrase] = useState("");
   const [unlocked, setUnlocked] = useState(false);
   const [key, setKey] = useState<CryptoKey | null>(null);
@@ -513,48 +513,48 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
         </button>
       </div>
       <div className="grid-two">
-        <div className="panel" aria-label="Vault controls">
+        <div className="panel" aria-label={tr("Vault controls")}>
           <div className="panel-heading">
-            <span>Secure Notes</span>
+            <span>{tr("Secure Notes")}</span>
             <span className="panel-subtext">AES-GCM + PBKDF2</span>
           </div>
           <div className="controls-row">
             <input
               className="input"
               type="password"
-              placeholder="passphrase"
+              placeholder={tr("passphrase")}
               value={passphrase}
               onChange={(event) => setPassphrase(event.target.value)}
-              aria-label="Vault key"
+              aria-label={tr("Vault key")}
             />
             <button className="button" type="button" onClick={handleUnlock} disabled={unlocked || !passphrase}>
-              unlock
+              {tr("unlock")}
             </button>
             <button className="button" type="button" onClick={handleLock} disabled={!unlocked}>
-              lock
+              {tr("lock")}
             </button>
           </div>
           <div className="status-line">
-            <span>passphrase strength</span>
+            <span>{tr("passphrase strength")}</span>
             <span className={gradeTagClass(passphraseAssessment.grade)}>{gradeLabel(passphraseAssessment.grade)}</span>
-            <span className="microcopy">effective ≈ {passphraseAssessment.effectiveEntropyBits} bits</span>
+            <span className="microcopy">{tr("effective")} ≈ {formatNumber(passphraseAssessment.effectiveEntropyBits)} {tr("bits")}</span>
           </div>
           <div className="controls-row">
             <button className="button" type="button" onClick={() => openVaultExportDialog("plain")} disabled={!unlocked || notes.length === 0}>
-              export (json)
+              {tr("export (json)")}
             </button>
             <button className="button" type="button" onClick={() => openVaultExportDialog("encrypted")} disabled={!unlocked || notes.length === 0}>
-              export encrypted
+              {tr("export encrypted")}
             </button>
             <button className="button" type="button" onClick={handleImport}>
-              import
+              {tr("import")}
             </button>
             <button
               className="button"
               type="button"
               onClick={() => encryptedImportRef.current?.click()}
             >
-              import encrypted
+              {tr("import encrypted")}
             </button>
             <input
               ref={fileInputRef}
@@ -586,29 +586,29 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
               onClick={() => setWipeDialogOpen(true)}
               style={{ borderColor: "var(--danger)", color: "var(--danger)" }}
             >
-              wipe
+              {tr("wipe")}
             </button>
           </div>
           <div className="status-line">
-            <span>state</span>
-            <Chip label={unlocked ? "unsealed" : "locked"} tone={unlocked ? "accent" : "muted"} />
-            <span className="microcopy">notes: {notes.length}</span>
+            <span>{tr("state")}</span>
+            <Chip label={unlocked ? tr("unsealed") : tr("locked")} tone={unlocked ? "accent" : "muted"} />
+            <span className="microcopy">{tr("notes")}: {formatNumber(notes.length)}</span>
             <Chip label={`storage: ${backendInfo.kind}`} tone={backendInfo.fallbackReason ? "danger" : "muted"} />
             {backendInfo.fallbackReason && <span className="microcopy">fallback: {backendInfo.fallbackReason}</span>}
           </div>
           <div className="status-line">
-            <span>auto-lock</span>
-            <span className="tag">{unlocked ? `${lockRemaining}s` : "locked"}</span>
-            <span className="microcopy">{unlocked ? "timer resets on activity" : "unlock to start timer"}</span>
+            <span>{tr("auto-lock")}</span>
+            <span className="tag">{unlocked ? `${formatNumber(lockRemaining)}s` : tr("locked")}</span>
+            <span className="microcopy">{unlocked ? tr("timer resets on activity") : tr("unlock to start timer")}</span>
           </div>
           <div className="controls-row">
             <label className="section-title" htmlFor="vault-search">
-              Search
+              {tr("Search")}
             </label>
             <input
               id="vault-search"
               className="input"
-              placeholder="Filter title, body, or tags"
+              placeholder={tr("Filter title, body, or tags")}
               value={filter}
               onChange={(event) => setFilter(event.target.value)}
               disabled={!unlocked}
@@ -616,7 +616,7 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
           </div>
           <div className="controls-row">
             <label className="section-title" htmlFor="auto-lock">
-              Auto lock (seconds)
+              {tr("Auto lock (seconds)")}
             </label>
             <input
               id="auto-lock"
@@ -630,67 +630,67 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
             />
           </div>
         </div>
-        <div className="panel" aria-label="Create note form">
+        <div className="panel" aria-label={tr("Create note form")}>
           <div className="panel-heading">
-            <span>{activeId ? "Edit note" : "Create note"}</span>
-            <span className="panel-subtext">encrypted body</span>
+            <span>{activeId ? tr("Edit note") : tr("Create note")}</span>
+            <span className="panel-subtext">{tr("encrypted body")}</span>
           </div>
           <label className="section-title" htmlFor="note-title">
-            Title
+            {tr("Title")}
           </label>
           <input
             id="note-title"
             className="input"
-            placeholder="Incident draft"
-            aria-label="Note title"
+            placeholder={tr("Incident draft")}
+            aria-label={tr("Note title")}
             disabled={!unlocked}
             value={title}
             onChange={(event) => setTitle(event.target.value)}
           />
           <label className="section-title" htmlFor="note-body">
-            Body
+            {tr("Body")}
           </label>
           <textarea
             id="note-body"
             className="textarea"
-            placeholder="Encrypted note body..."
-            aria-label="Note body"
+            placeholder={tr("Encrypted note body...")}
+            aria-label={tr("Note body")}
             disabled={!unlocked}
             value={body}
             onChange={(event) => setBody(event.target.value)}
           />
           <label className="section-title" htmlFor="note-tags">
-            Tags (comma separated)
+            {tr("Tags (comma separated)")}
           </label>
           <input
             id="note-tags"
             className="input"
-            placeholder="incident, access, case-142"
-            aria-label="Note tags"
+            placeholder={tr("incident, access, case-142")}
+            aria-label={tr("Note tags")}
             disabled={!unlocked}
             value={tags}
             onChange={(event) => setTags(event.target.value)}
           />
           <div className="controls-row">
-            <span className="section-title">Templates</span>
-            <div className="pill-buttons" role="group" aria-label="Vault note templates">
+            <span className="section-title">{tr("Templates")}</span>
+            <div className="pill-buttons" role="group" aria-label={tr("Vault note templates")}>
               <button type="button" className={template === "blank" ? "active" : ""} onClick={() => applyTemplate("blank")}>
-                blank
+                {tr("blank")}
               </button>
               <button type="button" className={template === "incident" ? "active" : ""} onClick={() => applyTemplate("incident")}>
-                incident
+                {tr("incident")}
               </button>
               <button type="button" className={template === "credentials" ? "active" : ""} onClick={() => applyTemplate("credentials")}>
-                credentials
+                {tr("credentials")}
               </button>
               <button type="button" className={template === "checklist" ? "active" : ""} onClick={() => applyTemplate("checklist")}>
-                checklist
+                {tr("checklist")}
               </button>
             </div>
           </div>
           <div className="controls-row">
             <button className="button" type="button" disabled={!unlocked} onClick={handleSave}>
-              {activeId ? "update" : "store"}
+              {activeId ? tr("update") : tr("store")}
             </button>
             <button
               className="button"
@@ -703,22 +703,22 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
                 setActiveId(null);
               }}
             >
-              clear
+              {tr("clear")}
             </button>
           </div>
         </div>
       </div>
-      <div className="panel" aria-label="Notes list">
+      <div className="panel" aria-label={tr("Notes list")}>
         <div className="panel-heading">
-          <span>Notes</span>
-          <span className="panel-subtext">decrypted in-memory only</span>
+          <span>{tr("Notes")}</span>
+          <span className="panel-subtext">{tr("decrypted in-memory only")}</span>
         </div>
         <div className="note-box">
           <div className="status-line">
-            <span>analytics</span>
-            <span className="tag tag-accent">notes {vaultStats.totalNotes}</span>
-            <span className="tag">avg chars {vaultStats.avgChars}</span>
-            <span className="tag">tags {vaultStats.uniqueTags}</span>
+            <span>{tr("analytics")}</span>
+            <span className="tag tag-accent">{tr("notes")} {formatNumber(vaultStats.totalNotes)}</span>
+            <span className="tag">{tr("avg chars")} {formatNumber(vaultStats.avgChars)}</span>
+            <span className="tag">{tr("tags")} {formatNumber(vaultStats.uniqueTags)}</span>
           </div>
           <div className="controls-row">
             <button
@@ -730,7 +730,7 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
               }}
               disabled={!unlocked || filteredNotes.length === 0}
             >
-              export notes report
+              {tr("export notes report")}
             </button>
             <span className="microcopy">
               {vaultStats.latestUpdate ? `latest update: ${formatTs(vaultStats.latestUpdate)}` : "no notes yet"}
@@ -738,7 +738,7 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
           </div>
           {unlocked ? (
             filteredNotes.length === 0 ? (
-              <div className="microcopy">no matching notes</div>
+              <div className="microcopy">{tr("no matching notes")}</div>
             ) : (
               <ul className="note-list">
                 {filteredNotes.map((note) => (
@@ -757,7 +757,7 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
                     </div>
                     <div className="controls-row">
                       <button className="button" type="button" onClick={() => handleEdit(note)}>
-                        edit
+                        {tr("edit")}
                       </button>
                       <button
                         className="button"
@@ -765,7 +765,7 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
                         onClick={() => handleDelete(note.id)}
                         style={{ borderColor: "var(--danger)", color: "var(--danger)" }}
                       >
-                        delete
+                        {tr("delete")}
                       </button>
                     </div>
                   </li>
@@ -773,7 +773,7 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
               </ul>
             )
           ) : (
-            <div className="microcopy">locked. unlock to view.</div>
+            <div className="microcopy">{tr("locked. unlock to view.")}</div>
           )}
         </div>
       </div>

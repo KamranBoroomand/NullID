@@ -10,7 +10,7 @@ interface FrameProps {
   compact?: boolean;
 }
 
-export function Frame({ modulePane, workspace, header, buildMarker = "build: ui-preview", stacked, compact }: FrameProps) {
+export function Frame({ modulePane, workspace, header, buildMarker = "Version: Local", stacked, compact }: FrameProps) {
   return (
     <div className={`frame ${compact ? "frame-compact" : ""}`}>
       <div className="frame-shell">

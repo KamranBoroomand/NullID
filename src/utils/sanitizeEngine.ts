@@ -70,7 +70,7 @@ const rules: Rule[] = [
   {
     key: "maskIp",
     label: "Mask IP addresses",
-    apply: (input) => replaceWithCount(input, /\b(\d{1,3}\.){3}\d{1,3}\b/g, "[ip]"),
+    apply: replaceIpv4,
   },
   {
     key: "maskIpv6",
@@ -380,7 +380,7 @@ function replaceWithCount(input: string, regex: RegExp, replacement: string) {
 }
 
 function replaceCardNumbers(input: string) {
-  const regex = /\b(?:\d[ -]?){12,19}\b/g;
+  const regex = /(?:[0-9\u06F0-\u06F9\u0660-\u0669][ -]?){12,19}/g;
   let count = 0;
   const output = input.replace(regex, (match) => {
     if (passesLuhn(match)) {
@@ -393,7 +393,7 @@ function replaceCardNumbers(input: string) {
 }
 
 function replaceIban(input: string) {
-  const regex = /\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/gi;
+  const regex = /\b[A-Z]{2}[0-9\u06F0-\u06F9\u0660-\u0669]{2}[A-Z0-9\u06F0-\u06F9\u0660-\u0669]{11,30}\b/gi;
   let count = 0;
   const output = input.replace(regex, (match) => {
     if (isValidIban(match)) {
@@ -406,7 +406,7 @@ function replaceIban(input: string) {
 }
 
 function passesLuhn(value: string) {
-  const digits = value.replace(/[^0-9]/g, "");
+  const digits = toAsciiDigits(value).replace(/[^0-9]/g, "");
   if (digits.length < 12 || digits.length > 19) return false;
   let sum = 0;
   let doubleDigit = false;
@@ -423,7 +423,7 @@ function passesLuhn(value: string) {
 }
 
 function isValidIban(value: string) {
-  const trimmed = value.replace(/\s+/g, "").toUpperCase();
+  const trimmed = toAsciiDigits(value).replace(/\s+/g, "").toUpperCase();
   if (trimmed.length < 15 || trimmed.length > 34) return false;
   const rearranged = `${trimmed.slice(4)}${trimmed.slice(0, 4)}`;
   const converted = rearranged.replace(/[A-Z]/g, (ch) => `${ch.charCodeAt(0) - 55}`);
@@ -432,6 +432,19 @@ function isValidIban(value: string) {
     remainder = (remainder * 10 + Number(converted[i])) % 97;
   }
   return remainder === 1;
+}
+
+function replaceIpv4(input: string) {
+  const regex = /\b(?:[0-9\u06F0-\u06F9\u0660-\u0669]{1,3}\.){3}[0-9\u06F0-\u06F9\u0660-\u0669]{1,3}\b/g;
+  let count = 0;
+  const output = input.replace(regex, (match) => {
+    if (isValidIpv4(match)) {
+      count += 1;
+      return "[ip]";
+    }
+    return match;
+  });
+  return { output, count };
 }
 
 function replaceInternationalPhoneNumbers(input: string) {
@@ -478,6 +491,17 @@ function toAsciiDigits(value: string) {
   return value
     .replace(/[۰-۹]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 1728))
     .replace(/[٠-٩]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 1584));
+}
+
+function isValidIpv4(value: string) {
+  const normalized = toAsciiDigits(value);
+  const parts = normalized.split(".");
+  if (parts.length !== 4) return false;
+  return parts.every((part) => {
+    if (!/^\d{1,3}$/.test(part)) return false;
+    const num = Number(part);
+    return num >= 0 && num <= 255;
+  });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

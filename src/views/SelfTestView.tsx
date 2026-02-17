@@ -80,7 +80,7 @@ const initialResults = Object.fromEntries(checkKeys.map((key) => [key, "idle"]))
 
 export function SelfTestView({ onOpenGuide }: SelfTestViewProps) {
   const { push } = useToast();
-  const { t, formatDateTime } = useI18n();
+  const { t, tr, formatDateTime } = useI18n();
   const [results, setResults] = useState<Record<string, ExtendedResult>>(initialResults);
   const [details, setDetails] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("ready");
@@ -331,11 +331,11 @@ export function SelfTestView({ onOpenGuide }: SelfTestViewProps) {
   const summary = summarizeResults(results);
 
   const badge = (result: ExtendedResult) => {
-    if (result === "running") return <span className="tag">running</span>;
-    if (result === "pass") return <span className="tag tag-accent">pass</span>;
-    if (result === "warn") return <span className="tag">warn</span>;
-    if (result === "fail") return <span className="tag tag-danger">fail</span>;
-    return <span className="tag">idle</span>;
+    if (result === "running") return <span className="tag">{tr("running")}</span>;
+    if (result === "pass") return <span className="tag tag-accent">{tr("pass")}</span>;
+    if (result === "warn") return <span className="tag">{tr("warn")}</span>;
+    if (result === "fail") return <span className="tag tag-danger">{tr("fail")}</span>;
+    return <span className="tag">{tr("idle")}</span>;
   };
 
   return (
@@ -347,24 +347,24 @@ export function SelfTestView({ onOpenGuide }: SelfTestViewProps) {
       </div>
       <div className="panel">
         <div className="panel-heading">
-          <span>Self-test</span>
-          <span className="panel-subtext">dev diagnostics</span>
+          <span>{tr("Self-test")}</span>
+          <span className="panel-subtext">{tr("dev diagnostics")}</span>
         </div>
         <p className="microcopy">
           Runs runtime checks for crypto, storage, browser capability support, and responsiveness. Failed or warning checks include remediation hints.
         </p>
         <div className="controls-row">
           <button className="button" type="button" onClick={runAll}>
-            run all
+            {tr("run all")}
           </button>
           <label className="microcopy" style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
             <input
               type="checkbox"
               checked={autoMonitor}
               onChange={(event) => setAutoMonitor(event.target.checked)}
-              aria-label="Enable auto monitor"
+              aria-label={tr("Enable auto monitor")}
             />
-            auto monitor
+            {tr("auto monitor")}
           </label>
           <input
             className="input"
@@ -373,21 +373,21 @@ export function SelfTestView({ onOpenGuide }: SelfTestViewProps) {
             max={3600}
             value={monitorIntervalSec}
             onChange={(event) => setMonitorIntervalSec(Math.min(3600, Math.max(30, Number(event.target.value))))}
-            aria-label="Auto monitor interval in seconds"
+            aria-label={tr("Auto monitor interval in seconds")}
           />
           <button className="button" type="button" onClick={exportReport}>
-            export report
+            {tr("export report")}
           </button>
-          <span className="microcopy">status: {message}</span>
+          <span className="microcopy">{tr("status")}: {tr(message)}</span>
         </div>
         <div className="status-line">
-          <span>summary</span>
-          <span className="tag tag-danger">fail {summary.fail}</span>
-          <span className="tag">warn {summary.warn}</span>
-          <span className="tag tag-accent">pass {summary.pass}</span>
-          <span className="microcopy">health score {summary.healthScore}/100</span>
+          <span>{tr("summary")}</span>
+          <span className="tag tag-danger">{tr("fail")} {summary.fail}</span>
+          <span className="tag">{tr("warn")} {summary.warn}</span>
+          <span className="tag tag-accent">{tr("pass")} {summary.pass}</span>
+          <span className="microcopy">{tr("health score")} {summary.healthScore}/100</span>
         </div>
-        <div className="microcopy">last run: {lastRunAt ? formatDateTime(lastRunAt) : "never"}</div>
+        <div className="microcopy">{tr("last run:")} {lastRunAt ? formatDateTime(lastRunAt) : tr("never")}</div>
         <ul className="note-list">
           {checks.map((item) => {
             const result = results[item.key] ?? "idle";
@@ -402,7 +402,7 @@ export function SelfTestView({ onOpenGuide }: SelfTestViewProps) {
                 <div className="controls-row">
                   {badge(result)}
                   <button className="button" type="button" onClick={() => void runSingle(item.key)}>
-                    run
+                    {tr("run")}
                   </button>
                 </div>
               </li>

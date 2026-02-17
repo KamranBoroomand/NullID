@@ -64,9 +64,10 @@ const detectors: Detector[] = [
   {
     key: "ip",
     label: "IP",
-    regex: /\b(?:\d{1,3}\.){3}\d{1,3}\b/g,
+    regex: /\b(?:[0-9\u06F0-\u06F9\u0660-\u0669]{1,3}\.){3}[0-9\u06F0-\u06F9\u0660-\u0669]{1,3}\b/g,
     severity: "medium",
     mask: "[ip]",
+    validate: isValidIpv4,
   },
   {
     key: "id",
@@ -78,7 +79,7 @@ const detectors: Detector[] = [
   {
     key: "iban",
     label: "IBAN",
-    regex: /\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/gi,
+    regex: /\b[A-Z]{2}[0-9\u06F0-\u06F9\u0660-\u0669]{2}[A-Z0-9\u06F0-\u06F9\u0660-\u0669]{11,30}\b/gi,
     severity: "high",
     mask: "[iban]",
     validate: isValidIban,
@@ -86,7 +87,7 @@ const detectors: Detector[] = [
   {
     key: "card",
     label: "Credit card",
-    regex: /\b(?:\d[ -]?){12,19}\b/g,
+    regex: /(?:[0-9\u06F0-\u06F9\u0660-\u0669][ -]?){12,19}/g,
     severity: "high",
     mask: "[card]",
     validate: passesLuhn,
@@ -120,7 +121,7 @@ interface RedactViewProps {
 
 export function RedactView({ onOpenGuide }: RedactViewProps) {
   const { push } = useToast();
-  const { t } = useI18n();
+  const { t, tr } = useI18n();
   const [clipboardPrefs] = useClipboardPrefs();
   const [input, setInput] = useState("");
   const [maskMode, setMaskMode] = usePersistentState<MaskMode>("nullid:redact:mask", "full");
@@ -244,45 +245,45 @@ export function RedactView({ onOpenGuide }: RedactViewProps) {
         </button>
       </div>
       <div className="grid-two">
-        <div className="panel" aria-label="Redaction input">
+        <div className="panel" aria-label={tr("Redaction input")}>
           <div className="panel-heading">
-            <span>Input</span>
-            <span className="panel-subtext">paste text</span>
+            <span>{tr("Input")}</span>
+            <span className="panel-subtext">{tr("paste text")}</span>
           </div>
           <textarea
             className="textarea"
-            placeholder="Drop text for redaction..."
-            aria-label="Redaction input"
+            placeholder={tr("Drop text for redaction...")}
+            aria-label={tr("Redaction input")}
             value={input}
             onChange={(event) => setInput(event.target.value)}
           />
           <div className="controls-row">
-            <span className="section-title">Mask mode</span>
-            <div className="pill-buttons" role="group" aria-label="Mask mode">
+            <span className="section-title">{tr("Mask mode")}</span>
+            <div className="pill-buttons" role="group" aria-label={tr("Mask mode")}>
               {(["full", "partial"] as MaskMode[]).map((mode) => (
                 <button key={mode} type="button" className={maskMode === mode ? "active" : ""} onClick={() => setMaskMode(mode)}>
-                  {mode}
+                  {tr(mode)}
                 </button>
               ))}
             </div>
           </div>
           <div className="controls-row">
             <label className="section-title" htmlFor="min-severity">
-              Min severity
+              {tr("Min severity")}
             </label>
             <select
               id="min-severity"
               className="select"
               value={minimumSeverity}
               onChange={(event) => setMinimumSeverity(event.target.value as SeverityThreshold)}
-              aria-label="Minimum severity filter"
+              aria-label={tr("Minimum severity filter")}
             >
-              <option value="low">low</option>
-              <option value="medium">medium</option>
-              <option value="high">high</option>
+              <option value="low">{tr("low")}</option>
+              <option value="medium">{tr("medium")}</option>
+              <option value="high">{tr("high")}</option>
             </select>
             <label className="section-title" htmlFor="token-length">
-              Token min len
+              {tr("Token min len")}
             </label>
             <input
               id="token-length"
@@ -292,60 +293,60 @@ export function RedactView({ onOpenGuide }: RedactViewProps) {
               max={64}
               value={minTokenLength}
               onChange={(event) => setMinTokenLength(clamp(Number(event.target.value) || 0, 12, 64))}
-              aria-label="Minimum token detector length"
+              aria-label={tr("Minimum token detector length")}
             />
             <label className="microcopy" style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
               <input
                 type="checkbox"
                 checked={preserveLength}
                 onChange={(event) => setPreserveLength(event.target.checked)}
-                aria-label="Preserve replacement length"
+                aria-label={tr("Preserve replacement length")}
               />
-              preserve length in full mask
+              {tr("preserve length in full mask")}
             </label>
           </div>
         </div>
-        <div className="panel" aria-label="Redaction output">
+        <div className="panel" aria-label={tr("Redaction output")}>
           <div className="panel-heading">
-            <span>Output</span>
-            <span className="panel-subtext">preview + apply</span>
+            <span>{tr("Output")}</span>
+            <span className="panel-subtext">{tr("preview + apply")}</span>
           </div>
-          <div className="redact-preview" aria-label="Highlight view">
+          <div className="redact-preview" aria-label={tr("Highlight view")}>
             {highlight(input, findings.matches)}
           </div>
-          <textarea className="textarea" readOnly value={output || redacted} aria-label="Redacted output" />
+          <textarea className="textarea" readOnly value={output || redacted} aria-label={tr("Redacted output")} />
           <div className="controls-row">
             <button className="button" type="button" onClick={handleApply}>
-              apply redaction
+              {tr("apply redaction")}
             </button>
             <button className="button" type="button" onClick={handleCopy}>
-              copy
+              {tr("copy")}
             </button>
             <button className="button" type="button" onClick={handleDownload}>
-              download
+              {tr("download")}
             </button>
             <button className="button" type="button" onClick={exportFindingsReport}>
-              export report
+              {tr("export report")}
             </button>
           </div>
           <div className="status-line">
-            <span>severity</span>
+            <span>{tr("severity")}</span>
             <Chip label={findings.overall.toUpperCase()} tone={findings.overall === "high" ? "danger" : "accent"} />
-            <span className="microcopy">{findings.total} findings</span>
+            <span className="microcopy">{findings.total} {tr("findings")}</span>
           </div>
           <div className="status-line">
-            <span>coverage</span>
-            <span className="tag">{coverage}% chars masked</span>
+            <span>{tr("coverage")}</span>
+            <span className="tag">{coverage}% {tr("chars masked")}</span>
             <span className="microcopy">
-              high {severityCounts.high} · medium {severityCounts.medium} · low {severityCounts.low}
+              {tr("high")} {severityCounts.high} · {tr("medium")} {severityCounts.medium} · {tr("low")} {severityCounts.low}
             </span>
           </div>
         </div>
       </div>
-      <div className="panel" aria-label="Findings table">
+      <div className="panel" aria-label={tr("Findings table")}>
         <div className="panel-heading">
-          <span>Findings</span>
-          <span className="panel-subtext">type / count / severity</span>
+          <span>{tr("Findings")}</span>
+          <span className="panel-subtext">{tr("type / count / severity")}</span>
         </div>
         <div className="controls-row">
           {detectors.map((detector) => (
@@ -363,9 +364,9 @@ export function RedactView({ onOpenGuide }: RedactViewProps) {
         <table className="table">
           <thead>
             <tr>
-              <th>type</th>
-              <th>count</th>
-              <th>severity</th>
+              <th>{tr("type")}</th>
+              <th>{tr("count")}</th>
+              <th>{tr("severity")}</th>
             </tr>
           </thead>
           <tbody>
@@ -383,39 +384,39 @@ export function RedactView({ onOpenGuide }: RedactViewProps) {
             {findings.total === 0 && (
               <tr>
                 <td colSpan={3} className="muted">
-                  no findings detected
+                  {tr("no findings detected")}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
-      <div className="panel" aria-label="Custom rule">
+      <div className="panel" aria-label={tr("Custom rule")}>
         <div className="panel-heading">
-          <span>Custom rule</span>
-          <span className="panel-subtext">regex + label</span>
+          <span>{tr("Custom rule")}</span>
+          <span className="panel-subtext">{tr("regex + label")}</span>
         </div>
         <div className="controls-row">
           <input
             className="input"
-            placeholder="Regex pattern"
+            placeholder={tr("Regex pattern")}
             value={customPattern}
             onChange={(event) => setCustomPattern(event.target.value)}
-            aria-label="Custom regex pattern"
+            aria-label={tr("Custom regex pattern")}
           />
           <input
             className="input"
-            placeholder="Label"
+            placeholder={tr("Label")}
             value={customLabel}
             onChange={(event) => setCustomLabel(event.target.value)}
-            aria-label="Custom regex label"
+            aria-label={tr("Custom regex label")}
           />
           <button className="button" type="button" onClick={applyCustomRule}>
-            add
+            {tr("add")}
           </button>
         </div>
         <div className="microcopy">
-          Safe handling: regex runs locally; errors are reported without applying. Custom rules mask with their label.
+          {tr("Safe handling: regex runs locally; errors are reported without applying. Custom rules mask with their label.")}
         </div>
       </div>
     </div>
@@ -499,7 +500,7 @@ function partialMask(value: string) {
 }
 
 function passesLuhn(value: string) {
-  const digits = value.replace(/[^0-9]/g, "");
+  const digits = toAsciiDigits(value).replace(/[^0-9]/g, "");
   if (digits.length < 12 || digits.length > 19) return false;
   let sum = 0;
   let shouldDouble = false;
@@ -540,7 +541,7 @@ function toAsciiDigits(value: string) {
 }
 
 function isValidIban(value: string) {
-  const trimmed = value.replace(/\s+/g, "").toUpperCase();
+  const trimmed = toAsciiDigits(value).replace(/\s+/g, "").toUpperCase();
   if (trimmed.length < 15 || trimmed.length > 34) return false;
   const rearranged = `${trimmed.slice(4)}${trimmed.slice(0, 4)}`;
   const converted = rearranged.replace(/[A-Z]/g, (ch) => `${ch.charCodeAt(0) - 55}`);
@@ -550,6 +551,17 @@ function isValidIban(value: string) {
     remainder = (remainder * 10 + Number(char)) % 97;
   }
   return remainder === 1;
+}
+
+function isValidIpv4(value: string) {
+  const normalized = toAsciiDigits(value);
+  const parts = normalized.split(".");
+  if (parts.length !== 4) return false;
+  return parts.every((part) => {
+    if (!/^\d{1,3}$/.test(part)) return false;
+    const num = Number(part);
+    return num >= 0 && num <= 255;
+  });
 }
 
 function highlight(text: string, matches: Match[]) {

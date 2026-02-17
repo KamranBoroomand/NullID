@@ -27,7 +27,7 @@ interface PwViewProps {
 
 export function PwView({ onOpenGuide }: PwViewProps) {
   const { push } = useToast();
-  const { t } = useI18n();
+  const { t, tr, formatNumber } = useI18n();
   const [clipboardPrefs] = useClipboardPrefs();
   const [passwordSettings, setPasswordSettings] = usePersistentState<PasswordSettings>("nullid:pw-settings", {
     length: 22,
@@ -174,23 +174,23 @@ export function PwView({ onOpenGuide }: PwViewProps) {
         </button>
       </div>
       <div className="grid-two">
-        <div className="panel" aria-label="Password generator">
+        <div className="panel" aria-label={tr("Password generator")}>
           <div className="panel-heading">
-            <span>Password</span>
-            <span className="panel-subtext">constraint-driven</span>
+            <span>{tr("Password")}</span>
+            <span className="panel-subtext">{tr("constraint-driven")}</span>
           </div>
           <div className="controls-row">
-            <input className="input" value={password} readOnly aria-label="Password output" />
+            <input className="input" value={password} readOnly aria-label={tr("Password output")} />
             <button className="button" type="button" onClick={() => setPassword(generatePassword(passwordSettings))}>
-              regenerate
+              {tr("regenerate")}
             </button>
             <button className="button" type="button" onClick={() => copySecret(password, "password copied")}>
-              copy
+              {tr("copy")}
             </button>
           </div>
           <div className="controls-row">
             <label className="section-title" htmlFor="password-length">
-              Length
+              {tr("Length")}
             </label>
             <input
               id="password-length"
@@ -205,9 +205,9 @@ export function PwView({ onOpenGuide }: PwViewProps) {
                   length: clamp(Number(event.target.value) || 0, 8, 96),
                 }))
               }
-              aria-label="Password length"
+              aria-label={tr("Password length")}
             />
-            <div className="pill-buttons" role="group" aria-label="Character sets">
+            <div className="pill-buttons" role="group" aria-label={tr("Character sets")}>
               {passwordToggleKeys.map((key) => (
                 <button
                   key={key}
@@ -228,47 +228,47 @@ export function PwView({ onOpenGuide }: PwViewProps) {
           </div>
           <div className="controls-row">
             <label className="section-title" htmlFor="pw-hardening">
-              Hardening
+              {tr("Hardening")}
             </label>
-            <div className="pill-buttons" role="group" aria-label="Hardening options">
+            <div className="pill-buttons" role="group" aria-label={tr("Hardening options")}>
               <button
                 id="pw-hardening"
                 type="button"
                 className={passwordSettings.avoidAmbiguity ? "active" : ""}
                 onClick={() => setPasswordSettings((prev) => ({ ...prev, avoidAmbiguity: !prev.avoidAmbiguity }))}
-                aria-label="Avoid ambiguous characters"
+                aria-label={tr("Avoid ambiguous characters")}
               >
-                avoid ambiguous
+                {tr("avoid ambiguous")}
               </button>
               <button
                 type="button"
                 className={passwordSettings.enforceMix ? "active" : ""}
                 onClick={() => setPasswordSettings((prev) => ({ ...prev, enforceMix: !prev.enforceMix }))}
-                aria-label="Require all selected character types"
+                aria-label={tr("Require all selected character types")}
               >
-                require all sets
+                {tr("require all sets")}
               </button>
               <button
                 type="button"
                 className={passwordSettings.blockSequential ? "active" : ""}
                 onClick={() => setPasswordSettings((prev) => ({ ...prev, blockSequential: !prev.blockSequential }))}
-                aria-label="Block sequential patterns"
+                aria-label={tr("Block sequential patterns")}
               >
-                block sequences
+                {tr("block sequences")}
               </button>
               <button
                 type="button"
                 className={passwordSettings.blockRepeats ? "active" : ""}
                 onClick={() => setPasswordSettings((prev) => ({ ...prev, blockRepeats: !prev.blockRepeats }))}
-                aria-label="Block repeated runs"
+                aria-label={tr("Block repeated runs")}
               >
-                block repeats
+                {tr("block repeats")}
               </button>
             </div>
           </div>
           <div className="controls-row">
             <label className="section-title" htmlFor="pw-min-unique">
-              Min unique
+              {tr("Min unique")}
             </label>
             <input
               id="pw-min-unique"
@@ -283,31 +283,31 @@ export function PwView({ onOpenGuide }: PwViewProps) {
                   minUniqueChars: clamp(Number(event.target.value) || 0, 1, prev.length),
                 }))
               }
-              aria-label="Minimum unique characters"
+              aria-label={tr("Minimum unique characters")}
             />
           </div>
           <div className="controls-row">
-            <span className="section-title">Presets</span>
-            <div className="pill-buttons" role="group" aria-label="Password presets">
+            <span className="section-title">{tr("Presets")}</span>
+            <div className="pill-buttons" role="group" aria-label={tr("Password presets")}>
               <button type="button" onClick={() => applyPasswordPreset("high")}>
-                high security
+                {tr("high security")}
               </button>
               <button type="button" onClick={() => applyPasswordPreset("nosym")}>
-                no symbols
+                {tr("no symbols")}
               </button>
               <button type="button" onClick={() => applyPasswordPreset("pin")}>
-                pin (digits)
+                {tr("pin (digits)")}
               </button>
             </div>
           </div>
           <div className="status-line">
-            <span>length {passwordSettings.length}</span>
-            <span className="tag tag-accent">entropy ≈ {passwordEntropy} bits</span>
+            <span>{tr("length")} {formatNumber(passwordSettings.length)}</span>
+            <span className="tag tag-accent">{tr("entropy")} ≈ {formatNumber(passwordEntropy)} {tr("bits")}</span>
             <span className={gradeTagClass(passwordAssessment.grade)}>{gradeLabel(passwordAssessment.grade)}</span>
           </div>
           <div className="note-box">
             <div className="microcopy">
-              effective entropy ≈ {passwordAssessment.effectiveEntropyBits} bits · online crack: {passwordAssessment.crackTime.online}
+              {tr("effective entropy")} ≈ {formatNumber(passwordAssessment.effectiveEntropyBits)} {tr("bits")} · {tr("online crack")}: {passwordAssessment.crackTime.online}
             </div>
             {passwordAssessment.warnings.length > 0 ? (
               <ul className="note-list">
@@ -316,31 +316,31 @@ export function PwView({ onOpenGuide }: PwViewProps) {
                 ))}
               </ul>
             ) : (
-              <div className="microcopy">No obvious pattern weaknesses detected.</div>
+              <div className="microcopy">{tr("No obvious pattern weaknesses detected.")}</div>
             )}
           </div>
         </div>
-        <div className="panel" aria-label="Passphrase generator">
+        <div className="panel" aria-label={tr("Passphrase generator")}>
           <div className="panel-heading">
-            <span>Passphrase</span>
-            <span className="panel-subtext">mega dictionary</span>
+            <span>{tr("Passphrase")}</span>
+            <span className="panel-subtext">{tr("mega dictionary")}</span>
           </div>
           <div className="controls-row">
-            <input className="input" value={phrase} readOnly aria-label="Passphrase output" />
+            <input className="input" value={phrase} readOnly aria-label={tr("Passphrase output")} />
             <button
               className="button"
               type="button"
               onClick={() => setPhrase(generatePassphrase(passphraseSettings))}
             >
-              regenerate
+              {tr("regenerate")}
             </button>
             <button className="button" type="button" onClick={() => copySecret(phrase, "passphrase copied")}>
-              copy
+              {tr("copy")}
             </button>
           </div>
           <div className="controls-row">
             <label className="section-title" htmlFor="word-count">
-              Words
+              {tr("Words")}
             </label>
             <input
               id="word-count"
@@ -355,7 +355,7 @@ export function PwView({ onOpenGuide }: PwViewProps) {
                   words: clamp(Number(event.target.value) || 0, 3, 12),
                 }))
               }
-              aria-label="Passphrase word count"
+              aria-label={tr("Passphrase word count")}
             />
             <select
               className="select"
@@ -366,9 +366,9 @@ export function PwView({ onOpenGuide }: PwViewProps) {
                   separator: event.target.value as PassphraseSettings["separator"],
                 }))
               }
-              aria-label="Word separator"
+              aria-label={tr("Word separator")}
             >
-              <option value="space">space</option>
+              <option value="space">{tr("space")}</option>
               <option value="-">-</option>
               <option value=".">.</option>
               <option value="_">_</option>
@@ -384,16 +384,16 @@ export function PwView({ onOpenGuide }: PwViewProps) {
                   dictionaryProfile: event.target.value as PassphraseSettings["dictionaryProfile"],
                 }))
               }
-              aria-label="Dictionary profile"
+              aria-label={tr("Dictionary profile")}
             >
-              <option value="balanced">balanced</option>
-              <option value="extended">extended</option>
-              <option value="maximal">maximal</option>
+              <option value="balanced">{tr("balanced")}</option>
+              <option value="extended">{tr("extended")}</option>
+              <option value="maximal">{tr("maximal")}</option>
             </select>
           </div>
           <div className="controls-row">
             <label className="section-title" htmlFor="phrase-hardening">
-              Styling
+              {tr("Styling")}
             </label>
             <select
               id="phrase-hardening"
@@ -405,12 +405,12 @@ export function PwView({ onOpenGuide }: PwViewProps) {
                   caseStyle: event.target.value as PassphraseSettings["caseStyle"],
                 }))
               }
-              aria-label="Passphrase case style"
+              aria-label={tr("Passphrase case style")}
             >
-              <option value="lower">lower</option>
-              <option value="title">title</option>
-              <option value="random">random</option>
-              <option value="upper">upper</option>
+              <option value="lower">{tr("lower")}</option>
+              <option value="title">{tr("title")}</option>
+              <option value="random">{tr("random")}</option>
+              <option value="upper">{tr("upper")}</option>
             </select>
             <select
               className="select"
@@ -421,11 +421,11 @@ export function PwView({ onOpenGuide }: PwViewProps) {
                   numberMode: event.target.value as PassphraseSettings["numberMode"],
                 }))
               }
-              aria-label="Passphrase number mode"
+              aria-label={tr("Passphrase number mode")}
             >
-              <option value="none">no number</option>
-              <option value="append-2">append 2 digits</option>
-              <option value="append-4">append 4 digits</option>
+              <option value="none">{tr("no number")}</option>
+              <option value="append-2">{tr("append 2 digits")}</option>
+              <option value="append-4">{tr("append 4 digits")}</option>
             </select>
             <select
               className="select"
@@ -436,50 +436,50 @@ export function PwView({ onOpenGuide }: PwViewProps) {
                   symbolMode: event.target.value as PassphraseSettings["symbolMode"],
                 }))
               }
-              aria-label="Passphrase symbol mode"
+              aria-label={tr("Passphrase symbol mode")}
             >
-              <option value="none">no symbol</option>
-              <option value="append">append symbol</option>
-              <option value="wrap">wrap with symbols</option>
+              <option value="none">{tr("no symbol")}</option>
+              <option value="append">{tr("append symbol")}</option>
+              <option value="wrap">{tr("wrap with symbols")}</option>
             </select>
           </div>
           <div className="controls-row">
-            <label className="section-title">Hardening</label>
-            <div className="pill-buttons" role="group" aria-label="Passphrase hardening options">
+            <label className="section-title">{tr("Hardening")}</label>
+            <div className="pill-buttons" role="group" aria-label={tr("Passphrase hardening options")}>
               <button
                 type="button"
                 className={passphraseSettings.ensureUniqueWords ? "active" : ""}
                 onClick={() => setPassphraseSettings((prev) => ({ ...prev, ensureUniqueWords: !prev.ensureUniqueWords }))}
-                aria-label="Enforce unique words"
+                aria-label={tr("Enforce unique words")}
               >
-                unique words
+                {tr("unique words")}
               </button>
             </div>
-            <span className="microcopy">dictionary: {dictionary.label}</span>
+            <span className="microcopy">{tr("dictionary")}: {dictionary.label}</span>
           </div>
           <div className="controls-row">
-            <span className="section-title">Presets</span>
-            <div className="pill-buttons" role="group" aria-label="Passphrase presets">
+            <span className="section-title">{tr("Presets")}</span>
+            <div className="pill-buttons" role="group" aria-label={tr("Passphrase presets")}>
               <button type="button" onClick={() => applyPassphrasePreset("memorable")}>
-                memorable
+                {tr("memorable")}
               </button>
               <button type="button" onClick={() => applyPassphrasePreset("balanced")}>
-                balanced
+                {tr("balanced")}
               </button>
               <button type="button" onClick={() => applyPassphrasePreset("max")}>
-                max entropy
+                {tr("max entropy")}
               </button>
             </div>
           </div>
           <div className="status-line">
-            <span>words {passphraseSettings.words}</span>
-            <span className="tag">{dictionary.size.toLocaleString()} words</span>
-            <span className="tag tag-accent">entropy ≈ {passphraseEntropy} bits</span>
+            <span>{tr("words")} {formatNumber(passphraseSettings.words)}</span>
+            <span className="tag">{formatNumber(dictionary.size)} {tr("words")}</span>
+            <span className="tag tag-accent">{tr("entropy")} ≈ {formatNumber(passphraseEntropy)} {tr("bits")}</span>
             <span className={gradeTagClass(passphraseAssessment.grade)}>{gradeLabel(passphraseAssessment.grade)}</span>
           </div>
           <div className="note-box">
             <div className="microcopy">
-              bits/word ≈ {dictionary.bitsPerWord.toFixed(2)} · offline crack: {passphraseAssessment.crackTime.offline}
+              {tr("bits/word")} ≈ {dictionary.bitsPerWord.toFixed(2)} · {tr("offline crack")}: {passphraseAssessment.crackTime.offline}
             </div>
             {passphraseAssessment.warnings.length > 0 ? (
               <ul className="note-list">
@@ -488,38 +488,38 @@ export function PwView({ onOpenGuide }: PwViewProps) {
                 ))}
               </ul>
             ) : (
-              <div className="microcopy">No obvious passphrase weaknesses detected.</div>
+              <div className="microcopy">{tr("No obvious passphrase weaknesses detected.")}</div>
             )}
           </div>
         </div>
       </div>
       <div className="grid-two">
-        <div className="panel" aria-label="Secret strength lab">
+        <div className="panel" aria-label={tr("Secret strength lab")}>
           <div className="panel-heading">
-            <span>Strength Lab</span>
-            <span className="panel-subtext">audit any secret</span>
+            <span>{tr("Strength Lab")}</span>
+            <span className="panel-subtext">{tr("audit any secret")}</span>
           </div>
           <textarea
             className="textarea"
             value={labInput}
             onChange={(event) => setLabInput(event.target.value)}
-            placeholder="Paste a password or passphrase to audit locally"
-            aria-label="Secret strength lab input"
+            placeholder={tr("Paste a password or passphrase to audit locally")}
+            aria-label={tr("Secret strength lab input")}
           />
           <div className="status-line">
-            <span>entropy ≈ {labAssessment.entropyBits} bits</span>
-            <span className="tag">effective ≈ {labAssessment.effectiveEntropyBits} bits</span>
+            <span>{tr("entropy")} ≈ {formatNumber(labAssessment.entropyBits)} {tr("bits")}</span>
+            <span className="tag">{tr("effective")} ≈ {formatNumber(labAssessment.effectiveEntropyBits)} {tr("bits")}</span>
             <span className={gradeTagClass(labAssessment.grade)}>{gradeLabel(labAssessment.grade)}</span>
           </div>
           <div className="note-box">
             <div className="microcopy">
-              online: {labAssessment.crackTime.online} · offline: {labAssessment.crackTime.offline}
+              {tr("online")}: {labAssessment.crackTime.online} · {tr("offline")}: {labAssessment.crackTime.offline}
             </div>
             <ul className="note-list">
               {labAssessment.warnings.length > 0 ? (
                 labAssessment.warnings.map((warning) => <li key={warning}>{warning}</li>)
               ) : (
-                <li>no direct warning patterns detected</li>
+                <li>{tr("no direct warning patterns detected")}</li>
               )}
               {labAssessment.strengths.map((strength) => (
                 <li key={strength}>{strength}</li>
@@ -527,26 +527,26 @@ export function PwView({ onOpenGuide }: PwViewProps) {
             </ul>
           </div>
         </div>
-        <div className="panel" aria-label="Batch generator">
+        <div className="panel" aria-label={tr("Batch generator")}>
           <div className="panel-heading">
-            <span>Batch Generator</span>
-            <span className="panel-subtext">shortlist candidates</span>
+            <span>{tr("Batch Generator")}</span>
+            <span className="panel-subtext">{tr("shortlist candidates")}</span>
           </div>
           <div className="controls-row">
-            <div className="pill-buttons" role="group" aria-label="Batch mode">
+            <div className="pill-buttons" role="group" aria-label={tr("Batch mode")}>
               <button
                 type="button"
                 className={batchMode === "password" ? "active" : ""}
                 onClick={() => setBatchMode("password")}
               >
-                passwords
+                {tr("passwords")}
               </button>
               <button
                 type="button"
                 className={batchMode === "passphrase" ? "active" : ""}
                 onClick={() => setBatchMode("passphrase")}
               >
-                passphrases
+                {tr("passphrases")}
               </button>
             </div>
             <input
@@ -556,7 +556,7 @@ export function PwView({ onOpenGuide }: PwViewProps) {
               max={16}
               value={batchCount}
               onChange={(event) => setBatchCount(clamp(Number(event.target.value) || 0, 3, 16))}
-              aria-label="Batch candidate count"
+              aria-label={tr("Batch candidate count")}
             />
             <button
               className="button"
@@ -569,16 +569,16 @@ export function PwView({ onOpenGuide }: PwViewProps) {
                 )
               }
             >
-              regenerate batch
+              {tr("regenerate batch")}
             </button>
           </div>
-          <table className="table" aria-label="Batch candidates table">
+          <table className="table" aria-label={tr("Batch candidates table")}>
             <thead>
               <tr>
-                <th>candidate</th>
-                <th>entropy</th>
-                <th>grade</th>
-                <th>copy</th>
+                <th>{tr("candidate")}</th>
+                <th>{tr("entropy")}</th>
+                <th>{tr("grade")}</th>
+                <th>{tr("copy")}</th>
               </tr>
             </thead>
             <tbody>

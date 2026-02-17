@@ -2,6 +2,7 @@ import "./styles.css";
 import { useClipboardPrefs } from "../utils/clipboard";
 import { guideExtras, guideTools } from "../content/guideContent";
 import "./GuideView.css";
+import { useI18n } from "../i18n";
 
 const trustSignals = [
   {
@@ -38,56 +39,57 @@ const operatorNotes = [
 ];
 
 export function GuideView() {
+  const { tr } = useI18n();
   const [clipboardPrefs, setClipboardPrefs] = useClipboardPrefs();
   const buildId = (import.meta.env.VITE_BUILD_ID as string | undefined) ?? "dev";
   const buildShort = buildId.slice(0, 7);
 
   return (
     <div className="workspace-scroll guide-surface">
-      <div className="panel" aria-label="Guide overview">
+      <div className="panel" aria-label={tr("Guide overview")}>
         <div className="panel-heading">
-          <span>Guide</span>
-          <span className="panel-subtext">how to use NullID</span>
+          <span>{tr("Guide")}</span>
+          <span className="panel-subtext">{tr("how to use NullID")}</span>
         </div>
         <div className="microcopy">
-          Offline-first tooling; no network calls, no analytics. All processing and clipboard actions are local and best-effort cleared.
+          {tr("Offline-first tooling; no network calls, no analytics. All processing and clipboard actions are local and best-effort cleared.")}
         </div>
       </div>
       <div className="guide-grid">
-        <article className="panel guide-card" aria-label="Trust signals">
+        <article className="panel guide-card" aria-label={tr("Trust signals")}>
           <div className="guide-card-header">
             <div className="guide-card-title">
               <span className="guide-key">:trust</span>
               <div className="guide-title-wrap">
-                <span className="guide-name">Trust Signals</span>
-                <span className="guide-summary">Security posture at a glance</span>
+                <span className="guide-name">{tr("Trust Signals")}</span>
+                <span className="guide-summary">{tr("Security posture at a glance")}</span>
               </div>
             </div>
           </div>
           <ul className="microcopy guide-list">
             {trustSignals.map((signal) => (
               <li key={signal.title}>
-                <span className="note-title">{signal.title}</span>
-                <span className="note-body"> {signal.detail}</span>
+                <span className="note-title">{tr(signal.title)}</span>
+                <span className="note-body"> {tr(signal.detail)}</span>
               </li>
             ))}
           </ul>
         </article>
-        <article className="panel guide-card" aria-label="Operator testimonials">
+        <article className="panel guide-card" aria-label={tr("Operator testimonials")}>
           <div className="guide-card-header">
             <div className="guide-card-title">
               <span className="guide-key">:proof</span>
               <div className="guide-title-wrap">
-                <span className="guide-name">Operator Notes</span>
-                <span className="guide-summary">Field feedback from common workflows</span>
+                <span className="guide-name">{tr("Operator Notes")}</span>
+                <span className="guide-summary">{tr("Field feedback from common workflows")}</span>
               </div>
             </div>
           </div>
           <ul className="microcopy guide-list">
             {operatorNotes.map((note) => (
               <li key={note.role}>
-                <span className="note-title">{note.role}</span>
-                <span className="note-body"> {note.quote}</span>
+                <span className="note-title">{tr(note.role)}</span>
+                <span className="note-body"> {tr(note.quote)}</span>
               </li>
             ))}
           </ul>
@@ -95,13 +97,13 @@ export function GuideView() {
       </div>
       <div className="guide-grid">
         {guideTools.map((tool) => (
-          <article key={tool.key} id={tool.key} className="panel guide-card" aria-label={`${tool.title} guide`}>
+          <article key={tool.key} id={tool.key} className="panel guide-card" aria-label={`${tr(tool.title)} ${tr("guide")}`}>
             <div className="guide-card-header">
               <div className="guide-card-title">
                 <span className="guide-key">:{tool.key}</span>
                 <div className="guide-title-wrap">
-                  <span className="guide-name">{tool.title}</span>
-                  <span className="guide-summary">{tool.whatItDoes}</span>
+                  <span className="guide-name">{tr(tool.title)}</span>
+                  <span className="guide-summary">{tr(tool.whatItDoes)}</span>
                 </div>
               </div>
             </div>
@@ -111,13 +113,13 @@ export function GuideView() {
       </div>
       <div className="guide-grid">
         {guideExtras.map((item) => (
-          <article key={item.key} id={item.key} className="panel guide-card" aria-label={`${item.title} guidance`}>
+          <article key={item.key} id={item.key} className="panel guide-card" aria-label={`${tr(item.title)} ${tr("guidance")}`}>
             <div className="guide-card-header">
               <div className="guide-card-title">
                 <span className="guide-key">:{item.key}</span>
                 <div className="guide-title-wrap">
-                  <span className="guide-name">{item.title}</span>
-                  <span className="guide-summary">{item.whatItDoes}</span>
+                  <span className="guide-name">{tr(item.title)}</span>
+                  <span className="guide-summary">{tr(item.whatItDoes)}</span>
                 </div>
               </div>
             </div>
@@ -125,9 +127,9 @@ export function GuideView() {
             {item.key === "clipboard" && (
               <div className="controls-row guide-clipboard-row" style={{ alignItems: "center" }}>
                 <label className="microcopy" htmlFor="clipboard-clear">
-                  Auto-clear clipboard
+                  {tr("Auto-clear clipboard")}
                 </label>
-                <div className="pill-buttons" role="group" aria-label="Clipboard auto clear">
+                <div className="pill-buttons" role="group" aria-label={tr("Clipboard auto clear")}>
                   <button
                     type="button"
                     className={clipboardPrefs.enableAutoClearClipboard ? "active" : ""}
@@ -135,11 +137,11 @@ export function GuideView() {
                       setClipboardPrefs((prev) => ({ ...prev, enableAutoClearClipboard: !prev.enableAutoClearClipboard }))
                     }
                   >
-                    {clipboardPrefs.enableAutoClearClipboard ? "enabled" : "disabled"}
+                    {clipboardPrefs.enableAutoClearClipboard ? tr("enabled") : tr("disabled")}
                   </button>
                 </div>
                 <label className="microcopy" htmlFor="clipboard-seconds">
-                  Clear after (seconds)
+                  {tr("Clear after (seconds)")}
                 </label>
                 <input
                   id="clipboard-seconds"
@@ -162,7 +164,7 @@ export function GuideView() {
         ))}
       </div>
       <div className="microcopy" style={{ marginTop: "1.25rem", textAlign: "center", color: "var(--text-muted)" }}>
-        Build {buildShort}
+        {tr("Build")} {buildShort}
       </div>
     </div>
   );
@@ -173,38 +175,39 @@ interface GuideListsProps {
 }
 
 function GuideLists({ item }: GuideListsProps) {
+  const { tr } = useI18n();
   return (
     <div className="guide-card-body">
       <div className="guide-section">
-        <div className="section-title">What & when</div>
+        <div className="section-title">{tr("What & when")}</div>
         <ul className="microcopy guide-list">
           {item.whatWhen.map((line) => (
-            <li key={line}>{line}</li>
+            <li key={line}>{tr(line)}</li>
           ))}
         </ul>
       </div>
       <div className="guide-section">
-        <div className="section-title">How</div>
+        <div className="section-title">{tr("How")}</div>
         <ol className="microcopy guide-list">
           {item.howSteps.map((line) => (
-            <li key={line}>{line}</li>
+            <li key={line}>{tr(line)}</li>
           ))}
         </ol>
       </div>
       <div className="guide-section">
-        <div className="section-title">Common mistakes & limits</div>
+        <div className="section-title">{tr("Common mistakes & limits")}</div>
         <ul className="microcopy guide-list">
           {item.limits.map((line) => (
-            <li key={line}>{line}</li>
+            <li key={line}>{tr(line)}</li>
           ))}
         </ul>
       </div>
       {item.privacyNotes?.length ? (
         <div className="guide-section">
-          <div className="section-title">Privacy notes</div>
+          <div className="section-title">{tr("Privacy notes")}</div>
           <ul className="microcopy guide-list">
             {item.privacyNotes.map((line) => (
-              <li key={line}>{line}</li>
+              <li key={line}>{tr(line)}</li>
             ))}
           </ul>
         </div>

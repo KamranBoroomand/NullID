@@ -14,7 +14,7 @@ interface EncViewProps {
 
 export function EncView({ onOpenGuide }: EncViewProps) {
   const { push } = useToast();
-  const { t } = useI18n();
+  const { t, tr, formatNumber } = useI18n();
   const [plain, setPlain] = useState("");
   const [encPass, setEncPass] = useState("");
   const [cipherText, setCipherText] = useState("");
@@ -245,42 +245,42 @@ export function EncView({ onOpenGuide }: EncViewProps) {
         </button>
       </div>
       <div className="grid-two">
-        <div className="panel" aria-label="Encrypt panel">
+        <div className="panel" aria-label={tr("Encrypt panel")}>
           <div className="panel-heading">
-            <span>Encrypt</span>
+            <span>{tr("Encrypt")}</span>
             <span className="panel-subtext">PBKDF2 + AES-GCM</span>
           </div>
           <label className="section-title" htmlFor="encrypt-plain">
-            Plaintext
+            {tr("Plaintext")}
           </label>
           <textarea
             id="encrypt-plain"
             className="textarea"
-            placeholder="Enter text to encrypt"
-            aria-label="Plaintext"
+            placeholder={tr("Enter text to encrypt")}
+            aria-label={tr("Plaintext")}
             value={plain}
             onChange={(event) => setPlain(event.target.value)}
           />
           <label className="section-title" htmlFor="encrypt-pass">
-            Passphrase
+            {tr("Passphrase")}
           </label>
           <input
             id="encrypt-pass"
             className="input"
             type="password"
             placeholder="••••••"
-            aria-label="Encrypt passphrase"
+            aria-label={tr("Encrypt passphrase")}
             value={encPass}
             onChange={(event) => setEncPass(event.target.value)}
           />
           <div className="status-line">
-            <span>passphrase strength</span>
+            <span>{tr("passphrase strength")}</span>
             <span className={gradeTagClass(encPassAssessment.grade)}>{gradeLabel(encPassAssessment.grade)}</span>
-            <span className="microcopy">effective ≈ {encPassAssessment.effectiveEntropyBits} bits</span>
+            <span className="microcopy">{tr("effective")} ≈ {formatNumber(encPassAssessment.effectiveEntropyBits)} {tr("bits")}</span>
           </div>
           <div className="controls-row">
-            <span className="section-title">KDF profile</span>
-            <div className="pill-buttons" role="group" aria-label="KDF profile">
+            <span className="section-title">{tr("KDF profile")}</span>
+            <div className="pill-buttons" role="group" aria-label={tr("KDF profile")}>
               {(["compat", "strong", "paranoid"] as KdfProfile[]).map((profile) => (
                 <button
                   key={profile}
@@ -294,13 +294,13 @@ export function EncView({ onOpenGuide }: EncViewProps) {
             </div>
           </div>
           <div className="controls-row">
-            <span className="section-title">KDF mode</span>
-            <div className="pill-buttons" role="group" aria-label="KDF mode">
+            <span className="section-title">{tr("KDF mode")}</span>
+            <div className="pill-buttons" role="group" aria-label={tr("KDF mode")}>
               <button type="button" className={kdfMode === "profile" ? "active" : ""} onClick={() => setKdfMode("profile")}>
-                profile
+                {tr("profile")}
               </button>
               <button type="button" className={kdfMode === "custom" ? "active" : ""} onClick={() => setKdfMode("custom")}>
-                custom
+                {tr("custom")}
               </button>
             </div>
             {kdfMode === "custom" && (
@@ -309,7 +309,7 @@ export function EncView({ onOpenGuide }: EncViewProps) {
                   className="select"
                   value={customHash}
                   onChange={(event) => setCustomHash(event.target.value as KdfHash)}
-                  aria-label="Custom KDF hash"
+                  aria-label={tr("Custom KDF hash")}
                 >
                   <option value="SHA-256">SHA-256</option>
                   <option value="SHA-512">SHA-512</option>
@@ -322,56 +322,56 @@ export function EncView({ onOpenGuide }: EncViewProps) {
                   step={50000}
                   value={customIterations}
                   onChange={(event) => setCustomIterations(clamp(Number(event.target.value) || 0, 100_000, 2_000_000))}
-                  aria-label="Custom KDF iterations"
+                  aria-label={tr("Custom KDF iterations")}
                 />
               </>
             )}
           </div>
-          <div className="microcopy">PBKDF2 {kdfConfig.hash.toLowerCase()} · {kdfConfig.iterations.toLocaleString()} iterations</div>
+          <div className="microcopy">PBKDF2 {kdfConfig.hash.toLowerCase()} · {formatNumber(kdfConfig.iterations)} {tr("iterations")}</div>
           <div className="controls-row">
             <button className="button" type="button" onClick={handleEncryptText} disabled={!plain || !encPass || isEncrypting}>
-              seal text
+              {tr("seal text")}
             </button>
             <button className="button" type="button" onClick={() => encryptFileInput.current?.click()} disabled={!encPass || isEncrypting}>
-              select file
+              {tr("select file")}
             </button>
             <input
               ref={encryptFileInput}
               type="file"
               style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }}
               onChange={(event) => setEncFile(event.target.files?.[0] ?? null)}
-              aria-label="Pick file to encrypt"
+              aria-label={tr("Pick file to encrypt")}
               tabIndex={-1}
             />
             <button className="button" type="button" onClick={handleEncryptFile} disabled={!encPass || !encFile || isEncrypting}>
-              seal file
+              {tr("seal file")}
             </button>
           </div>
           <div className="status-line">
-            <span>file</span>
-            <Chip label={encFile?.name ?? "none"} tone="muted" />
-            {isEncrypting && <Chip label="working…" tone="accent" />}
+            <span>{tr("file")}</span>
+            <Chip label={encFile?.name ?? tr("none")} tone="muted" />
+            {isEncrypting && <Chip label={tr("working…")} tone="accent" />}
           </div>
         </div>
-        <div className="panel" aria-label="Decrypt panel">
+        <div className="panel" aria-label={tr("Decrypt panel")}>
           <div className="panel-heading">
-            <span>Decrypt</span>
-            <span className="panel-subtext">verify envelope</span>
+            <span>{tr("Decrypt")}</span>
+            <span className="panel-subtext">{tr("verify envelope")}</span>
           </div>
           <label className="section-title" htmlFor="decrypt-blob">
-            Ciphertext
+            {tr("Ciphertext")}
           </label>
           <textarea
             id="decrypt-blob"
             className="textarea"
-            placeholder="Paste envelope"
-            aria-label="Ciphertext"
+            placeholder={tr("Paste envelope")}
+            aria-label={tr("Ciphertext")}
             value={cipherText}
             onChange={(event) => setCipherText(event.target.value)}
           />
           <div className="controls-row">
             <button className="button" type="button" onClick={() => decryptFileInput.current?.click()}>
-              load file
+              {tr("load file")}
             </button>
             <input
               ref={decryptFileInput}
@@ -387,67 +387,67 @@ export function EncView({ onOpenGuide }: EncViewProps) {
               tabIndex={-1}
             />
             <button className="button" type="button" onClick={handleDecryptText} disabled={!cipherText || !decPass || isDecrypting}>
-              decrypt text
+              {tr("decrypt text")}
             </button>
             <button className="button" type="button" onClick={handleDecryptFile} disabled={!cipherText || !decPass || isDecrypting}>
-              decrypt file
+              {tr("decrypt file")}
             </button>
           </div>
           <label className="section-title" htmlFor="decrypt-pass">
-            Passphrase
+            {tr("Passphrase")}
           </label>
           <input
             id="decrypt-pass"
             className="input"
             type="password"
             placeholder="••••••"
-            aria-label="Decrypt passphrase"
+            aria-label={tr("Decrypt passphrase")}
             value={decPass}
             onChange={(event) => setDecPass(event.target.value)}
           />
           <div className="status-line">
-            <span>passphrase strength</span>
+            <span>{tr("passphrase strength")}</span>
             <span className={gradeTagClass(decPassAssessment.grade)}>{gradeLabel(decPassAssessment.grade)}</span>
-            <span className="microcopy">effective ≈ {decPassAssessment.effectiveEntropyBits} bits</span>
+            <span className="microcopy">{tr("effective")} ≈ {formatNumber(decPassAssessment.effectiveEntropyBits)} {tr("bits")}</span>
           </div>
           <div className="controls-row">
             <Chip label={payloadMeta?.name ?? "text/plain"} tone="muted" />
-            {payloadMeta?.bytes !== undefined && <Chip label={`${Math.ceil((payloadMeta.bytes ?? 0) / 1024)} KB`} tone="muted" />}
-            {isDecrypting && <Chip label="decrypting…" tone="accent" />}
+            {payloadMeta?.bytes !== undefined && <Chip label={`${formatNumber(Math.ceil((payloadMeta.bytes ?? 0) / 1024))} KB`} tone="muted" />}
+            {isDecrypting && <Chip label={tr("decrypting…")} tone="accent" />}
           </div>
         </div>
       </div>
-      <div className="panel" aria-label="Envelope preview">
+      <div className="panel" aria-label={tr("Envelope preview")}>
         <div className="panel-heading">
-          <span>Envelope</span>
+          <span>{tr("Envelope")}</span>
           <span className="panel-subtext">NULLID:ENC:1</span>
         </div>
         <div className="note-box">
           <div className="microcopy">
-            prefix NULLID:ENC:1, AES-GCM, PBKDF2 profile: {kdfProfile} ({kdfConfig.hash.toLowerCase()} / {kdfConfig.iterations.toLocaleString()}),
+            prefix NULLID:ENC:1, AES-GCM, PBKDF2 profile: {kdfProfile} ({kdfConfig.hash.toLowerCase()} / {formatNumber(kdfConfig.iterations)}),
             AAD bound
           </div>
           <div className="microcopy">
             {envelopeMeta
-              ? `header: ${envelopeMeta.hash.toLowerCase()} / ${envelopeMeta.iterations.toLocaleString()} · ${Math.ceil(envelopeMeta.cipherBytes / 1024)} KB ciphertext${envelopeMeta.name ? ` · ${envelopeMeta.name}` : ""}`
+              ? `header: ${envelopeMeta.hash.toLowerCase()} / ${formatNumber(envelopeMeta.iterations)} · ${formatNumber(Math.ceil(envelopeMeta.cipherBytes / 1024))} KB ciphertext${envelopeMeta.name ? ` · ${envelopeMeta.name}` : ""}`
               : envelopeMetaError
                 ? `header parse: ${envelopeMetaError}`
                 : "header parse pending"}
           </div>
-          <pre className="output">{cipherText || "Generate an envelope to view"}</pre>
+          <pre className="output">{cipherText || tr("Generate an envelope to view")}</pre>
         </div>
         <div className="controls-row">
           <label className="section-title" htmlFor="auto-clear">
-            Hygiene
+            {tr("Hygiene")}
           </label>
-          <div className="pill-buttons" role="group" aria-label="Auto clear options">
+          <div className="pill-buttons" role="group" aria-label={tr("Auto clear options")}>
             <button
               id="auto-clear"
               type="button"
               className={autoClear ? "active" : ""}
               onClick={() => setAutoClear((prev) => !prev)}
             >
-              auto clear
+              {tr("auto clear")}
             </button>
             <input
               className="input"
@@ -456,29 +456,29 @@ export function EncView({ onOpenGuide }: EncViewProps) {
               max={300}
               value={clearAfter}
               onChange={(event) => setClearAfter(Math.min(300, Math.max(5, Number(event.target.value))))}
-              aria-label="Auto clear seconds"
+              aria-label={tr("Auto clear seconds")}
             />
             <button className="button" type="button" onClick={downloadEncryptedFile} disabled={!encFileBlob}>
-              download envelope
+              {tr("download envelope")}
             </button>
             <button className="button" type="button" onClick={downloadDecryptedFile} disabled={!decFileBlob}>
-              download decrypted
+              {tr("download decrypted")}
             </button>
           </div>
         </div>
         <div className="status-line">
-          <span>decrypt</span>
-          <span className={`tag ${error ? "tag-danger" : "tag-accent"}`}>{error || decrypted || "pending"}</span>
+          <span>{tr("decrypt")}</span>
+          <span className={`tag ${error ? "tag-danger" : "tag-accent"}`}>{error || decrypted || tr("pending")}</span>
         </div>
       </div>
-      <div className="panel" aria-label="Decryption output">
+      <div className="panel" aria-label={tr("Decryption output")}>
         <div className="panel-heading">
-          <span>Output</span>
-          <span className="panel-subtext">{decFileBlob ? "file ready" : "text"}</span>
+          <span>{tr("Output")}</span>
+          <span className="panel-subtext">{decFileBlob ? tr("file ready") : tr("text")}</span>
         </div>
         <div className="note-box">
-          <div className="microcopy">Decrypted preview</div>
-          <pre className="output" aria-live="polite">{decrypted || "[pending]"}</pre>
+          <div className="microcopy">{tr("Decrypted preview")}</div>
+          <pre className="output" aria-live="polite">{decrypted || tr("[pending]")}</pre>
           {decFileBlob && (
             <div className="microcopy">
               file: {decFileName ?? "decrypted.bin"} · type: {decMime} · size: {decFileBlob.byteLength} bytes
