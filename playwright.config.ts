@@ -2,6 +2,7 @@ import type { PlaywrightTestConfig } from "@playwright/test";
 
 const config: PlaywrightTestConfig = {
   timeout: 60_000,
+  workers: process.env.CI ? 1 : undefined,
   use: {
     baseURL: "http://127.0.0.1:4173",
     viewport: { width: 1280, height: 800 },

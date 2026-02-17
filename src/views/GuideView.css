@@ -49,9 +49,9 @@
   font-family: var(--font-sans);
   font-weight: 800;
   letter-spacing: 0.02em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
 }
 
 .guide-summary {
@@ -104,9 +104,5 @@ ol.guide-list {
 @media (max-width: 720px) {
   .guide-card-body {
     grid-template-columns: 1fr;
-  }
-
-  .guide-name {
-    white-space: normal;
   }
 }

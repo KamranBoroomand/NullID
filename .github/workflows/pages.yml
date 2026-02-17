@@ -39,14 +39,26 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Validate
-        run: npm run validate
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Playwright e2e (includes RU/FA layout integrity)
+        run: CI=1 npm run e2e
 
       - name: Build
         env:
           VITE_BASE: /
           VITE_BUILD_ID: ${{ github.sha }}
         run: npm run build
+
+      - name: Verify build manifest
+        run: npm run verify:build
 
       - name: Assert guide
         run: node scripts/assert-guide.mjs

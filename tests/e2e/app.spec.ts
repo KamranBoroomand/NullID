@@ -34,6 +34,7 @@ test("secure note persists after reload", async ({ page }) => {
   await page.getByLabel("Note title").fill("pw-note");
   await page.getByLabel("Note body").fill("persist me");
   await page.getByRole("button", { name: /^store$/i }).click();
+  await expect(page.getByText("pw-note").first()).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: /Secure Notes/i }).click();
   await page.getByLabel("Vault key").fill("playwright-pass");

@@ -133,6 +133,7 @@ Available npm scripts:
 | `npm run lint` | `node scripts/lint.js` | Enforce offline policy by scanning for disallowed network patterns. |
 | `npm run test` | `tsc -p tsconfig.test.json && node --test build-test/__tests__/*.js` | Compile and run utility unit tests. |
 | `npm run e2e` | `playwright test` | Execute browser end-to-end tests. |
+| `npm run test:e2e:i18n-layout` | `playwright test tests/e2e/i18n-layout.spec.ts` | Run RU/FA layout integrity checks (desktop + mobile) to catch overflow/clipping regressions. |
 | `npm run validate` | `npm run typecheck && npm run lint && npm run test && npm run e2e && npm run build && npm run verify:build` | Full validation pipeline. |
 
 Team enforcement helpers:
@@ -141,7 +142,7 @@ Team enforcement helpers:
 - Reuse CI templates from `.github/workflow-templates/nullid-pr-sanitize.yml` and `.github/workflow-templates/nullid-artifact-checks.yml`.
 - Platform-breadth workflow reference: `docs/phase3-workflows.md`.
 - Signed release + provenance workflow: `.github/workflows/release-signed.yml`.
-- Pages workflow runs validation/build checks on PRs and only deploys on `main` push.
+- Pages workflow runs validation/build checks (including Playwright RU/FA layout integrity) on PRs and only deploys on `main` push.
 - Signed export/import operating conventions: `docs/signed-workflow-conventions.md`.
 - Release-candidate security checklist: `docs/release-security-checklist.md`.
 

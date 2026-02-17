@@ -390,7 +390,7 @@ function AppShell() {
         }
     }, [closePalette, push]);
     const isStacked = viewport.width < 1100;
-    const isCompact = viewport.height < 820;
+    const isCompact = viewport.width < 960 || viewport.height < 820;
     const goToGuide = useCallback((key) => {
         setActiveModule("guide");
         setStatus({ message: "guide", tone: "accent" });

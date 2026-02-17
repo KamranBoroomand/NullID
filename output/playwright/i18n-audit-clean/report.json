@@ -1,0 +1,3386 @@
+[
+  {
+    "viewport": "desktop",
+    "locale": "ru",
+    "moduleKey": "hash",
+    "file": "desktop-ru-hash.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "scrollHeight": 1272,
+      "clientHeight": 1272,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 1272,
+      "clientHeight": 1272,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "scrollHeight": 1272,
+      "clientHeight": 1272,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 98,
+      "clientHeight": 98,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 22,
+    "clippedSamples": [
+      {
+        "tag": "div",
+        "className": "module-list",
+        "text": "ИнструментыНавигация:hashХэш и проверкадайджесты⟡:redactРедактирование текстаочи",
+        "scrollWidth": 322,
+        "clientWidth": 278,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "auto"
+      },
+      {
+        "tag": "div",
+        "className": "module-header",
+        "text": "ИнструментыНавигация",
+        "scrollWidth": 263,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "nav",
+        "className": "",
+        "text": ":hashХэш и проверкадайджесты⟡:redactРедактирование текстаочистка PII⟡:sanitizeСа",
+        "scrollWidth": 306,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "ul",
+        "className": "",
+        "text": ":hashХэш и проверкадайджесты⟡:redactРедактирование текстаочистка PII⟡:sanitizeСа",
+        "scrollWidth": 306,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "Хэш и проверкадайджесты",
+        "scrollWidth": 110,
+        "clientWidth": 102,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "li",
+        "className": "",
+        "text": ":redactРедактирование текстаочистка PII⟡",
+        "scrollWidth": 274,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "button",
+        "className": "module-button ",
+        "text": ":redactРедактирование текстаочистка PII⟡",
+        "scrollWidth": 273,
+        "clientWidth": 244,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "Редактирование текстаочистка PII",
+        "scrollWidth": 163,
+        "clientWidth": 88,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "li",
+        "className": "",
+        "text": ":sanitizeСанитайзер логовпредпросмотр diff⟡",
+        "scrollWidth": 253,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "button",
+        "className": "module-button ",
+        "text": ":sanitizeСанитайзер логовпредпросмотр diff⟡",
+        "scrollWidth": 252,
+        "clientWidth": 244,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "desktop",
+    "locale": "ru",
+    "moduleKey": "redact",
+    "file": "desktop-ru-redact.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "scrollHeight": 1272,
+      "clientHeight": 1272,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 1272,
+      "clientHeight": 1272,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "scrollHeight": 1272,
+      "clientHeight": 1272,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 98,
+      "clientHeight": 98,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 22,
+    "clippedSamples": [
+      {
+        "tag": "div",
+        "className": "module-list",
+        "text": "ИнструментыНавигация:hashХэш и проверкадайджесты⟡:redactРедактирование текстаочи",
+        "scrollWidth": 322,
+        "clientWidth": 278,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "auto"
+      },
+      {
+        "tag": "div",
+        "className": "module-header",
+        "text": "ИнструментыНавигация",
+        "scrollWidth": 263,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "nav",
+        "className": "",
+        "text": ":hashХэш и проверкадайджесты⟡:redactРедактирование текстаочистка PII⟡:sanitizeСа",
+        "scrollWidth": 306,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "ul",
+        "className": "",
+        "text": ":hashХэш и проверкадайджесты⟡:redactРедактирование текстаочистка PII⟡:sanitizeСа",
+        "scrollWidth": 306,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "Хэш и проверкадайджесты",
+        "scrollWidth": 110,
+        "clientWidth": 102,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "li",
+        "className": "",
+        "text": ":redactРедактирование текстаочистка PII⟡",
+        "scrollWidth": 274,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "button",
+        "className": "module-button ",
+        "text": ":redactРедактирование текстаочистка PII⟡",
+        "scrollWidth": 273,
+        "clientWidth": 244,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "Редактирование текстаочистка PII",
+        "scrollWidth": 163,
+        "clientWidth": 88,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "li",
+        "className": "",
+        "text": ":sanitizeСанитайзер логовпредпросмотр diff⟡",
+        "scrollWidth": 253,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "button",
+        "className": "module-button ",
+        "text": ":sanitizeСанитайзер логовпредпросмотр diff⟡",
+        "scrollWidth": 252,
+        "clientWidth": 244,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "desktop",
+    "locale": "ru",
+    "moduleKey": "sanitize",
+    "file": "desktop-ru-sanitize.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "scrollHeight": 1272,
+      "clientHeight": 1272,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 1272,
+      "clientHeight": 1272,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "scrollHeight": 1272,
+      "clientHeight": 1272,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 98,
+      "clientHeight": 98,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 22,
+    "clippedSamples": [
+      {
+        "tag": "div",
+        "className": "module-list",
+        "text": "ИнструментыНавигация:hashХэш и проверкадайджесты⟡:redactРедактирование текстаочи",
+        "scrollWidth": 322,
+        "clientWidth": 278,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "auto"
+      },
+      {
+        "tag": "div",
+        "className": "module-header",
+        "text": "ИнструментыНавигация",
+        "scrollWidth": 263,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "nav",
+        "className": "",
+        "text": ":hashХэш и проверкадайджесты⟡:redactРедактирование текстаочистка PII⟡:sanitizeСа",
+        "scrollWidth": 306,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "ul",
+        "className": "",
+        "text": ":hashХэш и проверкадайджесты⟡:redactРедактирование текстаочистка PII⟡:sanitizeСа",
+        "scrollWidth": 306,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "Хэш и проверкадайджесты",
+        "scrollWidth": 110,
+        "clientWidth": 102,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "li",
+        "className": "",
+        "text": ":redactРедактирование текстаочистка PII⟡",
+        "scrollWidth": 274,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "button",
+        "className": "module-button ",
+        "text": ":redactРедактирование текстаочистка PII⟡",
+        "scrollWidth": 273,
+        "clientWidth": 244,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "Редактирование текстаочистка PII",
+        "scrollWidth": 163,
+        "clientWidth": 88,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "li",
+        "className": "",
+        "text": ":sanitizeСанитайзер логовпредпросмотр diff⟡",
+        "scrollWidth": 253,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "button",
+        "className": "module-button ",
+        "text": ":sanitizeСанитайзер логовпредпросмотр diff⟡",
+        "scrollWidth": 252,
+        "clientWidth": 244,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "desktop",
+    "locale": "ru",
+    "moduleKey": "meta",
+    "file": "desktop-ru-meta.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "scrollHeight": 1272,
+      "clientHeight": 1272,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 1272,
+      "clientHeight": 1272,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "scrollHeight": 1272,
+      "clientHeight": 1272,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 98,
+      "clientHeight": 98,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 22,
+    "clippedSamples": [
+      {
+        "tag": "div",
+        "className": "module-list",
+        "text": "ИнструментыНавигация:hashХэш и проверкадайджесты⟡:redactРедактирование текстаочи",
+        "scrollWidth": 322,
+        "clientWidth": 278,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "auto"
+      },
+      {
+        "tag": "div",
+        "className": "module-header",
+        "text": "ИнструментыНавигация",
+        "scrollWidth": 263,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "nav",
+        "className": "",
+        "text": ":hashХэш и проверкадайджесты⟡:redactРедактирование текстаочистка PII⟡:sanitizeСа",
+        "scrollWidth": 306,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "ul",
+        "className": "",
+        "text": ":hashХэш и проверкадайджесты⟡:redactРедактирование текстаочистка PII⟡:sanitizeСа",
+        "scrollWidth": 306,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "Хэш и проверкадайджесты",
+        "scrollWidth": 110,
+        "clientWidth": 102,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "li",
+        "className": "",
+        "text": ":redactРедактирование текстаочистка PII⟡",
+        "scrollWidth": 274,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "button",
+        "className": "module-button ",
+        "text": ":redactРедактирование текстаочистка PII⟡",
+        "scrollWidth": 273,
+        "clientWidth": 244,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "Редактирование текстаочистка PII",
+        "scrollWidth": 163,
+        "clientWidth": 88,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "li",
+        "className": "",
+        "text": ":sanitizeСанитайзер логовпредпросмотр diff⟡",
+        "scrollWidth": 253,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "button",
+        "className": "module-button ",
+        "text": ":sanitizeСанитайзер логовпредпросмотр diff⟡",
+        "scrollWidth": 252,
+        "clientWidth": 244,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "desktop",
+    "locale": "ru",
+    "moduleKey": "enc",
+    "file": "desktop-ru-enc.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "scrollHeight": 1272,
+      "clientHeight": 1272,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 1272,
+      "clientHeight": 1272,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "scrollHeight": 1272,
+      "clientHeight": 1272,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 98,
+      "clientHeight": 98,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 22,
+    "clippedSamples": [
+      {
+        "tag": "div",
+        "className": "module-list",
+        "text": "ИнструментыНавигация:hashХэш и проверкадайджесты⟡:redactРедактирование текстаочи",
+        "scrollWidth": 322,
+        "clientWidth": 278,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "auto"
+      },
+      {
+        "tag": "div",
+        "className": "module-header",
+        "text": "ИнструментыНавигация",
+        "scrollWidth": 263,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "nav",
+        "className": "",
+        "text": ":hashХэш и проверкадайджесты⟡:redactРедактирование текстаочистка PII⟡:sanitizeСа",
+        "scrollWidth": 306,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "ul",
+        "className": "",
+        "text": ":hashХэш и проверкадайджесты⟡:redactРедактирование текстаочистка PII⟡:sanitizeСа",
+        "scrollWidth": 306,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "Хэш и проверкадайджесты",
+        "scrollWidth": 110,
+        "clientWidth": 102,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "li",
+        "className": "",
+        "text": ":redactРедактирование текстаочистка PII⟡",
+        "scrollWidth": 274,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "button",
+        "className": "module-button ",
+        "text": ":redactРедактирование текстаочистка PII⟡",
+        "scrollWidth": 273,
+        "clientWidth": 244,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "Редактирование текстаочистка PII",
+        "scrollWidth": 163,
+        "clientWidth": 88,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "li",
+        "className": "",
+        "text": ":sanitizeСанитайзер логовпредпросмотр diff⟡",
+        "scrollWidth": 253,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "button",
+        "className": "module-button ",
+        "text": ":sanitizeСанитайзер логовпредпросмотр diff⟡",
+        "scrollWidth": 252,
+        "clientWidth": 244,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "desktop",
+    "locale": "ru",
+    "moduleKey": "pw",
+    "file": "desktop-ru-pw.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "scrollHeight": 1272,
+      "clientHeight": 1272,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 1272,
+      "clientHeight": 1272,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "scrollHeight": 1272,
+      "clientHeight": 1272,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 98,
+      "clientHeight": 98,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 22,
+    "clippedSamples": [
+      {
+        "tag": "div",
+        "className": "module-list",
+        "text": "ИнструментыНавигация:hashХэш и проверкадайджесты⟡:redactРедактирование текстаочи",
+        "scrollWidth": 322,
+        "clientWidth": 278,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "auto"
+      },
+      {
+        "tag": "div",
+        "className": "module-header",
+        "text": "ИнструментыНавигация",
+        "scrollWidth": 263,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "nav",
+        "className": "",
+        "text": ":hashХэш и проверкадайджесты⟡:redactРедактирование текстаочистка PII⟡:sanitizeСа",
+        "scrollWidth": 306,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "ul",
+        "className": "",
+        "text": ":hashХэш и проверкадайджесты⟡:redactРедактирование текстаочистка PII⟡:sanitizeСа",
+        "scrollWidth": 306,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "Хэш и проверкадайджесты",
+        "scrollWidth": 110,
+        "clientWidth": 102,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "li",
+        "className": "",
+        "text": ":redactРедактирование текстаочистка PII⟡",
+        "scrollWidth": 274,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "button",
+        "className": "module-button ",
+        "text": ":redactРедактирование текстаочистка PII⟡",
+        "scrollWidth": 273,
+        "clientWidth": 244,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "Редактирование текстаочистка PII",
+        "scrollWidth": 163,
+        "clientWidth": 88,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "li",
+        "className": "",
+        "text": ":sanitizeСанитайзер логовпредпросмотр diff⟡",
+        "scrollWidth": 253,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "button",
+        "className": "module-button ",
+        "text": ":sanitizeСанитайзер логовпредпросмотр diff⟡",
+        "scrollWidth": 252,
+        "clientWidth": 244,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "desktop",
+    "locale": "ru",
+    "moduleKey": "vault",
+    "file": "desktop-ru-vault.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "scrollHeight": 1272,
+      "clientHeight": 1272,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 1272,
+      "clientHeight": 1272,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "scrollHeight": 1272,
+      "clientHeight": 1272,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 98,
+      "clientHeight": 98,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 22,
+    "clippedSamples": [
+      {
+        "tag": "div",
+        "className": "module-list",
+        "text": "ИнструментыНавигация:hashХэш и проверкадайджесты⟡:redactРедактирование текстаочи",
+        "scrollWidth": 322,
+        "clientWidth": 278,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "auto"
+      },
+      {
+        "tag": "div",
+        "className": "module-header",
+        "text": "ИнструментыНавигация",
+        "scrollWidth": 263,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "nav",
+        "className": "",
+        "text": ":hashХэш и проверкадайджесты⟡:redactРедактирование текстаочистка PII⟡:sanitizeСа",
+        "scrollWidth": 306,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "ul",
+        "className": "",
+        "text": ":hashХэш и проверкадайджесты⟡:redactРедактирование текстаочистка PII⟡:sanitizeСа",
+        "scrollWidth": 306,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "Хэш и проверкадайджесты",
+        "scrollWidth": 110,
+        "clientWidth": 102,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "li",
+        "className": "",
+        "text": ":redactРедактирование текстаочистка PII⟡",
+        "scrollWidth": 274,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "button",
+        "className": "module-button ",
+        "text": ":redactРедактирование текстаочистка PII⟡",
+        "scrollWidth": 273,
+        "clientWidth": 244,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "Редактирование текстаочистка PII",
+        "scrollWidth": 163,
+        "clientWidth": 88,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "li",
+        "className": "",
+        "text": ":sanitizeСанитайзер логовпредпросмотр diff⟡",
+        "scrollWidth": 253,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "button",
+        "className": "module-button ",
+        "text": ":sanitizeСанитайзер логовпредпросмотр diff⟡",
+        "scrollWidth": 252,
+        "clientWidth": 244,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "desktop",
+    "locale": "ru",
+    "moduleKey": "selftest",
+    "file": "desktop-ru-selftest.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "scrollHeight": 1272,
+      "clientHeight": 1272,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 1272,
+      "clientHeight": 1272,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "scrollHeight": 1272,
+      "clientHeight": 1272,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 98,
+      "clientHeight": 98,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 22,
+    "clippedSamples": [
+      {
+        "tag": "div",
+        "className": "module-list",
+        "text": "ИнструментыНавигация:hashХэш и проверкадайджесты⟡:redactРедактирование текстаочи",
+        "scrollWidth": 322,
+        "clientWidth": 278,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "auto"
+      },
+      {
+        "tag": "div",
+        "className": "module-header",
+        "text": "ИнструментыНавигация",
+        "scrollWidth": 263,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "nav",
+        "className": "",
+        "text": ":hashХэш и проверкадайджесты⟡:redactРедактирование текстаочистка PII⟡:sanitizeСа",
+        "scrollWidth": 306,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "ul",
+        "className": "",
+        "text": ":hashХэш и проверкадайджесты⟡:redactРедактирование текстаочистка PII⟡:sanitizeСа",
+        "scrollWidth": 306,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "Хэш и проверкадайджесты",
+        "scrollWidth": 110,
+        "clientWidth": 102,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "li",
+        "className": "",
+        "text": ":redactРедактирование текстаочистка PII⟡",
+        "scrollWidth": 274,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "button",
+        "className": "module-button ",
+        "text": ":redactРедактирование текстаочистка PII⟡",
+        "scrollWidth": 273,
+        "clientWidth": 244,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "Редактирование текстаочистка PII",
+        "scrollWidth": 163,
+        "clientWidth": 88,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "li",
+        "className": "",
+        "text": ":sanitizeСанитайзер логовпредпросмотр diff⟡",
+        "scrollWidth": 253,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "button",
+        "className": "module-button ",
+        "text": ":sanitizeСанитайзер логовпредпросмотр diff⟡",
+        "scrollWidth": 252,
+        "clientWidth": 244,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "desktop",
+    "locale": "ru",
+    "moduleKey": "guide",
+    "file": "desktop-ru-guide.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "scrollHeight": 1272,
+      "clientHeight": 1272,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 1272,
+      "clientHeight": 1272,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "scrollHeight": 1272,
+      "clientHeight": 1272,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 98,
+      "clientHeight": 98,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 22,
+    "clippedSamples": [
+      {
+        "tag": "div",
+        "className": "module-list",
+        "text": "ИнструментыНавигация:hashХэш и проверкадайджесты⟡:redactРедактирование текстаочи",
+        "scrollWidth": 322,
+        "clientWidth": 278,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "auto"
+      },
+      {
+        "tag": "div",
+        "className": "module-header",
+        "text": "ИнструментыНавигация",
+        "scrollWidth": 263,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "nav",
+        "className": "",
+        "text": ":hashХэш и проверкадайджесты⟡:redactРедактирование текстаочистка PII⟡:sanitizeСа",
+        "scrollWidth": 306,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "ul",
+        "className": "",
+        "text": ":hashХэш и проверкадайджесты⟡:redactРедактирование текстаочистка PII⟡:sanitizeСа",
+        "scrollWidth": 306,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "Хэш и проверкадайджесты",
+        "scrollWidth": 110,
+        "clientWidth": 102,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "li",
+        "className": "",
+        "text": ":redactРедактирование текстаочистка PII⟡",
+        "scrollWidth": 274,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "button",
+        "className": "module-button ",
+        "text": ":redactРедактирование текстаочистка PII⟡",
+        "scrollWidth": 273,
+        "clientWidth": 244,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "Редактирование текстаочистка PII",
+        "scrollWidth": 163,
+        "clientWidth": 88,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "li",
+        "className": "",
+        "text": ":sanitizeСанитайзер логовпредпросмотр diff⟡",
+        "scrollWidth": 253,
+        "clientWidth": 246,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "button",
+        "className": "module-button ",
+        "text": ":sanitizeСанитайзер логовпредпросмотр diff⟡",
+        "scrollWidth": 252,
+        "clientWidth": 244,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "desktop",
+    "locale": "fa",
+    "moduleKey": "hash",
+    "file": "desktop-fa-hash.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "scrollHeight": 1209,
+      "clientHeight": 1209,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 1209,
+      "clientHeight": 1209,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "scrollHeight": 1209,
+      "clientHeight": 1209,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 98,
+      "clientHeight": 98,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 3,
+    "clippedSamples": [
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "حذف اطلاعات حساسپاک‌سازی PII",
+        "scrollWidth": 124,
+        "clientWidth": 88,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "رمزگذاری / رمزگشاییپاکت‌ها",
+        "scrollWidth": 116,
+        "clientWidth": 102,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "گذرواژه و عبارت عبورتولیدکننده",
+        "scrollWidth": 115,
+        "clientWidth": 102,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "desktop",
+    "locale": "fa",
+    "moduleKey": "redact",
+    "file": "desktop-fa-redact.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "scrollHeight": 1209,
+      "clientHeight": 1209,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 1209,
+      "clientHeight": 1209,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "scrollHeight": 1209,
+      "clientHeight": 1209,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 98,
+      "clientHeight": 98,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 3,
+    "clippedSamples": [
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "حذف اطلاعات حساسپاک‌سازی PII",
+        "scrollWidth": 124,
+        "clientWidth": 88,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "رمزگذاری / رمزگشاییپاکت‌ها",
+        "scrollWidth": 116,
+        "clientWidth": 102,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "گذرواژه و عبارت عبورتولیدکننده",
+        "scrollWidth": 115,
+        "clientWidth": 102,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "desktop",
+    "locale": "fa",
+    "moduleKey": "sanitize",
+    "file": "desktop-fa-sanitize.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "scrollHeight": 1209,
+      "clientHeight": 1209,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 1209,
+      "clientHeight": 1209,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "scrollHeight": 1209,
+      "clientHeight": 1209,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 98,
+      "clientHeight": 98,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 3,
+    "clippedSamples": [
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "حذف اطلاعات حساسپاک‌سازی PII",
+        "scrollWidth": 124,
+        "clientWidth": 88,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "رمزگذاری / رمزگشاییپاکت‌ها",
+        "scrollWidth": 116,
+        "clientWidth": 102,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "گذرواژه و عبارت عبورتولیدکننده",
+        "scrollWidth": 115,
+        "clientWidth": 102,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "desktop",
+    "locale": "fa",
+    "moduleKey": "meta",
+    "file": "desktop-fa-meta.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "scrollHeight": 1209,
+      "clientHeight": 1209,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 1209,
+      "clientHeight": 1209,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "scrollHeight": 1209,
+      "clientHeight": 1209,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 98,
+      "clientHeight": 98,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 3,
+    "clippedSamples": [
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "حذف اطلاعات حساسپاک‌سازی PII",
+        "scrollWidth": 124,
+        "clientWidth": 88,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "رمزگذاری / رمزگشاییپاکت‌ها",
+        "scrollWidth": 116,
+        "clientWidth": 102,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "گذرواژه و عبارت عبورتولیدکننده",
+        "scrollWidth": 115,
+        "clientWidth": 102,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "desktop",
+    "locale": "fa",
+    "moduleKey": "enc",
+    "file": "desktop-fa-enc.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "scrollHeight": 1209,
+      "clientHeight": 1209,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 1209,
+      "clientHeight": 1209,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "scrollHeight": 1209,
+      "clientHeight": 1209,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 98,
+      "clientHeight": 98,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 3,
+    "clippedSamples": [
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "حذف اطلاعات حساسپاک‌سازی PII",
+        "scrollWidth": 124,
+        "clientWidth": 88,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "رمزگذاری / رمزگشاییپاکت‌ها",
+        "scrollWidth": 116,
+        "clientWidth": 102,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "گذرواژه و عبارت عبورتولیدکننده",
+        "scrollWidth": 115,
+        "clientWidth": 102,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "desktop",
+    "locale": "fa",
+    "moduleKey": "pw",
+    "file": "desktop-fa-pw.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "scrollHeight": 1209,
+      "clientHeight": 1209,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 1209,
+      "clientHeight": 1209,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "scrollHeight": 1209,
+      "clientHeight": 1209,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 98,
+      "clientHeight": 98,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 3,
+    "clippedSamples": [
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "حذف اطلاعات حساسپاک‌سازی PII",
+        "scrollWidth": 124,
+        "clientWidth": 88,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "رمزگذاری / رمزگشاییپاکت‌ها",
+        "scrollWidth": 116,
+        "clientWidth": 102,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "گذرواژه و عبارت عبورتولیدکننده",
+        "scrollWidth": 115,
+        "clientWidth": 102,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "desktop",
+    "locale": "fa",
+    "moduleKey": "vault",
+    "file": "desktop-fa-vault.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "scrollHeight": 1209,
+      "clientHeight": 1209,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 1209,
+      "clientHeight": 1209,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "scrollHeight": 1209,
+      "clientHeight": 1209,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 98,
+      "clientHeight": 98,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 3,
+    "clippedSamples": [
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "حذف اطلاعات حساسپاک‌سازی PII",
+        "scrollWidth": 124,
+        "clientWidth": 88,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "رمزگذاری / رمزگشاییپاکت‌ها",
+        "scrollWidth": 116,
+        "clientWidth": 102,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "گذرواژه و عبارت عبورتولیدکننده",
+        "scrollWidth": 115,
+        "clientWidth": 102,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "desktop",
+    "locale": "fa",
+    "moduleKey": "selftest",
+    "file": "desktop-fa-selftest.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "scrollHeight": 1209,
+      "clientHeight": 1209,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 1209,
+      "clientHeight": 1209,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "scrollHeight": 1209,
+      "clientHeight": 1209,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 98,
+      "clientHeight": 98,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 3,
+    "clippedSamples": [
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "حذف اطلاعات حساسپاک‌سازی PII",
+        "scrollWidth": 124,
+        "clientWidth": 88,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "رمزگذاری / رمزگشاییپاکت‌ها",
+        "scrollWidth": 116,
+        "clientWidth": 102,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "گذرواژه و عبارت عبورتولیدکننده",
+        "scrollWidth": 115,
+        "clientWidth": 102,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "desktop",
+    "locale": "fa",
+    "moduleKey": "guide",
+    "file": "desktop-fa-guide.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "scrollHeight": 1209,
+      "clientHeight": 1209,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 1209,
+      "clientHeight": 1209,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "scrollHeight": 1209,
+      "clientHeight": 1209,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "scrollHeight": 98,
+      "clientHeight": 98,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 3,
+    "clippedSamples": [
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "حذف اطلاعات حساسپاک‌سازی PII",
+        "scrollWidth": 124,
+        "clientWidth": 88,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "رمزگذاری / رمزگشاییپاکت‌ها",
+        "scrollWidth": 116,
+        "clientWidth": 102,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "span",
+        "className": "module-copy",
+        "text": "گذرواژه و عبارت عبورتولیدکننده",
+        "scrollWidth": 115,
+        "clientWidth": 102,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "mobile",
+    "locale": "ru",
+    "moduleKey": "hash",
+    "file": "mobile-ru-hash.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 2672,
+      "clientHeight": 2672,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 445,
+      "clientWidth": 356,
+      "scrollHeight": 2538,
+      "clientHeight": 2538,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 132,
+      "clientHeight": 132,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    },
+    "header": {
+      "scrollWidth": 445,
+      "clientWidth": 356,
+      "scrollHeight": 204,
+      "clientHeight": 204,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 4,
+    "clippedSamples": [
+      {
+        "tag": "ul",
+        "className": "",
+        "text": ":hashХэш и проверкадайджесты⟡:redactРедактирование текстаочистка PII⟡:sanitizeСа",
+        "scrollWidth": 2704,
+        "clientWidth": 328,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "auto"
+      },
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDХэш и проверка:hashготоволокальноофлайнбез сетиТема: СветлаяЯзыкEnglishفار",
+        "scrollWidth": 445,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "hidden"
+      },
+      {
+        "tag": "header",
+        "className": "global-header ",
+        "text": "NullIDХэш и проверка:hashготоволокальноофлайнбез сетиТема: СветлаяЯзыкEnglishفار",
+        "scrollWidth": 445,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "div",
+        "className": "status-line",
+        "text": "Производительностьожиданиетелеметрия хэша после первого запуска",
+        "scrollWidth": 279,
+        "clientWidth": 274,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "mobile",
+    "locale": "ru",
+    "moduleKey": "redact",
+    "file": "mobile-ru-redact.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 2672,
+      "clientHeight": 2672,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 445,
+      "clientWidth": 356,
+      "scrollHeight": 2538,
+      "clientHeight": 2538,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 132,
+      "clientHeight": 132,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    },
+    "header": {
+      "scrollWidth": 445,
+      "clientWidth": 356,
+      "scrollHeight": 204,
+      "clientHeight": 204,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 4,
+    "clippedSamples": [
+      {
+        "tag": "ul",
+        "className": "",
+        "text": ":hashХэш и проверкадайджесты⟡:redactРедактирование текстаочистка PII⟡:sanitizeСа",
+        "scrollWidth": 2704,
+        "clientWidth": 328,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "auto"
+      },
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDХэш и проверка:hashготоволокальноофлайнбез сетиТема: СветлаяЯзыкEnglishفار",
+        "scrollWidth": 445,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "hidden"
+      },
+      {
+        "tag": "header",
+        "className": "global-header ",
+        "text": "NullIDХэш и проверка:hashготоволокальноофлайнбез сетиТема: СветлаяЯзыкEnglishفار",
+        "scrollWidth": 445,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "div",
+        "className": "status-line",
+        "text": "Производительностьожиданиетелеметрия хэша после первого запуска",
+        "scrollWidth": 279,
+        "clientWidth": 274,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "mobile",
+    "locale": "ru",
+    "moduleKey": "sanitize",
+    "file": "mobile-ru-sanitize.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 2672,
+      "clientHeight": 2672,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 445,
+      "clientWidth": 356,
+      "scrollHeight": 2538,
+      "clientHeight": 2538,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 132,
+      "clientHeight": 132,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    },
+    "header": {
+      "scrollWidth": 445,
+      "clientWidth": 356,
+      "scrollHeight": 204,
+      "clientHeight": 204,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 4,
+    "clippedSamples": [
+      {
+        "tag": "ul",
+        "className": "",
+        "text": ":hashХэш и проверкадайджесты⟡:redactРедактирование текстаочистка PII⟡:sanitizeСа",
+        "scrollWidth": 2704,
+        "clientWidth": 328,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "auto"
+      },
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDХэш и проверка:hashготоволокальноофлайнбез сетиТема: СветлаяЯзыкEnglishفار",
+        "scrollWidth": 445,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "hidden"
+      },
+      {
+        "tag": "header",
+        "className": "global-header ",
+        "text": "NullIDХэш и проверка:hashготоволокальноофлайнбез сетиТема: СветлаяЯзыкEnglishفار",
+        "scrollWidth": 445,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "div",
+        "className": "status-line",
+        "text": "Производительностьожиданиетелеметрия хэша после первого запуска",
+        "scrollWidth": 279,
+        "clientWidth": 274,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "mobile",
+    "locale": "ru",
+    "moduleKey": "meta",
+    "file": "mobile-ru-meta.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 2672,
+      "clientHeight": 2672,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 445,
+      "clientWidth": 356,
+      "scrollHeight": 2538,
+      "clientHeight": 2538,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 132,
+      "clientHeight": 132,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    },
+    "header": {
+      "scrollWidth": 445,
+      "clientWidth": 356,
+      "scrollHeight": 204,
+      "clientHeight": 204,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 4,
+    "clippedSamples": [
+      {
+        "tag": "ul",
+        "className": "",
+        "text": ":hashХэш и проверкадайджесты⟡:redactРедактирование текстаочистка PII⟡:sanitizeСа",
+        "scrollWidth": 2704,
+        "clientWidth": 328,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "auto"
+      },
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDХэш и проверка:hashготоволокальноофлайнбез сетиТема: СветлаяЯзыкEnglishفار",
+        "scrollWidth": 445,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "hidden"
+      },
+      {
+        "tag": "header",
+        "className": "global-header ",
+        "text": "NullIDХэш и проверка:hashготоволокальноофлайнбез сетиТема: СветлаяЯзыкEnglishفار",
+        "scrollWidth": 445,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "div",
+        "className": "status-line",
+        "text": "Производительностьожиданиетелеметрия хэша после первого запуска",
+        "scrollWidth": 279,
+        "clientWidth": 274,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "mobile",
+    "locale": "ru",
+    "moduleKey": "enc",
+    "file": "mobile-ru-enc.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 2672,
+      "clientHeight": 2672,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 445,
+      "clientWidth": 356,
+      "scrollHeight": 2538,
+      "clientHeight": 2538,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 132,
+      "clientHeight": 132,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    },
+    "header": {
+      "scrollWidth": 445,
+      "clientWidth": 356,
+      "scrollHeight": 204,
+      "clientHeight": 204,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 4,
+    "clippedSamples": [
+      {
+        "tag": "ul",
+        "className": "",
+        "text": ":hashХэш и проверкадайджесты⟡:redactРедактирование текстаочистка PII⟡:sanitizeСа",
+        "scrollWidth": 2704,
+        "clientWidth": 328,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "auto"
+      },
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDХэш и проверка:hashготоволокальноофлайнбез сетиТема: СветлаяЯзыкEnglishفار",
+        "scrollWidth": 445,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "hidden"
+      },
+      {
+        "tag": "header",
+        "className": "global-header ",
+        "text": "NullIDХэш и проверка:hashготоволокальноофлайнбез сетиТема: СветлаяЯзыкEnglishفار",
+        "scrollWidth": 445,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "div",
+        "className": "status-line",
+        "text": "Производительностьожиданиетелеметрия хэша после первого запуска",
+        "scrollWidth": 279,
+        "clientWidth": 274,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "mobile",
+    "locale": "ru",
+    "moduleKey": "pw",
+    "file": "mobile-ru-pw.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 2672,
+      "clientHeight": 2672,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 445,
+      "clientWidth": 356,
+      "scrollHeight": 2538,
+      "clientHeight": 2538,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 132,
+      "clientHeight": 132,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    },
+    "header": {
+      "scrollWidth": 445,
+      "clientWidth": 356,
+      "scrollHeight": 204,
+      "clientHeight": 204,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 4,
+    "clippedSamples": [
+      {
+        "tag": "ul",
+        "className": "",
+        "text": ":hashХэш и проверкадайджесты⟡:redactРедактирование текстаочистка PII⟡:sanitizeСа",
+        "scrollWidth": 2704,
+        "clientWidth": 328,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "auto"
+      },
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDХэш и проверка:hashготоволокальноофлайнбез сетиТема: СветлаяЯзыкEnglishفار",
+        "scrollWidth": 445,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "hidden"
+      },
+      {
+        "tag": "header",
+        "className": "global-header ",
+        "text": "NullIDХэш и проверка:hashготоволокальноофлайнбез сетиТема: СветлаяЯзыкEnglishفار",
+        "scrollWidth": 445,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "div",
+        "className": "status-line",
+        "text": "Производительностьожиданиетелеметрия хэша после первого запуска",
+        "scrollWidth": 279,
+        "clientWidth": 274,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "mobile",
+    "locale": "ru",
+    "moduleKey": "vault",
+    "file": "mobile-ru-vault.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 2672,
+      "clientHeight": 2672,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 445,
+      "clientWidth": 356,
+      "scrollHeight": 2538,
+      "clientHeight": 2538,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 132,
+      "clientHeight": 132,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    },
+    "header": {
+      "scrollWidth": 445,
+      "clientWidth": 356,
+      "scrollHeight": 204,
+      "clientHeight": 204,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 4,
+    "clippedSamples": [
+      {
+        "tag": "ul",
+        "className": "",
+        "text": ":hashХэш и проверкадайджесты⟡:redactРедактирование текстаочистка PII⟡:sanitizeСа",
+        "scrollWidth": 2704,
+        "clientWidth": 328,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "auto"
+      },
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDХэш и проверка:hashготоволокальноофлайнбез сетиТема: СветлаяЯзыкEnglishفار",
+        "scrollWidth": 445,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "hidden"
+      },
+      {
+        "tag": "header",
+        "className": "global-header ",
+        "text": "NullIDХэш и проверка:hashготоволокальноофлайнбез сетиТема: СветлаяЯзыкEnglishفار",
+        "scrollWidth": 445,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "div",
+        "className": "status-line",
+        "text": "Производительностьожиданиетелеметрия хэша после первого запуска",
+        "scrollWidth": 279,
+        "clientWidth": 274,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "mobile",
+    "locale": "ru",
+    "moduleKey": "selftest",
+    "file": "mobile-ru-selftest.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 2672,
+      "clientHeight": 2672,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 445,
+      "clientWidth": 356,
+      "scrollHeight": 2538,
+      "clientHeight": 2538,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 132,
+      "clientHeight": 132,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    },
+    "header": {
+      "scrollWidth": 445,
+      "clientWidth": 356,
+      "scrollHeight": 204,
+      "clientHeight": 204,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 4,
+    "clippedSamples": [
+      {
+        "tag": "ul",
+        "className": "",
+        "text": ":hashХэш и проверкадайджесты⟡:redactРедактирование текстаочистка PII⟡:sanitizeСа",
+        "scrollWidth": 2704,
+        "clientWidth": 328,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "auto"
+      },
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDХэш и проверка:hashготоволокальноофлайнбез сетиТема: СветлаяЯзыкEnglishفار",
+        "scrollWidth": 445,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "hidden"
+      },
+      {
+        "tag": "header",
+        "className": "global-header ",
+        "text": "NullIDХэш и проверка:hashготоволокальноофлайнбез сетиТема: СветлаяЯзыкEnglishفار",
+        "scrollWidth": 445,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "div",
+        "className": "status-line",
+        "text": "Производительностьожиданиетелеметрия хэша после первого запуска",
+        "scrollWidth": 279,
+        "clientWidth": 274,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "mobile",
+    "locale": "ru",
+    "moduleKey": "guide",
+    "file": "mobile-ru-guide.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 2672,
+      "clientHeight": 2672,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 445,
+      "clientWidth": 356,
+      "scrollHeight": 2538,
+      "clientHeight": 2538,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 132,
+      "clientHeight": 132,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    },
+    "header": {
+      "scrollWidth": 445,
+      "clientWidth": 356,
+      "scrollHeight": 204,
+      "clientHeight": 204,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 4,
+    "clippedSamples": [
+      {
+        "tag": "ul",
+        "className": "",
+        "text": ":hashХэш и проверкадайджесты⟡:redactРедактирование текстаочистка PII⟡:sanitizeСа",
+        "scrollWidth": 2704,
+        "clientWidth": 328,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "auto"
+      },
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDХэш и проверка:hashготоволокальноофлайнбез сетиТема: СветлаяЯзыкEnglishفار",
+        "scrollWidth": 445,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "hidden"
+      },
+      {
+        "tag": "header",
+        "className": "global-header ",
+        "text": "NullIDХэш и проверка:hashготоволокальноофлайнбез сетиТема: СветлаяЯзыкEnglishفار",
+        "scrollWidth": 445,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      },
+      {
+        "tag": "div",
+        "className": "status-line",
+        "text": "Производительностьожиданиетелеметрия хэша после первого запуска",
+        "scrollWidth": 279,
+        "clientWidth": 274,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "mobile",
+    "locale": "fa",
+    "moduleKey": "hash",
+    "file": "mobile-fa-hash.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 1964,
+      "clientHeight": 1964,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 414,
+      "clientWidth": 356,
+      "scrollHeight": 1829,
+      "clientHeight": 1829,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 133,
+      "clientHeight": 133,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    },
+    "header": {
+      "scrollWidth": 414,
+      "clientWidth": 356,
+      "scrollHeight": 222,
+      "clientHeight": 222,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 3,
+    "clippedSamples": [
+      {
+        "tag": "ul",
+        "className": "",
+        "text": ":hashهش و اعتبارسنجیهش‌ها⟡:redactحذف اطلاعات حساسپاک‌سازی PII⟡:sanitizeپاک‌ساز ل",
+        "scrollWidth": 2344,
+        "clientWidth": 328,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "auto"
+      },
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDهش و اعتبارسنجی:hashآمادهمحلیآفلاینبدون شبکهپوسته: روشنزبانEnglishفارسیРус",
+        "scrollWidth": 414,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "hidden"
+      },
+      {
+        "tag": "header",
+        "className": "global-header ",
+        "text": "NullIDهش و اعتبارسنجی:hashآمادهمحلیآفلاینبدون شبکهپوسته: روشنزبانEnglishفارسیРус",
+        "scrollWidth": 414,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "mobile",
+    "locale": "fa",
+    "moduleKey": "redact",
+    "file": "mobile-fa-redact.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 1964,
+      "clientHeight": 1964,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 414,
+      "clientWidth": 356,
+      "scrollHeight": 1829,
+      "clientHeight": 1829,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 133,
+      "clientHeight": 133,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    },
+    "header": {
+      "scrollWidth": 414,
+      "clientWidth": 356,
+      "scrollHeight": 222,
+      "clientHeight": 222,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 3,
+    "clippedSamples": [
+      {
+        "tag": "ul",
+        "className": "",
+        "text": ":hashهش و اعتبارسنجیهش‌ها⟡:redactحذف اطلاعات حساسپاک‌سازی PII⟡:sanitizeپاک‌ساز ل",
+        "scrollWidth": 2344,
+        "clientWidth": 328,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "auto"
+      },
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDهش و اعتبارسنجی:hashآمادهمحلیآفلاینبدون شبکهپوسته: روشنزبانEnglishفارسیРус",
+        "scrollWidth": 414,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "hidden"
+      },
+      {
+        "tag": "header",
+        "className": "global-header ",
+        "text": "NullIDهش و اعتبارسنجی:hashآمادهمحلیآفلاینبدون شبکهپوسته: روشنزبانEnglishفارسیРус",
+        "scrollWidth": 414,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "mobile",
+    "locale": "fa",
+    "moduleKey": "sanitize",
+    "file": "mobile-fa-sanitize.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 1964,
+      "clientHeight": 1964,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 414,
+      "clientWidth": 356,
+      "scrollHeight": 1829,
+      "clientHeight": 1829,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 133,
+      "clientHeight": 133,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    },
+    "header": {
+      "scrollWidth": 414,
+      "clientWidth": 356,
+      "scrollHeight": 222,
+      "clientHeight": 222,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 3,
+    "clippedSamples": [
+      {
+        "tag": "ul",
+        "className": "",
+        "text": ":hashهش و اعتبارسنجیهش‌ها⟡:redactحذف اطلاعات حساسپاک‌سازی PII⟡:sanitizeپاک‌ساز ل",
+        "scrollWidth": 2344,
+        "clientWidth": 328,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "auto"
+      },
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDهش و اعتبارسنجی:hashآمادهمحلیآفلاینبدون شبکهپوسته: روشنزبانEnglishفارسیРус",
+        "scrollWidth": 414,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "hidden"
+      },
+      {
+        "tag": "header",
+        "className": "global-header ",
+        "text": "NullIDهش و اعتبارسنجی:hashآمادهمحلیآفلاینبدون شبکهپوسته: روشنزبانEnglishفارسیРус",
+        "scrollWidth": 414,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "mobile",
+    "locale": "fa",
+    "moduleKey": "meta",
+    "file": "mobile-fa-meta.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 1964,
+      "clientHeight": 1964,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 414,
+      "clientWidth": 356,
+      "scrollHeight": 1829,
+      "clientHeight": 1829,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 133,
+      "clientHeight": 133,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    },
+    "header": {
+      "scrollWidth": 414,
+      "clientWidth": 356,
+      "scrollHeight": 222,
+      "clientHeight": 222,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 3,
+    "clippedSamples": [
+      {
+        "tag": "ul",
+        "className": "",
+        "text": ":hashهش و اعتبارسنجیهش‌ها⟡:redactحذف اطلاعات حساسپاک‌سازی PII⟡:sanitizeپاک‌ساز ل",
+        "scrollWidth": 2344,
+        "clientWidth": 328,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "auto"
+      },
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDهش و اعتبارسنجی:hashآمادهمحلیآفلاینبدون شبکهپوسته: روشنزبانEnglishفارسیРус",
+        "scrollWidth": 414,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "hidden"
+      },
+      {
+        "tag": "header",
+        "className": "global-header ",
+        "text": "NullIDهش و اعتبارسنجی:hashآمادهمحلیآفلاینبدون شبکهپوسته: روشنزبانEnglishفارسیРус",
+        "scrollWidth": 414,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "mobile",
+    "locale": "fa",
+    "moduleKey": "enc",
+    "file": "mobile-fa-enc.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 1964,
+      "clientHeight": 1964,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 414,
+      "clientWidth": 356,
+      "scrollHeight": 1829,
+      "clientHeight": 1829,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 133,
+      "clientHeight": 133,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    },
+    "header": {
+      "scrollWidth": 414,
+      "clientWidth": 356,
+      "scrollHeight": 222,
+      "clientHeight": 222,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 3,
+    "clippedSamples": [
+      {
+        "tag": "ul",
+        "className": "",
+        "text": ":hashهش و اعتبارسنجیهش‌ها⟡:redactحذف اطلاعات حساسپاک‌سازی PII⟡:sanitizeپاک‌ساز ل",
+        "scrollWidth": 2344,
+        "clientWidth": 328,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "auto"
+      },
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDهش و اعتبارسنجی:hashآمادهمحلیآفلاینبدون شبکهپوسته: روشنزبانEnglishفارسیРус",
+        "scrollWidth": 414,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "hidden"
+      },
+      {
+        "tag": "header",
+        "className": "global-header ",
+        "text": "NullIDهش و اعتبارسنجی:hashآمادهمحلیآفلاینبدون شبکهپوسته: روشنزبانEnglishفارسیРус",
+        "scrollWidth": 414,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "mobile",
+    "locale": "fa",
+    "moduleKey": "pw",
+    "file": "mobile-fa-pw.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 1964,
+      "clientHeight": 1964,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 414,
+      "clientWidth": 356,
+      "scrollHeight": 1829,
+      "clientHeight": 1829,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 133,
+      "clientHeight": 133,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    },
+    "header": {
+      "scrollWidth": 414,
+      "clientWidth": 356,
+      "scrollHeight": 222,
+      "clientHeight": 222,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 3,
+    "clippedSamples": [
+      {
+        "tag": "ul",
+        "className": "",
+        "text": ":hashهش و اعتبارسنجیهش‌ها⟡:redactحذف اطلاعات حساسپاک‌سازی PII⟡:sanitizeپاک‌ساز ل",
+        "scrollWidth": 2344,
+        "clientWidth": 328,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "auto"
+      },
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDهش و اعتبارسنجی:hashآمادهمحلیآفلاینبدون شبکهپوسته: روشنزبانEnglishفارسیРус",
+        "scrollWidth": 414,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "hidden"
+      },
+      {
+        "tag": "header",
+        "className": "global-header ",
+        "text": "NullIDهش و اعتبارسنجی:hashآمادهمحلیآفلاینبدون شبکهپوسته: روشنزبانEnglishفارسیРус",
+        "scrollWidth": 414,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "mobile",
+    "locale": "fa",
+    "moduleKey": "vault",
+    "file": "mobile-fa-vault.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 1964,
+      "clientHeight": 1964,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 414,
+      "clientWidth": 356,
+      "scrollHeight": 1829,
+      "clientHeight": 1829,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 133,
+      "clientHeight": 133,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    },
+    "header": {
+      "scrollWidth": 414,
+      "clientWidth": 356,
+      "scrollHeight": 222,
+      "clientHeight": 222,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 3,
+    "clippedSamples": [
+      {
+        "tag": "ul",
+        "className": "",
+        "text": ":hashهش و اعتبارسنجیهش‌ها⟡:redactحذف اطلاعات حساسپاک‌سازی PII⟡:sanitizeپاک‌ساز ل",
+        "scrollWidth": 2344,
+        "clientWidth": 328,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "auto"
+      },
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDهش و اعتبارسنجی:hashآمادهمحلیآفلاینبدون شبکهپوسته: روشنزبانEnglishفارسیРус",
+        "scrollWidth": 414,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "hidden"
+      },
+      {
+        "tag": "header",
+        "className": "global-header ",
+        "text": "NullIDهش و اعتبارسنجی:hashآمادهمحلیآفلاینبدون شبکهپوسته: روشنزبانEnglishفارسیРус",
+        "scrollWidth": 414,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "mobile",
+    "locale": "fa",
+    "moduleKey": "selftest",
+    "file": "mobile-fa-selftest.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 1964,
+      "clientHeight": 1964,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 414,
+      "clientWidth": 356,
+      "scrollHeight": 1829,
+      "clientHeight": 1829,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 133,
+      "clientHeight": 133,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    },
+    "header": {
+      "scrollWidth": 414,
+      "clientWidth": 356,
+      "scrollHeight": 222,
+      "clientHeight": 222,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 3,
+    "clippedSamples": [
+      {
+        "tag": "ul",
+        "className": "",
+        "text": ":hashهش و اعتبارسنجیهش‌ها⟡:redactحذف اطلاعات حساسپاک‌سازی PII⟡:sanitizeپاک‌ساز ل",
+        "scrollWidth": 2344,
+        "clientWidth": 328,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "auto"
+      },
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDهش و اعتبارسنجی:hashآمادهمحلیآفلاینبدون شبکهپوسته: روشنزبانEnglishفارسیРус",
+        "scrollWidth": 414,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "hidden"
+      },
+      {
+        "tag": "header",
+        "className": "global-header ",
+        "text": "NullIDهش و اعتبارسنجی:hashآمادهمحلیآفلاینبدون شبکهپوسته: روشنزبانEnglishفارسیРус",
+        "scrollWidth": 414,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  },
+  {
+    "viewport": "mobile",
+    "locale": "fa",
+    "moduleKey": "guide",
+    "file": "mobile-fa-guide.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 1964,
+      "clientHeight": 1964,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 414,
+      "clientWidth": 356,
+      "scrollHeight": 1829,
+      "clientHeight": 1829,
+      "overflowX": "hidden",
+      "overflowY": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 133,
+      "clientHeight": 133,
+      "overflowX": "auto",
+      "overflowY": "auto"
+    },
+    "header": {
+      "scrollWidth": 414,
+      "clientWidth": 356,
+      "scrollHeight": 222,
+      "clientHeight": 222,
+      "overflowX": "visible",
+      "overflowY": "visible"
+    },
+    "borderRadius": "16px",
+    "clippedNodeCount": 3,
+    "clippedSamples": [
+      {
+        "tag": "ul",
+        "className": "",
+        "text": ":hashهش و اعتبارسنجیهش‌ها⟡:redactحذف اطلاعات حساسپاک‌سازی PII⟡:sanitizeپاک‌ساز ل",
+        "scrollWidth": 2344,
+        "clientWidth": 328,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "auto"
+      },
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDهش و اعتبارسنجی:hashآمادهمحلیآفلاینبدون شبکهپوسته: روشنزبانEnglishفارسیРус",
+        "scrollWidth": 414,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "hidden"
+      },
+      {
+        "tag": "header",
+        "className": "global-header ",
+        "text": "NullIDهش و اعتبارسنجی:hashآمادهمحلیآفلاینبدون شبکهپوسته: روشنزبانEnglishفارسیРус",
+        "scrollWidth": 414,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip",
+        "overflowX": "visible"
+      }
+    ]
+  }
+]

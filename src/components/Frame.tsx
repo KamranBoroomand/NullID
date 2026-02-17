@@ -21,9 +21,9 @@ export function Frame({ modulePane, workspace, header, buildMarker = "Version: L
             {workspace}
           </section>
         </div>
-      </div>
-      <div className="frame-footer" aria-label="Build marker">
-        <span>{buildMarker}</span>
+        <div className="frame-footer" aria-label="Build marker">
+          <span>{buildMarker}</span>
+        </div>
       </div>
     </div>
   );

@@ -20,6 +20,7 @@
     "lint": "node scripts/lint.js",
     "test": "tsc -p tsconfig.test.json && node --test build-test/__tests__/*.js",
     "e2e": "playwright test",
+    "test:e2e:i18n-layout": "playwright test tests/e2e/i18n-layout.spec.ts",
     "validate": "npm run typecheck && npm run lint && npm run test && npm run e2e && npm run build && npm run verify:build"
   },
   "dependencies": {

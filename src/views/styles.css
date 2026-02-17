@@ -137,6 +137,15 @@
   color: var(--text-muted);
 }
 
+.app-surface.is-compact .status-line {
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.app-surface.is-compact .status-line > * {
+  min-width: 0;
+}
+
 .tag {
   padding: 0.25rem 0.5rem;
   border-radius: 0.4rem;
@@ -191,7 +200,11 @@
   display: inline-flex;
   border: 1px solid var(--border-subtle);
   border-radius: 0.6rem;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
 
 .pill-buttons button {
@@ -201,6 +214,8 @@
   font-family: var(--font-mono);
   cursor: pointer;
   transition: background 160ms ease, color 160ms ease;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .pill-buttons button:not(:last-child) {

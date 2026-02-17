@@ -1,0 +1,1255 @@
+[
+  {
+    "viewport": "desktop",
+    "locale": "ru",
+    "moduleKey": "hash",
+    "file": "desktop-ru-hash.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "overflowX": "visible"
+    },
+    "textOverflowCount": 0,
+    "textOverflowSamples": [],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "desktop",
+    "locale": "ru",
+    "moduleKey": "redact",
+    "file": "desktop-ru-redact.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "overflowX": "visible"
+    },
+    "textOverflowCount": 0,
+    "textOverflowSamples": [],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "desktop",
+    "locale": "ru",
+    "moduleKey": "sanitize",
+    "file": "desktop-ru-sanitize.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "overflowX": "visible"
+    },
+    "textOverflowCount": 0,
+    "textOverflowSamples": [],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "desktop",
+    "locale": "ru",
+    "moduleKey": "meta",
+    "file": "desktop-ru-meta.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "overflowX": "visible"
+    },
+    "textOverflowCount": 0,
+    "textOverflowSamples": [],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "desktop",
+    "locale": "ru",
+    "moduleKey": "enc",
+    "file": "desktop-ru-enc.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "overflowX": "visible"
+    },
+    "textOverflowCount": 0,
+    "textOverflowSamples": [],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "desktop",
+    "locale": "ru",
+    "moduleKey": "pw",
+    "file": "desktop-ru-pw.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "overflowX": "visible"
+    },
+    "textOverflowCount": 1,
+    "textOverflowSamples": [
+      {
+        "tag": "div",
+        "className": "pill-buttons",
+        "text": "избегать неоднозначныхтребовать все наборыблокировать последовательностиблокиров",
+        "scrollWidth": 527,
+        "clientWidth": 417,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      }
+    ],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "desktop",
+    "locale": "ru",
+    "moduleKey": "vault",
+    "file": "desktop-ru-vault.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "overflowX": "visible"
+    },
+    "textOverflowCount": 0,
+    "textOverflowSamples": [],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "desktop",
+    "locale": "ru",
+    "moduleKey": "selftest",
+    "file": "desktop-ru-selftest.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "overflowX": "visible"
+    },
+    "textOverflowCount": 0,
+    "textOverflowSamples": [],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "desktop",
+    "locale": "ru",
+    "moduleKey": "guide",
+    "file": "desktop-ru-guide.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "overflowX": "visible"
+    },
+    "textOverflowCount": 2,
+    "textOverflowSamples": [
+      {
+        "tag": "span",
+        "className": "guide-name",
+        "text": "Инспектор метаданных",
+        "scrollWidth": 203,
+        "clientWidth": 190,
+        "whiteSpace": "nowrap",
+        "textOverflow": "ellipsis"
+      },
+      {
+        "tag": "span",
+        "className": "guide-name",
+        "text": "Защищенные заметки",
+        "scrollWidth": 192,
+        "clientWidth": 181,
+        "whiteSpace": "nowrap",
+        "textOverflow": "ellipsis"
+      }
+    ],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "desktop",
+    "locale": "fa",
+    "moduleKey": "hash",
+    "file": "desktop-fa-hash.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "overflowX": "visible"
+    },
+    "textOverflowCount": 0,
+    "textOverflowSamples": [],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "desktop",
+    "locale": "fa",
+    "moduleKey": "redact",
+    "file": "desktop-fa-redact.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "overflowX": "visible"
+    },
+    "textOverflowCount": 0,
+    "textOverflowSamples": [],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "desktop",
+    "locale": "fa",
+    "moduleKey": "sanitize",
+    "file": "desktop-fa-sanitize.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "overflowX": "visible"
+    },
+    "textOverflowCount": 0,
+    "textOverflowSamples": [],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "desktop",
+    "locale": "fa",
+    "moduleKey": "meta",
+    "file": "desktop-fa-meta.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "overflowX": "visible"
+    },
+    "textOverflowCount": 0,
+    "textOverflowSamples": [],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "desktop",
+    "locale": "fa",
+    "moduleKey": "enc",
+    "file": "desktop-fa-enc.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "overflowX": "visible"
+    },
+    "textOverflowCount": 0,
+    "textOverflowSamples": [],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "desktop",
+    "locale": "fa",
+    "moduleKey": "pw",
+    "file": "desktop-fa-pw.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "overflowX": "visible"
+    },
+    "textOverflowCount": 0,
+    "textOverflowSamples": [],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "desktop",
+    "locale": "fa",
+    "moduleKey": "vault",
+    "file": "desktop-fa-vault.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "overflowX": "visible"
+    },
+    "textOverflowCount": 0,
+    "textOverflowSamples": [],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "desktop",
+    "locale": "fa",
+    "moduleKey": "selftest",
+    "file": "desktop-fa-selftest.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "overflowX": "visible"
+    },
+    "textOverflowCount": 0,
+    "textOverflowSamples": [],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "desktop",
+    "locale": "fa",
+    "moduleKey": "guide",
+    "file": "desktop-fa-guide.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 966,
+      "clientWidth": 966,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 279,
+      "clientWidth": 279,
+      "overflowX": "visible"
+    },
+    "textOverflowCount": 0,
+    "textOverflowSamples": [],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "mobile",
+    "locale": "ru",
+    "moduleKey": "hash",
+    "file": "mobile-ru-hash.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 445,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "auto"
+    },
+    "textOverflowCount": 1,
+    "textOverflowSamples": [
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDХэш и проверка:hash:hash readyлокальноофлайнбез сетиТема: СветлаяЯзыкEngli",
+        "scrollWidth": 445,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      }
+    ],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "mobile",
+    "locale": "ru",
+    "moduleKey": "redact",
+    "file": "mobile-ru-redact.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 445,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "auto"
+    },
+    "textOverflowCount": 1,
+    "textOverflowSamples": [
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDРедактирование текста:redact:redact readyлокальноофлайнбез сетиТема: Светл",
+        "scrollWidth": 445,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      }
+    ],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "mobile",
+    "locale": "ru",
+    "moduleKey": "sanitize",
+    "file": "mobile-ru-sanitize.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 445,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "auto"
+    },
+    "textOverflowCount": 2,
+    "textOverflowSamples": [
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDСанитайзер логов:sanitize:sanitize readyлокальноофлайнбез сетиТема: Светла",
+        "scrollWidth": 445,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      },
+      {
+        "tag": "div",
+        "className": "pill-buttons",
+        "text": "nginx accessapache accessauth logJSON log",
+        "scrollWidth": 279,
+        "clientWidth": 272,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      }
+    ],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "mobile",
+    "locale": "ru",
+    "moduleKey": "meta",
+    "file": "mobile-ru-meta.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 445,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "auto"
+    },
+    "textOverflowCount": 1,
+    "textOverflowSamples": [
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDИнспектор метаданных:meta:meta readyлокальноофлайнбез сетиТема: СветлаяЯзы",
+        "scrollWidth": 445,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      }
+    ],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "mobile",
+    "locale": "ru",
+    "moduleKey": "enc",
+    "file": "mobile-ru-enc.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 445,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "auto"
+    },
+    "textOverflowCount": 2,
+    "textOverflowSamples": [
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDШифрование / Дешифрование:enc:enc readyлокальноофлайнбез сетиТема: Светлая",
+        "scrollWidth": 445,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      },
+      {
+        "tag": "div",
+        "className": "pill-buttons",
+        "text": "автоочисткаскачать конвертскачать расшифрованное",
+        "scrollWidth": 371,
+        "clientWidth": 272,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      }
+    ],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "mobile",
+    "locale": "ru",
+    "moduleKey": "pw",
+    "file": "mobile-ru-pw.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 445,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "auto"
+    },
+    "textOverflowCount": 5,
+    "textOverflowSamples": [
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDПароли и фразы:pw:pw readyлокальноофлайнбез сетиТема: СветлаяЯзыкEnglishفا",
+        "scrollWidth": 445,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      },
+      {
+        "tag": "div",
+        "className": "pill-buttons",
+        "text": "upperlowerdigitssymbols",
+        "scrollWidth": 303,
+        "clientWidth": 272,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      },
+      {
+        "tag": "div",
+        "className": "pill-buttons",
+        "text": "избегать неоднозначныхтребовать все наборыблокировать последовательностиблокиров",
+        "scrollWidth": 527,
+        "clientWidth": 272,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      },
+      {
+        "tag": "div",
+        "className": "pill-buttons",
+        "text": "высокая безопасностьбез символовpin (цифры)",
+        "scrollWidth": 305,
+        "clientWidth": 272,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      },
+      {
+        "tag": "div",
+        "className": "pill-buttons",
+        "text": "запоминаемыйсбалансированныймакс. энтропия",
+        "scrollWidth": 377,
+        "clientWidth": 272,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      }
+    ],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "mobile",
+    "locale": "ru",
+    "moduleKey": "vault",
+    "file": "mobile-ru-vault.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 445,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "auto"
+    },
+    "textOverflowCount": 2,
+    "textOverflowSamples": [
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDЗащищенные заметки:vault:vault readyлокальноофлайнбез сетиТема: СветлаяЯзы",
+        "scrollWidth": 445,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      },
+      {
+        "tag": "div",
+        "className": "pill-buttons",
+        "text": "пустоинцидентучетные данныечеклист",
+        "scrollWidth": 335,
+        "clientWidth": 272,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      }
+    ],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "mobile",
+    "locale": "ru",
+    "moduleKey": "selftest",
+    "file": "mobile-ru-selftest.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 445,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "auto"
+    },
+    "textOverflowCount": 1,
+    "textOverflowSamples": [
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDСамопроверка:selftest:selftest readyлокальноофлайнбез сетиТема: СветлаяЯзы",
+        "scrollWidth": 445,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      }
+    ],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "mobile",
+    "locale": "ru",
+    "moduleKey": "guide",
+    "file": "mobile-ru-guide.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 445,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "auto"
+    },
+    "textOverflowCount": 1,
+    "textOverflowSamples": [
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDГайд:guide:guide readyлокальноофлайнбез сетиТема: СветлаяЯзыкEnglishفارسیР",
+        "scrollWidth": 445,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      }
+    ],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "mobile",
+    "locale": "fa",
+    "moduleKey": "hash",
+    "file": "mobile-fa-hash.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 414,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "auto"
+    },
+    "textOverflowCount": 1,
+    "textOverflowSamples": [
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDهش و اعتبارسنجی:hash:hash readyمحلیآفلاینبدون شبکهپوسته: روشنزبانEnglishفا",
+        "scrollWidth": 414,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      }
+    ],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "mobile",
+    "locale": "fa",
+    "moduleKey": "redact",
+    "file": "mobile-fa-redact.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 414,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "auto"
+    },
+    "textOverflowCount": 1,
+    "textOverflowSamples": [
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDحذف اطلاعات حساس:redact:redact readyمحلیآفلاینبدون شبکهپوسته: روشنزبانEngl",
+        "scrollWidth": 414,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      }
+    ],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "mobile",
+    "locale": "fa",
+    "moduleKey": "sanitize",
+    "file": "mobile-fa-sanitize.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 414,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "auto"
+    },
+    "textOverflowCount": 2,
+    "textOverflowSamples": [
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDپاک‌ساز لاگ:sanitize:sanitize readyمحلیآفلاینبدون شبکهپوسته: روشنزبانEngli",
+        "scrollWidth": 414,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      },
+      {
+        "tag": "div",
+        "className": "pill-buttons",
+        "text": "nginx accessapache accessauth logJSON log",
+        "scrollWidth": 279,
+        "clientWidth": 272,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      }
+    ],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "mobile",
+    "locale": "fa",
+    "moduleKey": "meta",
+    "file": "mobile-fa-meta.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 414,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "auto"
+    },
+    "textOverflowCount": 1,
+    "textOverflowSamples": [
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDبازرس فراداده:meta:meta readyمحلیآفلاینبدون شبکهپوسته: روشنزبانEnglishفارس",
+        "scrollWidth": 414,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      }
+    ],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "mobile",
+    "locale": "fa",
+    "moduleKey": "enc",
+    "file": "mobile-fa-enc.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 414,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "auto"
+    },
+    "textOverflowCount": 2,
+    "textOverflowSamples": [
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDرمزگذاری / رمزگشایی:enc:enc readyمحلیآفلاینبدون شبکهپوسته: روشنزبانEnglish",
+        "scrollWidth": 414,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      },
+      {
+        "tag": "div",
+        "className": "pill-buttons",
+        "text": "پاک‌سازی خودکاردانلود پاکتدانلود رمزگشایی‌شده",
+        "scrollWidth": 306,
+        "clientWidth": 272,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      }
+    ],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "mobile",
+    "locale": "fa",
+    "moduleKey": "pw",
+    "file": "mobile-fa-pw.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 414,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "auto"
+    },
+    "textOverflowCount": 3,
+    "textOverflowSamples": [
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDگذرواژه و عبارت عبور:pw:pw readyمحلیآفلاینبدون شبکهپوسته: روشنزبانEnglishف",
+        "scrollWidth": 414,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      },
+      {
+        "tag": "div",
+        "className": "pill-buttons",
+        "text": "upperlowerdigitssymbols",
+        "scrollWidth": 303,
+        "clientWidth": 272,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      },
+      {
+        "tag": "div",
+        "className": "pill-buttons",
+        "text": "اجتناب از مبهمالزام همه مجموعه‌هامسدودسازی توالیمسدودسازی تکرار",
+        "scrollWidth": 374,
+        "clientWidth": 272,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      }
+    ],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "mobile",
+    "locale": "fa",
+    "moduleKey": "vault",
+    "file": "mobile-fa-vault.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 414,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "auto"
+    },
+    "textOverflowCount": 2,
+    "textOverflowSamples": [
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDیادداشت امن:vault:vault readyمحلیآفلاینبدون شبکهپوسته: روشنزبانEnglishفارس",
+        "scrollWidth": 414,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      },
+      {
+        "tag": "div",
+        "className": "pill-buttons",
+        "text": "خالیرخداداعتبارنامهچک‌لیست",
+        "scrollWidth": 318,
+        "clientWidth": 272,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      }
+    ],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "mobile",
+    "locale": "fa",
+    "moduleKey": "selftest",
+    "file": "mobile-fa-selftest.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 414,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "auto"
+    },
+    "textOverflowCount": 1,
+    "textOverflowSamples": [
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDخودآزمون:selftest:selftest readyمحلیآفلاینبدون شبکهپوسته: روشنزبانEnglishف",
+        "scrollWidth": 414,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      }
+    ],
+    "borderRadius": "16px"
+  },
+  {
+    "viewport": "mobile",
+    "locale": "fa",
+    "moduleKey": "guide",
+    "file": "mobile-fa-guide.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "frameWorkspace": {
+      "scrollWidth": 414,
+      "clientWidth": 356,
+      "overflowX": "hidden"
+    },
+    "framePane": {
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "overflowX": "auto"
+    },
+    "textOverflowCount": 1,
+    "textOverflowSamples": [
+      {
+        "tag": "section",
+        "className": "frame-workspace",
+        "text": "NullIDراهنما:guide:guide readyمحلیآفلاینبدون شبکهپوسته: روشنزبانEnglishفارسیРусс",
+        "scrollWidth": 414,
+        "clientWidth": 356,
+        "whiteSpace": "normal",
+        "textOverflow": "clip"
+      }
+    ],
+    "borderRadius": "16px"
+  }
+]

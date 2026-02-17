@@ -471,7 +471,7 @@ function AppShell() {
   );
 
   const isStacked = viewport.width < 1100;
-  const isCompact = viewport.height < 820;
+  const isCompact = viewport.width < 960 || viewport.height < 820;
 
   const goToGuide = useCallback(
     (key?: ModuleKey) => {

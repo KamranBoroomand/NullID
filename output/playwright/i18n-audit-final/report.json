@@ -1,0 +1,722 @@
+[
+  {
+    "viewport": "desktop",
+    "locale": "ru",
+    "moduleKey": "hash",
+    "file": "desktop-ru-hash.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966
+    },
+    "moduleHeader": {
+      "scrollWidth": 246,
+      "clientWidth": 246
+    }
+  },
+  {
+    "viewport": "desktop",
+    "locale": "ru",
+    "moduleKey": "redact",
+    "file": "desktop-ru-redact.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966
+    },
+    "moduleHeader": {
+      "scrollWidth": 246,
+      "clientWidth": 246
+    }
+  },
+  {
+    "viewport": "desktop",
+    "locale": "ru",
+    "moduleKey": "sanitize",
+    "file": "desktop-ru-sanitize.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966
+    },
+    "moduleHeader": {
+      "scrollWidth": 246,
+      "clientWidth": 246
+    }
+  },
+  {
+    "viewport": "desktop",
+    "locale": "ru",
+    "moduleKey": "meta",
+    "file": "desktop-ru-meta.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966
+    },
+    "moduleHeader": {
+      "scrollWidth": 246,
+      "clientWidth": 246
+    }
+  },
+  {
+    "viewport": "desktop",
+    "locale": "ru",
+    "moduleKey": "enc",
+    "file": "desktop-ru-enc.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966
+    },
+    "moduleHeader": {
+      "scrollWidth": 246,
+      "clientWidth": 246
+    }
+  },
+  {
+    "viewport": "desktop",
+    "locale": "ru",
+    "moduleKey": "pw",
+    "file": "desktop-ru-pw.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966
+    },
+    "moduleHeader": {
+      "scrollWidth": 246,
+      "clientWidth": 246
+    }
+  },
+  {
+    "viewport": "desktop",
+    "locale": "ru",
+    "moduleKey": "vault",
+    "file": "desktop-ru-vault.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966
+    },
+    "moduleHeader": {
+      "scrollWidth": 246,
+      "clientWidth": 246
+    }
+  },
+  {
+    "viewport": "desktop",
+    "locale": "ru",
+    "moduleKey": "selftest",
+    "file": "desktop-ru-selftest.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966
+    },
+    "moduleHeader": {
+      "scrollWidth": 246,
+      "clientWidth": 246
+    }
+  },
+  {
+    "viewport": "desktop",
+    "locale": "ru",
+    "moduleKey": "guide",
+    "file": "desktop-ru-guide.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966
+    },
+    "moduleHeader": {
+      "scrollWidth": 246,
+      "clientWidth": 246
+    }
+  },
+  {
+    "viewport": "desktop",
+    "locale": "fa",
+    "moduleKey": "hash",
+    "file": "desktop-fa-hash.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966
+    },
+    "moduleHeader": {
+      "scrollWidth": 246,
+      "clientWidth": 246
+    }
+  },
+  {
+    "viewport": "desktop",
+    "locale": "fa",
+    "moduleKey": "redact",
+    "file": "desktop-fa-redact.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966
+    },
+    "moduleHeader": {
+      "scrollWidth": 246,
+      "clientWidth": 246
+    }
+  },
+  {
+    "viewport": "desktop",
+    "locale": "fa",
+    "moduleKey": "sanitize",
+    "file": "desktop-fa-sanitize.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966
+    },
+    "moduleHeader": {
+      "scrollWidth": 246,
+      "clientWidth": 246
+    }
+  },
+  {
+    "viewport": "desktop",
+    "locale": "fa",
+    "moduleKey": "meta",
+    "file": "desktop-fa-meta.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966
+    },
+    "moduleHeader": {
+      "scrollWidth": 246,
+      "clientWidth": 246
+    }
+  },
+  {
+    "viewport": "desktop",
+    "locale": "fa",
+    "moduleKey": "enc",
+    "file": "desktop-fa-enc.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966
+    },
+    "moduleHeader": {
+      "scrollWidth": 246,
+      "clientWidth": 246
+    }
+  },
+  {
+    "viewport": "desktop",
+    "locale": "fa",
+    "moduleKey": "pw",
+    "file": "desktop-fa-pw.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966
+    },
+    "moduleHeader": {
+      "scrollWidth": 246,
+      "clientWidth": 246
+    }
+  },
+  {
+    "viewport": "desktop",
+    "locale": "fa",
+    "moduleKey": "vault",
+    "file": "desktop-fa-vault.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966
+    },
+    "moduleHeader": {
+      "scrollWidth": 246,
+      "clientWidth": 246
+    }
+  },
+  {
+    "viewport": "desktop",
+    "locale": "fa",
+    "moduleKey": "selftest",
+    "file": "desktop-fa-selftest.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966
+    },
+    "moduleHeader": {
+      "scrollWidth": 246,
+      "clientWidth": 246
+    }
+  },
+  {
+    "viewport": "desktop",
+    "locale": "fa",
+    "moduleKey": "guide",
+    "file": "desktop-fa-guide.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 1246,
+      "clientWidth": 1246
+    },
+    "header": {
+      "scrollWidth": 966,
+      "clientWidth": 966
+    },
+    "moduleHeader": {
+      "scrollWidth": 246,
+      "clientWidth": 246
+    }
+  },
+  {
+    "viewport": "mobile",
+    "locale": "ru",
+    "moduleKey": "hash",
+    "file": "mobile-ru-hash.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "header": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "moduleHeader": {
+      "scrollWidth": 336,
+      "clientWidth": 336
+    }
+  },
+  {
+    "viewport": "mobile",
+    "locale": "ru",
+    "moduleKey": "redact",
+    "file": "mobile-ru-redact.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "header": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "moduleHeader": {
+      "scrollWidth": 336,
+      "clientWidth": 336
+    }
+  },
+  {
+    "viewport": "mobile",
+    "locale": "ru",
+    "moduleKey": "sanitize",
+    "file": "mobile-ru-sanitize.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "header": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "moduleHeader": {
+      "scrollWidth": 336,
+      "clientWidth": 336
+    }
+  },
+  {
+    "viewport": "mobile",
+    "locale": "ru",
+    "moduleKey": "meta",
+    "file": "mobile-ru-meta.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "header": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "moduleHeader": {
+      "scrollWidth": 336,
+      "clientWidth": 336
+    }
+  },
+  {
+    "viewport": "mobile",
+    "locale": "ru",
+    "moduleKey": "enc",
+    "file": "mobile-ru-enc.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "header": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "moduleHeader": {
+      "scrollWidth": 336,
+      "clientWidth": 336
+    }
+  },
+  {
+    "viewport": "mobile",
+    "locale": "ru",
+    "moduleKey": "pw",
+    "file": "mobile-ru-pw.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "header": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "moduleHeader": {
+      "scrollWidth": 336,
+      "clientWidth": 336
+    }
+  },
+  {
+    "viewport": "mobile",
+    "locale": "ru",
+    "moduleKey": "vault",
+    "file": "mobile-ru-vault.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "header": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "moduleHeader": {
+      "scrollWidth": 336,
+      "clientWidth": 336
+    }
+  },
+  {
+    "viewport": "mobile",
+    "locale": "ru",
+    "moduleKey": "selftest",
+    "file": "mobile-ru-selftest.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "header": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "moduleHeader": {
+      "scrollWidth": 336,
+      "clientWidth": 336
+    }
+  },
+  {
+    "viewport": "mobile",
+    "locale": "ru",
+    "moduleKey": "guide",
+    "file": "mobile-ru-guide.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "header": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "moduleHeader": {
+      "scrollWidth": 336,
+      "clientWidth": 336
+    }
+  },
+  {
+    "viewport": "mobile",
+    "locale": "fa",
+    "moduleKey": "hash",
+    "file": "mobile-fa-hash.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "header": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "moduleHeader": {
+      "scrollWidth": 336,
+      "clientWidth": 336
+    }
+  },
+  {
+    "viewport": "mobile",
+    "locale": "fa",
+    "moduleKey": "redact",
+    "file": "mobile-fa-redact.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "header": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "moduleHeader": {
+      "scrollWidth": 336,
+      "clientWidth": 336
+    }
+  },
+  {
+    "viewport": "mobile",
+    "locale": "fa",
+    "moduleKey": "sanitize",
+    "file": "mobile-fa-sanitize.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "header": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "moduleHeader": {
+      "scrollWidth": 336,
+      "clientWidth": 336
+    }
+  },
+  {
+    "viewport": "mobile",
+    "locale": "fa",
+    "moduleKey": "meta",
+    "file": "mobile-fa-meta.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "header": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "moduleHeader": {
+      "scrollWidth": 336,
+      "clientWidth": 336
+    }
+  },
+  {
+    "viewport": "mobile",
+    "locale": "fa",
+    "moduleKey": "enc",
+    "file": "mobile-fa-enc.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "header": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "moduleHeader": {
+      "scrollWidth": 336,
+      "clientWidth": 336
+    }
+  },
+  {
+    "viewport": "mobile",
+    "locale": "fa",
+    "moduleKey": "pw",
+    "file": "mobile-fa-pw.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "header": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "moduleHeader": {
+      "scrollWidth": 336,
+      "clientWidth": 336
+    }
+  },
+  {
+    "viewport": "mobile",
+    "locale": "fa",
+    "moduleKey": "vault",
+    "file": "mobile-fa-vault.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "header": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "moduleHeader": {
+      "scrollWidth": 336,
+      "clientWidth": 336
+    }
+  },
+  {
+    "viewport": "mobile",
+    "locale": "fa",
+    "moduleKey": "selftest",
+    "file": "mobile-fa-selftest.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "header": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "moduleHeader": {
+      "scrollWidth": 336,
+      "clientWidth": 336
+    }
+  },
+  {
+    "viewport": "mobile",
+    "locale": "fa",
+    "moduleKey": "guide",
+    "file": "mobile-fa-guide.png",
+    "docOverflow": 0,
+    "bodyOverflow": 0,
+    "frameContent": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "header": {
+      "scrollWidth": 364,
+      "clientWidth": 364
+    },
+    "moduleHeader": {
+      "scrollWidth": 336,
+      "clientWidth": 336
+    }
+  }
+]

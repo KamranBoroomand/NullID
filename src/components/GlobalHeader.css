@@ -77,6 +77,8 @@
   align-items: flex-end;
   gap: 0.45rem;
   position: relative;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .indicator-row {
@@ -89,6 +91,8 @@
   display: flex;
   gap: 0.4rem;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .header-locale-label {
@@ -167,9 +171,33 @@
   padding: 0.65rem 0.9rem;
 }
 
+.global-header.is-compact .header-center {
+  width: 100%;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.global-header.is-compact .page-meta {
+  width: 100%;
+}
+
+.global-header.is-compact .page-title {
+  font-size: 1.08rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
 .global-header.is-compact .header-actions {
   width: 100%;
   align-items: flex-start;
+}
+
+.global-header.is-compact .indicator-row {
+  width: 100%;
+}
+
+.global-header.is-compact .compact-actions {
+  margin-inline-start: auto;
 }
 
 .global-header.is-compact .action-row {
