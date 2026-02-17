@@ -64,7 +64,7 @@ const detectors: Detector[] = [
   {
     key: "ip",
     label: "IP",
-    regex: /\b(?:[0-9\u06F0-\u06F9\u0660-\u0669]{1,3}\.){3}[0-9\u06F0-\u06F9\u0660-\u0669]{1,3}\b/g,
+    regex: /(?<![0-9\u06F0-\u06F9\u0660-\u0669])(?:[0-9\u06F0-\u06F9\u0660-\u0669]{1,3}\.){3}[0-9\u06F0-\u06F9\u0660-\u0669]{1,3}(?![0-9\u06F0-\u06F9\u0660-\u0669])/g,
     severity: "medium",
     mask: "[ip]",
     validate: isValidIpv4,
@@ -79,7 +79,7 @@ const detectors: Detector[] = [
   {
     key: "iban",
     label: "IBAN",
-    regex: /\b[A-Z]{2}[0-9\u06F0-\u06F9\u0660-\u0669]{2}[A-Z0-9\u06F0-\u06F9\u0660-\u0669]{11,30}\b/gi,
+    regex: /(?<![A-Z0-9\u06F0-\u06F9\u0660-\u0669])[A-Z]{2}[0-9\u06F0-\u06F9\u0660-\u0669]{2}[A-Z0-9\u06F0-\u06F9\u0660-\u0669]{11,30}(?![A-Z0-9\u06F0-\u06F9\u0660-\u0669])/gi,
     severity: "high",
     mask: "[iban]",
     validate: isValidIban,
@@ -121,7 +121,7 @@ interface RedactViewProps {
 
 export function RedactView({ onOpenGuide }: RedactViewProps) {
   const { push } = useToast();
-  const { t, tr } = useI18n();
+  const { t, tr, formatNumber } = useI18n();
   const [clipboardPrefs] = useClipboardPrefs();
   const [input, setInput] = useState("");
   const [maskMode, setMaskMode] = usePersistentState<MaskMode>("nullid:redact:mask", "full");
@@ -331,14 +331,14 @@ export function RedactView({ onOpenGuide }: RedactViewProps) {
           </div>
           <div className="status-line">
             <span>{tr("severity")}</span>
-            <Chip label={findings.overall.toUpperCase()} tone={findings.overall === "high" ? "danger" : "accent"} />
-            <span className="microcopy">{findings.total} {tr("findings")}</span>
+            <Chip label={tr(findings.overall)} tone={findings.overall === "high" ? "danger" : "accent"} />
+            <span className="microcopy">{formatNumber(findings.total)} {tr("findings")}</span>
           </div>
           <div className="status-line">
             <span>{tr("coverage")}</span>
-            <span className="tag">{coverage}% {tr("chars masked")}</span>
+            <span className="tag">{formatNumber(coverage)}% {tr("chars masked")}</span>
             <span className="microcopy">
-              {tr("high")} {severityCounts.high} · {tr("medium")} {severityCounts.medium} · {tr("low")} {severityCounts.low}
+              {tr("high")} {formatNumber(severityCounts.high)} · {tr("medium")} {formatNumber(severityCounts.medium)} · {tr("low")} {formatNumber(severityCounts.low)}
             </span>
           </div>
         </div>
@@ -355,9 +355,9 @@ export function RedactView({ onOpenGuide }: RedactViewProps) {
                 type="checkbox"
                 checked={detectorState[detector.key]}
                 onChange={(event) => setDetectorState((prev) => ({ ...prev, [detector.key]: event.target.checked }))}
-                aria-label={`Toggle ${detector.label}`}
+                aria-label={`${tr("Toggle")} ${tr(detector.label)}`}
               />
-              {detector.label}
+              {tr(detector.label)}
             </label>
           ))}
         </div>
@@ -372,11 +372,11 @@ export function RedactView({ onOpenGuide }: RedactViewProps) {
           <tbody>
             {Object.entries(findings.counts).map(([key, count]) => (
               <tr key={key}>
-                <td>{key}</td>
-                <td>{count}</td>
+                <td>{tr(key)}</td>
+                <td>{formatNumber(count)}</td>
                 <td>
                   <span className={`tag ${findings.severityMap[key] === "high" ? "tag-danger" : "tag-accent"}`}>
-                    {findings.severityMap[key]}
+                    {tr(findings.severityMap[key])}
                   </span>
                 </td>
               </tr>

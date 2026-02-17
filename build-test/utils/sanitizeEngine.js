@@ -2,7 +2,7 @@ const rules = [
     {
         key: "maskIp",
         label: "Mask IP addresses",
-        apply: (input) => replaceWithCount(input, /\b(\d{1,3}\.){3}\d{1,3}\b/g, "[ip]"),
+        apply: replaceIpv4,
     },
     {
         key: "maskIpv6",
@@ -305,7 +305,7 @@ function replaceWithCount(input, regex, replacement) {
     return { output, count };
 }
 function replaceCardNumbers(input) {
-    const regex = /\b(?:\d[ -]?){12,19}\b/g;
+    const regex = /(?:[0-9\u06F0-\u06F9\u0660-\u0669][ -]?){12,19}/g;
     let count = 0;
     const output = input.replace(regex, (match) => {
         if (passesLuhn(match)) {
@@ -317,19 +317,19 @@ function replaceCardNumbers(input) {
     return { output, count };
 }
 function replaceIban(input) {
-    const regex = /\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/gi;
+    const regex = /(^|[^A-Z0-9\u06F0-\u06F9\u0660-\u0669])([A-Z]{2}[0-9\u06F0-\u06F9\u0660-\u0669]{2}[A-Z0-9\u06F0-\u06F9\u0660-\u0669]{11,30})(?=$|[^A-Z0-9\u06F0-\u06F9\u0660-\u0669])/gi;
     let count = 0;
-    const output = input.replace(regex, (match) => {
-        if (isValidIban(match)) {
+    const output = input.replace(regex, (match, prefix, candidate) => {
+        if (isValidIban(candidate)) {
             count += 1;
-            return "[iban]";
+            return `${prefix}[iban]`;
         }
         return match;
     });
     return { output, count };
 }
 function passesLuhn(value) {
-    const digits = value.replace(/[^0-9]/g, "");
+    const digits = toAsciiDigits(value).replace(/[^0-9]/g, "");
     if (digits.length < 12 || digits.length > 19)
         return false;
     let sum = 0;
@@ -347,7 +347,7 @@ function passesLuhn(value) {
     return sum % 10 === 0;
 }
 function isValidIban(value) {
-    const trimmed = value.replace(/\s+/g, "").toUpperCase();
+    const trimmed = toAsciiDigits(value).replace(/\s+/g, "").toUpperCase();
     if (trimmed.length < 15 || trimmed.length > 34)
         return false;
     const rearranged = `${trimmed.slice(4)}${trimmed.slice(0, 4)}`;
@@ -357,6 +357,18 @@ function isValidIban(value) {
         remainder = (remainder * 10 + Number(converted[i])) % 97;
     }
     return remainder === 1;
+}
+function replaceIpv4(input) {
+    const regex = /(^|[^0-9\u06F0-\u06F9\u0660-\u0669])((?:[0-9\u06F0-\u06F9\u0660-\u0669]{1,3}\.){3}[0-9\u06F0-\u06F9\u0660-\u0669]{1,3})(?=$|[^0-9\u06F0-\u06F9\u0660-\u0669])/g;
+    let count = 0;
+    const output = input.replace(regex, (match, prefix, candidate) => {
+        if (isValidIpv4(candidate)) {
+            count += 1;
+            return `${prefix}[ip]`;
+        }
+        return match;
+    });
+    return { output, count };
 }
 function replaceInternationalPhoneNumbers(input) {
     const regex = /(?:\+|00)?[0-9\u06F0-\u06F9\u0660-\u0669][0-9\u06F0-\u06F9\u0660-\u0669().\-\s]{7,18}[0-9\u06F0-\u06F9\u0660-\u0669]/g;
@@ -401,6 +413,18 @@ function toAsciiDigits(value) {
     return value
         .replace(/[۰-۹]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 1728))
         .replace(/[٠-٩]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 1584));
+}
+function isValidIpv4(value) {
+    const normalized = toAsciiDigits(value);
+    const parts = normalized.split(".");
+    if (parts.length !== 4)
+        return false;
+    return parts.every((part) => {
+        if (!/^\d{1,3}$/.test(part))
+            return false;
+        const num = Number(part);
+        return num >= 0 && num <= 255;
+    });
 }
 function isRecord(value) {
     return Boolean(value) && typeof value === "object" && !Array.isArray(value);

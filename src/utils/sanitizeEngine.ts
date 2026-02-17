@@ -393,12 +393,12 @@ function replaceCardNumbers(input: string) {
 }
 
 function replaceIban(input: string) {
-  const regex = /\b[A-Z]{2}[0-9\u06F0-\u06F9\u0660-\u0669]{2}[A-Z0-9\u06F0-\u06F9\u0660-\u0669]{11,30}\b/gi;
+  const regex = /(^|[^A-Z0-9\u06F0-\u06F9\u0660-\u0669])([A-Z]{2}[0-9\u06F0-\u06F9\u0660-\u0669]{2}[A-Z0-9\u06F0-\u06F9\u0660-\u0669]{11,30})(?=$|[^A-Z0-9\u06F0-\u06F9\u0660-\u0669])/gi;
   let count = 0;
-  const output = input.replace(regex, (match) => {
-    if (isValidIban(match)) {
+  const output = input.replace(regex, (match, prefix: string, candidate: string) => {
+    if (isValidIban(candidate)) {
       count += 1;
-      return "[iban]";
+      return `${prefix}[iban]`;
     }
     return match;
   });
@@ -435,12 +435,12 @@ function isValidIban(value: string) {
 }
 
 function replaceIpv4(input: string) {
-  const regex = /\b(?:[0-9\u06F0-\u06F9\u0660-\u0669]{1,3}\.){3}[0-9\u06F0-\u06F9\u0660-\u0669]{1,3}\b/g;
+  const regex = /(^|[^0-9\u06F0-\u06F9\u0660-\u0669])((?:[0-9\u06F0-\u06F9\u0660-\u0669]{1,3}\.){3}[0-9\u06F0-\u06F9\u0660-\u0669]{1,3})(?=$|[^0-9\u06F0-\u06F9\u0660-\u0669])/g;
   let count = 0;
-  const output = input.replace(regex, (match) => {
-    if (isValidIpv4(match)) {
+  const output = input.replace(regex, (match, prefix: string, candidate: string) => {
+    if (isValidIpv4(candidate)) {
       count += 1;
-      return "[ip]";
+      return `${prefix}[ip]`;
     }
     return match;
   });

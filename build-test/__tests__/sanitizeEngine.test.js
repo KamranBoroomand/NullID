@@ -48,4 +48,13 @@ describe("sanitize engine", () => {
         assert.equal(result.applied.includes("maskPhoneIntl"), true);
         assert.equal(result.applied.includes("maskIranNationalId"), true);
     });
+    it("masks Persian-digit IPv4 and credit cards", () => {
+        const state = buildRulesState(["maskIp", "maskCard"]);
+        const input = "ip=۱۹۲.۱۶۸.۰.۱ card=۴۱۱۱ ۱۱۱۱ ۱۱۱۱ ۱۱۱۱";
+        const result = applySanitizeRules(input, state, [], false);
+        assert.equal(result.output.includes("[ip]"), true);
+        assert.equal(result.output.includes("[card]"), true);
+        assert.equal(result.applied.includes("maskIp"), true);
+        assert.equal(result.applied.includes("maskCard"), true);
+    });
 });
