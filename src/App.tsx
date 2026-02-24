@@ -35,6 +35,7 @@ const SelfTestView = lazy(() => import("./views/SelfTestView").then((module) => 
 const GuideView = lazy(() => import("./views/GuideView").then((module) => ({ default: module.GuideView })));
 
 type StatusTone = "neutral" | "accent" | "danger";
+type TrustState = "unsigned" | "verified" | "mismatch";
 
 interface WorkspaceViewProps {
   active: ModuleKey;
@@ -110,6 +111,17 @@ function AppShell() {
     () => keyHintProfiles.find((profile) => profile.id === selectedKeyHintProfileId) ?? null,
     [keyHintProfiles, selectedKeyHintProfileId],
   );
+  const profileExportTrustState: TrustState = !profileExportSign
+    ? "unsigned"
+    : profileExportPassphrase.trim()
+      ? "verified"
+      : "mismatch";
+  const profileImportTrustState = useMemo<TrustState>(() => {
+    if (!profileImportDescriptor?.signed) return "unsigned";
+    if (!profileImportPassphrase.trim()) return "mismatch";
+    if (profileImportError && /verification|signature|mismatch|integrity/i.test(profileImportError)) return "mismatch";
+    return "verified";
+  }, [profileImportDescriptor?.signed, profileImportError, profileImportPassphrase]);
 
   const resolvedActiveModule = useMemo<ModuleKey>(
     () => (modules.some((module) => module.key === activeModule) ? activeModule : "guide"),
@@ -615,6 +627,11 @@ function AppShell() {
         </label>
         {profileExportSign ? (
           <>
+            <div className="status-line">
+              <span>trust state</span>
+              <span className={trustTagClass(profileExportTrustState)}>{profileExportTrustState}</span>
+              {profileExportKeyHint.trim() ? <span className="microcopy">hint: {profileExportKeyHint.trim()}</span> : null}
+            </div>
             <label className="action-dialog-field">
               <span>{tr("Signing passphrase")}</span>
               <input
@@ -701,6 +718,11 @@ function AppShell() {
       >
         {profileImportDescriptor?.signed ? (
           <>
+            <div className="status-line">
+              <span>trust state</span>
+              <span className={trustTagClass(profileImportTrustState)}>{profileImportTrustState}</span>
+              {profileImportDescriptor.keyHint ? <span className="microcopy">{tr("hint")}: {profileImportDescriptor.keyHint}</span> : null}
+            </div>
             <p className="action-dialog-note">
               {tr("Signed profile detected")}{profileImportDescriptor.keyHint ? ` (${tr("hint")}: ${profileImportDescriptor.keyHint})` : ""}. {tr("Verification is required before import.")}
             </p>
@@ -720,7 +742,13 @@ function AppShell() {
             </label>
           </>
         ) : (
-          <p className="action-dialog-note">{tr("Unsigned profile snapshot. Continue only if you trust the source.")}</p>
+          <>
+            <div className="status-line">
+              <span>trust state</span>
+              <span className={trustTagClass(profileImportTrustState)}>{profileImportTrustState}</span>
+            </div>
+            <p className="action-dialog-note">{tr("Unsigned profile snapshot. Continue only if you trust the source.")}</p>
+          </>
         )}
         {profileImportError ? <p className="action-dialog-error">{profileImportError}</p> : null}
       </ActionDialog>
@@ -747,4 +775,10 @@ export default function App() {
       </ToastProvider>
     </I18nProvider>
   );
+}
+
+function trustTagClass(state: TrustState): string {
+  if (state === "verified") return "tag tag-accent";
+  if (state === "mismatch") return "tag tag-danger";
+  return "tag";
 }

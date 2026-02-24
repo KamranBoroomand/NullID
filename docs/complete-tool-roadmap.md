@@ -37,12 +37,16 @@ This roadmap tracks the major expansion areas required to make NullID a complete
 - [x] Gap review + prioritization for next assurance track.
 
 ## Phase 6: Complete Tool Rollout (Current)
-- [ ] Expand visual snapshot matrix to desktop + theme variants.
-- [ ] Add workflow-level visual regression gate with snapshot drift reporting.
+- [x] Expand visual snapshot matrix to desktop + theme variants.
+- [x] Add workflow-level visual regression gate with snapshot drift reporting.
 - [x] Extend signed workflow docs with key-hint profile operating conventions (`docs/signed-workflow-conventions.md`).
 - [x] Add password-storage hash lab with Argon2id/PBKDF2 + legacy compatibility warnings.
 - [x] Add vault unlock hardening controls (rate limiting, human check, optional MFA).
 - [x] Add static-host security header baseline files (`public/_headers`, `vercel.json`) and validation script.
+- [x] Add release dry-run workflow gate enforcing `release:bundle` + `release:verify` before publish.
+- [x] Harden desktop Tauri packaging with cross-platform smoke coverage (macOS/Linux/Windows).
+- [x] Extend archive sanitization manifest contract with per-file findings + severity totals and regression tests.
+- [x] Add signed import/export trust-state labels (`unsigned`, `verified`, `mismatch`) across profile/policy/vault flows.
 
 ## Delivery Notes
 - Each phase is designed to remain fully offline-first.

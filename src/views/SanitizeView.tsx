@@ -44,6 +44,7 @@ import {
 interface SanitizeViewProps {
   onOpenGuide?: (key?: ModuleKey) => void;
 }
+type TrustState = "unsigned" | "verified" | "mismatch";
 
 const ruleKeys = getRuleKeys();
 const presetKeys = Object.keys(sanitizePresets) as PresetKey[];
@@ -133,6 +134,17 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
     () => keyHintProfiles.find((profile) => profile.id === selectedKeyHintProfileId) ?? null,
     [keyHintProfiles, selectedKeyHintProfileId],
   );
+  const policyExportTrustState: TrustState = !policyExportSigned
+    ? "unsigned"
+    : policyExportPassphrase.trim()
+      ? "verified"
+      : "mismatch";
+  const policyImportTrustState = useMemo<TrustState>(() => {
+    if (!pendingPolicyImport?.descriptor.signed) return "unsigned";
+    if (!policyImportPassphrase.trim()) return "mismatch";
+    if (policyImportError && /verification|signature|mismatch|integrity/i.test(policyImportError)) return "mismatch";
+    return "verified";
+  }, [pendingPolicyImport?.descriptor.signed, policyImportError, policyImportPassphrase]);
 
   useEffect(() => {
     if (keyHintProfiles.length > 0) return;
@@ -966,6 +978,11 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
         </label>
         {policyExportSigned ? (
           <>
+            <div className="status-line">
+              <span>trust state</span>
+              <span className={trustTagClass(policyExportTrustState)}>{policyExportTrustState}</span>
+              {policyExportKeyHint.trim() ? <span className="microcopy">hint: {policyExportKeyHint.trim()}</span> : null}
+            </div>
             <label className="action-dialog-field">
               <span>Signing passphrase</span>
               <input
@@ -1037,6 +1054,11 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
       >
         {pendingPolicyImport?.descriptor.signed ? (
           <>
+            <div className="status-line">
+              <span>trust state</span>
+              <span className={trustTagClass(policyImportTrustState)}>{policyImportTrustState}</span>
+              {pendingPolicyImport.descriptor.keyHint ? <span className="microcopy">hint: {pendingPolicyImport.descriptor.keyHint}</span> : null}
+            </div>
             <p className="action-dialog-note">
               Signed pack detected{pendingPolicyImport.descriptor.keyHint ? ` (hint: ${pendingPolicyImport.descriptor.keyHint})` : ""}. Verification is required before import.
             </p>
@@ -1056,7 +1078,13 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
             </label>
           </>
         ) : (
-          <p className="action-dialog-note">Unsigned policy pack. Continue only if you trust the source.</p>
+          <>
+            <div className="status-line">
+              <span>trust state</span>
+              <span className={trustTagClass(policyImportTrustState)}>{policyImportTrustState}</span>
+            </div>
+            <p className="action-dialog-note">Unsigned policy pack. Continue only if you trust the source.</p>
+          </>
         )}
         {policyImportError ? <p className="action-dialog-error">{policyImportError}</p> : null}
       </ActionDialog>
@@ -1077,6 +1105,12 @@ function downloadBlob(blob: Blob, filename: string) {
 function sanitizeFileStem(value: string) {
   const base = value.replace(/\.[^.]+$/, "").trim();
   return (base || "nullid").replace(/[^a-z0-9_-]+/gi, "-").replace(/-+/g, "-");
+}
+
+function trustTagClass(state: TrustState): string {
+  if (state === "verified") return "tag tag-accent";
+  if (state === "mismatch") return "tag tag-danger";
+  return "tag";
 }
 
 function highlightDiff(before: string, after: string) {

@@ -66,6 +66,24 @@ export function VaultView({ onOpenGuide }) {
     const formatTs = useCallback((value) => formatDateTime(value), [formatDateTime]);
     const passphraseAssessment = useMemo(() => analyzeSecret(passphrase), [passphrase]);
     const selectedKeyHintProfile = useMemo(() => keyHintProfiles.find((profile) => profile.id === selectedKeyHintProfileId) ?? null, [keyHintProfiles, selectedKeyHintProfileId]);
+    const vaultExportTrustState = !vaultExportSign
+        ? "unsigned"
+        : vaultSigningPassphrase.trim()
+            ? "verified"
+            : "mismatch";
+    const vaultImportTrustState = useMemo(() => {
+        const hasTrustError = Boolean(vaultImportError && /verification|signature|mismatch|integrity/i.test(vaultImportError));
+        if (vaultImportMode === "plain") {
+            if (!vaultImportDescriptor?.signed)
+                return "unsigned";
+            if (!vaultImportVerifyPassphrase.trim())
+                return "mismatch";
+            return hasTrustError ? "mismatch" : "verified";
+        }
+        if (hasTrustError)
+            return "mismatch";
+        return vaultImportVerifyPassphrase.trim() ? "verified" : "unsigned";
+    }, [vaultImportDescriptor?.signed, vaultImportError, vaultImportMode, vaultImportVerifyPassphrase]);
     const filteredNotes = useMemo(() => notes.filter((note) => {
         const query = filter.toLowerCase();
         return (note.title.toLowerCase().includes(query) ||
@@ -616,7 +634,7 @@ export function VaultView({ onOpenGuide }) {
                                     setVaultExportPassphrase(event.target.value);
                                     if (vaultExportError)
                                         setVaultExportError(null);
-                                }, "aria-label": "Vault export passphrase", placeholder: "required for encrypted export" })] })) : null, _jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Sign metadata" }), _jsx("input", { type: "checkbox", checked: vaultExportSign, onChange: (event) => setVaultExportSign(event.target.checked), "aria-label": "Sign vault export metadata" })] }), vaultExportSign ? (_jsxs(_Fragment, { children: [_jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Signing passphrase" }), _jsx("input", { className: "action-dialog-input", type: "password", value: vaultSigningPassphrase, onChange: (event) => {
+                                }, "aria-label": "Vault export passphrase", placeholder: "required for encrypted export" })] })) : null, _jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Sign metadata" }), _jsx("input", { type: "checkbox", checked: vaultExportSign, onChange: (event) => setVaultExportSign(event.target.checked), "aria-label": "Sign vault export metadata" })] }), vaultExportSign ? (_jsxs(_Fragment, { children: [_jsxs("div", { className: "status-line", children: [_jsx("span", { children: "trust state" }), _jsx("span", { className: trustTagClass(vaultExportTrustState), children: vaultExportTrustState }), vaultExportKeyHint.trim() ? _jsxs("span", { className: "microcopy", children: ["hint: ", vaultExportKeyHint.trim()] }) : null] }), _jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Signing passphrase" }), _jsx("input", { className: "action-dialog-input", type: "password", value: vaultSigningPassphrase, onChange: (event) => {
                                             setVaultSigningPassphrase(event.target.value);
                                             if (vaultExportError)
                                                 setVaultExportError(null);
@@ -627,7 +645,7 @@ export function VaultView({ onOpenGuide }) {
                                                     setVaultExportKeyHint(profile?.keyHint ?? "");
                                                 }, "aria-label": "Saved vault key hint profile", children: [_jsx("option", { value: "", children: "custom key hint" }), keyHintProfiles.map((profile) => (_jsxs("option", { value: profile.id, children: [profile.name, " \u00B7 ", profile.keyHint] }, profile.id)))] })] }), _jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Key hint label" }), _jsx("input", { className: "action-dialog-input", value: vaultExportKeyHint, onChange: (event) => setVaultExportKeyHint(event.target.value), "aria-label": "Vault key hint", placeholder: "optional verification hint" })] })] }), _jsxs("p", { className: "action-dialog-note", children: ["Key hints are local labels only; passphrases are never persisted.", selectedKeyHintProfile ? ` Active: ${selectedKeyHintProfile.name} (v${selectedKeyHintProfile.version})` : ""] })] })) : (_jsx("p", { className: "action-dialog-note", children: "Unsigned exports skip signature verification during import." })), vaultExportError ? _jsx("p", { className: "action-dialog-error", children: vaultExportError }) : null] }), _jsxs(ActionDialog, { open: vaultImportDialogOpen, title: vaultImportMode === "encrypted" ? "Import encrypted vault snapshot" : "Import vault snapshot", description: vaultImportMode === "encrypted"
                     ? "Provide export passphrase and optional verification passphrase."
-                    : `${vaultImportDescriptor?.noteCount ?? 0} notes · schema ${vaultImportDescriptor?.schemaVersion ?? "unknown"}`, confirmLabel: vaultImportMode === "encrypted" ? "import encrypted" : "import snapshot", onCancel: closeVaultImportDialog, onConfirm: () => void confirmVaultImport(), children: [vaultImportMode === "encrypted" ? (_jsxs(_Fragment, { children: [_jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Export passphrase" }), _jsx("input", { className: "action-dialog-input", type: "password", value: vaultImportExportPassphrase, onChange: (event) => {
+                    : `${vaultImportDescriptor?.noteCount ?? 0} notes · schema ${vaultImportDescriptor?.schemaVersion ?? "unknown"}`, confirmLabel: vaultImportMode === "encrypted" ? "import encrypted" : "import snapshot", onCancel: closeVaultImportDialog, onConfirm: () => void confirmVaultImport(), children: [vaultImportMode === "encrypted" ? (_jsxs(_Fragment, { children: [_jsxs("div", { className: "status-line", children: [_jsx("span", { children: "trust state" }), _jsx("span", { className: trustTagClass(vaultImportTrustState), children: vaultImportTrustState })] }), _jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Export passphrase" }), _jsx("input", { className: "action-dialog-input", type: "password", value: vaultImportExportPassphrase, onChange: (event) => {
                                             setVaultImportExportPassphrase(event.target.value);
                                             if (vaultImportError)
                                                 setVaultImportError(null);
@@ -635,11 +653,11 @@ export function VaultView({ onOpenGuide }) {
                                             setVaultImportVerifyPassphrase(event.target.value);
                                             if (vaultImportError)
                                                 setVaultImportError(null);
-                                        }, "aria-label": "Encrypted vault verification passphrase", placeholder: "required when snapshot metadata is signed" })] })] })) : vaultImportDescriptor?.signed ? (_jsxs(_Fragment, { children: [_jsxs("p", { className: "action-dialog-note", children: ["Signed snapshot detected", vaultImportDescriptor.keyHint ? ` (hint: ${vaultImportDescriptor.keyHint})` : "", ". Verification is required before import."] }), _jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Verification passphrase" }), _jsx("input", { className: "action-dialog-input", type: "password", value: vaultImportVerifyPassphrase, onChange: (event) => {
+                                        }, "aria-label": "Encrypted vault verification passphrase", placeholder: "required when snapshot metadata is signed" })] })] })) : vaultImportDescriptor?.signed ? (_jsxs(_Fragment, { children: [_jsxs("div", { className: "status-line", children: [_jsx("span", { children: "trust state" }), _jsx("span", { className: trustTagClass(vaultImportTrustState), children: vaultImportTrustState }), vaultImportDescriptor.keyHint ? _jsxs("span", { className: "microcopy", children: ["hint: ", vaultImportDescriptor.keyHint] }) : null] }), _jsxs("p", { className: "action-dialog-note", children: ["Signed snapshot detected", vaultImportDescriptor.keyHint ? ` (hint: ${vaultImportDescriptor.keyHint})` : "", ". Verification is required before import."] }), _jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Verification passphrase" }), _jsx("input", { className: "action-dialog-input", type: "password", value: vaultImportVerifyPassphrase, onChange: (event) => {
                                             setVaultImportVerifyPassphrase(event.target.value);
                                             if (vaultImportError)
                                                 setVaultImportError(null);
-                                        }, "aria-label": "Vault verification passphrase", placeholder: "required for signed snapshots" })] })] })) : (_jsx("p", { className: "action-dialog-note", children: "Unsigned snapshot. Continue only if you trust this file." })), vaultImportError ? _jsx("p", { className: "action-dialog-error", children: vaultImportError }) : null] }), _jsx(ActionDialog, { open: reportDialogOpen, title: "Export notes report", description: "Choose whether note body content should be included in the report.", confirmLabel: "export report", onCancel: () => setReportDialogOpen(false), onConfirm: () => {
+                                        }, "aria-label": "Vault verification passphrase", placeholder: "required for signed snapshots" })] })] })) : (_jsxs(_Fragment, { children: [_jsxs("div", { className: "status-line", children: [_jsx("span", { children: "trust state" }), _jsx("span", { className: trustTagClass(vaultImportTrustState), children: vaultImportTrustState })] }), _jsx("p", { className: "action-dialog-note", children: "Unsigned snapshot. Continue only if you trust this file." })] })), vaultImportError ? _jsx("p", { className: "action-dialog-error", children: vaultImportError }) : null] }), _jsx(ActionDialog, { open: reportDialogOpen, title: "Export notes report", description: "Choose whether note body content should be included in the report.", confirmLabel: "export report", onCancel: () => setReportDialogOpen(false), onConfirm: () => {
                     exportFilteredReport(reportIncludeBodies);
                     setReportDialogOpen(false);
                 }, children: _jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: "Include note bodies in report" }), _jsx("input", { type: "checkbox", checked: reportIncludeBodies, onChange: (event) => setReportIncludeBodies(event.target.checked), "aria-label": "Include note bodies" })] }) }), _jsx(ActionDialog, { open: wipeDialogOpen, title: "Wipe vault data", description: "This removes all vault metadata, canary records, and encrypted notes from local storage.", confirmLabel: "wipe vault", danger: true, onCancel: () => setWipeDialogOpen(false), onConfirm: () => {
@@ -662,4 +680,11 @@ function gradeTagClass(grade) {
     if (grade === "fair")
         return "tag";
     return "tag tag-accent";
+}
+function trustTagClass(state) {
+    if (state === "verified")
+        return "tag tag-accent";
+    if (state === "mismatch")
+        return "tag tag-danger";
+    return "tag";
 }

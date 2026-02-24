@@ -25,6 +25,8 @@ Reference test corpus: `src/__tests__/adversarialCorpus.test.ts`.
 
 ## 3) Signed release + provenance gates
 - [ ] Release pipeline runs from `.github/workflows/release-signed.yml`.
+- [ ] Release dry-run gate passes from `.github/workflows/release-dry-run.yml`.
+- [ ] Signed release workflow runs `npm run release:dry-run` before signing/publish.
 - [ ] Release artifacts are packaged by `npm run release:bundle`.
 - [ ] Release checksums verify via `npm run release:verify`.
 - [ ] Keyless signatures are generated (`*.sig` + `*.pem`) for each release artifact.

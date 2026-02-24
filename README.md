@@ -164,7 +164,9 @@ Primary npm scripts:
 | `npm run setup:precommit` | `node scripts/install-precommit.mjs` | Install local pre-commit helper for sanitize/redact enforcement. |
 | `npm run release:bundle` | `node scripts/package-release.mjs` | Package release inputs into `release/`. |
 | `npm run release:verify` | `node scripts/verify-release-bundle.mjs` | Verify packaged release artifacts/checksums. |
+| `npm run release:dry-run` | `node scripts/release-dry-run.mjs` | Run release bundle + checksum verification gate before publish. |
 | `npm run desktop:init` | `node scripts/tauri-init.mjs` | Bootstrap desktop packaging path (`desktop/tauri`). |
+| `npm run desktop:smoke` | `node scripts/desktop-smoke.mjs` | Validate desktop Tauri packaging inputs and compile smoke checks. |
 | `npm run assets:brand` | `node scripts/generate-brand-assets.mjs` | Regenerate social/app icon assets from template. |
 | `npm run preview` | `vite preview` | Preview production build locally. |
 | `npm run typecheck` | `tsc -b` | Run TypeScript project checks. |
@@ -174,6 +176,9 @@ Primary npm scripts:
 | `npm run security:check` | `npm run audit:headers && npm run lint && npm run test` | Run local security checks (header baseline + no-network policy + unit tests). |
 | `npm run test` | `tsc -p tsconfig.test.json && node --test build-test/__tests__/*.js` | Compile and run utility tests. |
 | `npm run e2e` | `playwright test` | Run Playwright end-to-end tests. |
+| `npm run test:visual` | `playwright test tests/e2e/visual-regression.spec.ts` | Run desktop visual regression matrix (core modules × light/dark themes). |
+| `npm run test:visual:update` | `playwright test tests/e2e/visual-regression.spec.ts --update-snapshots` | Refresh visual snapshot baselines after intentional UI changes. |
+| `npm run visual:drift-report` | `node scripts/collect-visual-drift.mjs` | Build drift summary artifacts (`json` + markdown) from Playwright diff output. |
 | `npm run test:e2e:i18n-layout` | `playwright test tests/e2e/i18n-layout.spec.ts` | Run RU/FA layout integrity tests. |
 | `npm run validate` | `npm run typecheck && npm run lint && npm run test && npm run e2e && npm run build && npm run verify:build` | Full local quality pipeline. |
 
@@ -181,6 +186,9 @@ Team references:
 - CI templates: `.github/workflow-templates/nullid-pr-sanitize.yml`, `.github/workflow-templates/nullid-artifact-checks.yml`
 - Pages workflow: `.github/workflows/pages.yml`
 - Reproducibility workflow: `.github/workflows/reproducibility.yml`
+- Visual regression workflow: `.github/workflows/visual-regression.yml`
+- Desktop Tauri smoke workflow: `.github/workflows/desktop-tauri-smoke.yml`
+- Release dry-run workflow: `.github/workflows/release-dry-run.yml`
 - Signed release workflow: `.github/workflows/release-signed.yml`
 - Dependency monitoring: `.github/dependabot.yml`
 - Platform breadth notes: `docs/phase3-workflows.md`
@@ -237,7 +245,8 @@ Security references:
 - Unit tests cover crypto envelopes, hashing behavior, policy integrity, vault snapshot integrity, redaction overlap, and theme contrast.
 - Playwright covers end-to-end browser behavior.
 - RU/FA i18n layout checks catch overflow and clipping regressions.
-- Mobile visual snapshots are available under `tests/e2e/app.spec.ts-snapshots/` when baselines are present.
+- Visual snapshots cover desktop core modules in both light/dark theme modes via `tests/e2e/visual-regression.spec.ts`.
+- Visual regression CI uploads diff artifacts plus drift summaries and fails on unapproved changes.
 
 ## Project Structure
 ```text
@@ -281,17 +290,17 @@ No runtime service integration is expected. Core processing is local, and lint c
 No. It uses standard primitives and includes integrity controls, but it is not presented as externally audited or formally certified.
 
 ## Roadmap
-Status updated: February 17, 2026.
+Status updated: February 24, 2026.
 
 Current focus:
-- [ ] Expand visual snapshot matrix to include desktop coverage and theme variants (done when desktop baseline snapshots exist for each core module and theme mode).
-- [ ] Add workflow-level visual regression gating with artifact-based drift reporting (done when CI uploads diff artifacts and fails on unapproved drift).
-- [ ] Add release dry-run automation that enforces `release:bundle` and `release:verify` before publish (done when release workflow blocks publish on failed dry-run checks).
+- [x] Expand visual snapshot matrix to include desktop coverage and theme variants (desktop baseline snapshots exist for each core module and theme mode).
+- [x] Add workflow-level visual regression gating with artifact-based drift reporting (CI uploads diff artifacts and fails on unapproved drift).
+- [x] Add release dry-run automation that enforces `release:bundle` and `release:verify` before publish (release workflow blocks publish on failed dry-run checks).
 
 Next up:
-- [ ] Harden `desktop/tauri` packaging with cross-platform smoke tests (macOS, Linux, Windows CI legs).
-- [ ] Extend `archive-sanitize` reporting with per-file finding summaries and severity totals (JSON report contract plus test coverage).
-- [ ] Improve signed import/export trust-state visibility for key-hint profiles (UI state labels for unsigned, verified, and mismatch paths).
+- [x] Harden `desktop/tauri` packaging with cross-platform smoke tests (macOS, Linux, Windows CI legs).
+- [x] Extend `archive-sanitize` reporting with per-file finding summaries and severity totals (JSON report contract plus test coverage).
+- [x] Improve signed import/export trust-state visibility for key-hint profiles (UI state labels for unsigned, verified, and mismatch paths).
 
 Completed recently:
 - [x] Metadata parsing hardening for malformed edge files and uncommon vendor tags.

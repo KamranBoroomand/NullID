@@ -37,7 +37,7 @@ Behavior:
 - Accepts folder or zip source.
 - Applies sanitize rules to selected text extensions.
 - Preserves binary files.
-- Emits `nullid-archive-manifest.json` into output archive with hashes and per-file sanitization status.
+- Emits `nullid-archive-manifest.json` into output archive with hashes, per-file sanitization status, per-file finding summaries, and severity totals.
 
 ## 4) Desktop packaging path (Tauri scaffold)
 Command:
@@ -50,4 +50,4 @@ Behavior:
 Next hardening for desktop path:
 - Define capability/permission policy explicitly.
 - Add release signing and provenance for desktop binaries.
-- Add platform-specific smoke tests for macOS/Windows/Linux.
+- Keep platform-specific smoke tests healthy for macOS/Windows/Linux (`.github/workflows/desktop-tauri-smoke.yml`).

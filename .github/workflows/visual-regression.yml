@@ -1,0 +1,63 @@
+name: Visual Regression Gate
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  visual-regression:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install chromium
+
+      - name: Run visual regression suite
+        id: visual
+        continue-on-error: true
+        run: CI=1 npm run test:visual -- --reporter=line,html
+
+      - name: Collect visual drift report
+        if: always()
+        run: npm run visual:drift-report -- --root test-results --out output
+
+      - name: Publish visual drift summary
+        if: always()
+        run: |
+          if [ -f output/visual-drift-summary.md ]; then
+            cat output/visual-drift-summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload visual drift artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-drift-${{ github.run_id }}
+          path: |
+            test-results
+            playwright-report
+            output/visual-drift-report.json
+            output/visual-drift-summary.md
+          if-no-files-found: warn
+
+      - name: Enforce visual gate
+        if: steps.visual.outcome == 'failure'
+        run: |
+          echo "Unapproved visual drift detected. Review uploaded diff artifacts."
+          exit 1

@@ -663,6 +663,8 @@ function runArchiveSanitize(argv) {
     const files = walkFiles(sourceRoot);
     const entries = [];
     let sanitizedCount = 0;
+    let findingTotal = 0;
+    const severityTotals = { high: 0, medium: 0, low: 0 };
 
     files.forEach((sourceFile) => {
       const rel = path.relative(sourceRoot, sourceFile);
@@ -674,9 +676,43 @@ function runArchiveSanitize(argv) {
       const beforeHash = sha256Hex(sourceBuffer);
       let outputBuffer = sourceBuffer;
       let sanitized = false;
+      const isTextExt = includeExt.has(ext);
+      const withinMaxBytes = sourceBuffer.length <= maxBytes;
+      const isBinary = looksBinary(sourceBuffer);
+      const canScanText = sanitizeText && isTextExt && withinMaxBytes && !isBinary;
+      let findings = {
+        scanned: false,
+        reason: !sanitizeText
+          ? "sanitize-text-disabled"
+          : !isTextExt
+            ? "extension-filter"
+            : !withinMaxBytes
+              ? "max-bytes"
+              : isBinary
+                ? "binary"
+                : "not-scanned",
+        total: 0,
+        highestSeverity: null,
+        bySeverity: { high: 0, medium: 0, low: 0 },
+        byType: {},
+      };
 
-      if (sanitizeText && includeExt.has(ext) && sourceBuffer.length <= maxBytes && !looksBinary(sourceBuffer)) {
+      if (canScanText) {
         const text = sourceBuffer.toString("utf8");
+        const scan = scanRedaction(text, buildRedactDetectors());
+        const bySeverity = severityCounts(scan.matches);
+        findings = {
+          scanned: true,
+          reason: null,
+          total: scan.total,
+          highestSeverity: scan.total > 0 ? scan.overall : null,
+          bySeverity,
+          byType: scan.counts,
+        };
+        findingTotal += scan.total;
+        severityTotals.high += bySeverity.high;
+        severityTotals.medium += bySeverity.medium;
+        severityTotals.low += bySeverity.low;
         const result = sanitizeWithOptions(text, options);
         outputBuffer = Buffer.from(result.output, "utf8");
         sanitized = outputBuffer.toString("utf8") !== text;
@@ -691,11 +727,12 @@ function runArchiveSanitize(argv) {
         sha256Before: beforeHash,
         sha256After: sha256Hex(outputBuffer),
         sanitized,
+        findings,
       });
     });
 
     const manifest = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       kind: "nullid-archive-manifest",
       createdAt: new Date().toISOString(),
       source: {
@@ -709,6 +746,8 @@ function runArchiveSanitize(argv) {
       summary: {
         fileCount: entries.length,
         sanitizedCount,
+        findingTotal,
+        severityTotals,
       },
       files: entries,
     };
@@ -1538,6 +1577,16 @@ function partialMask(value) {
 
 function severityRank(value) {
   return value === "high" ? 3 : value === "medium" ? 2 : 1;
+}
+
+function severityCounts(matches) {
+  const totals = { high: 0, medium: 0, low: 0 };
+  matches.forEach((match) => {
+    if (match.severity === "high") totals.high += 1;
+    else if (match.severity === "medium") totals.medium += 1;
+    else totals.low += 1;
+  });
+  return totals;
 }
 
 const kdfProfiles = {

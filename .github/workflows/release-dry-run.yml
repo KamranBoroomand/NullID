@@ -1,0 +1,54 @@
+name: Release Dry-Run Gate
+
+on:
+  pull_request:
+    branches: ["main"]
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    env:
+      SOURCE_DATE_EPOCH: 1735689600
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Build reproducible artifacts
+        run: npm run build:repro
+
+      - name: Resolve dry-run tag
+        id: release_tag
+        run: echo "tag=dryrun-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - name: Run release dry-run checks
+        run: npm run release:dry-run -- --tag "${{ steps.release_tag.outputs.tag }}"
+
+      - name: Upload dry-run bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-dry-run-${{ steps.release_tag.outputs.tag }}
+          path: release/*

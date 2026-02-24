@@ -47,6 +47,7 @@ type DecryptedNote = { id: string; title: string; body: string; tags: string[]; 
 interface VaultViewProps {
   onOpenGuide?: (key?: ModuleKey) => void;
 }
+type TrustState = "unsigned" | "verified" | "mismatch";
 
 export function VaultView({ onOpenGuide }: VaultViewProps) {
   const { push } = useToast();
@@ -107,6 +108,21 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
     () => keyHintProfiles.find((profile) => profile.id === selectedKeyHintProfileId) ?? null,
     [keyHintProfiles, selectedKeyHintProfileId],
   );
+  const vaultExportTrustState: TrustState = !vaultExportSign
+    ? "unsigned"
+    : vaultSigningPassphrase.trim()
+      ? "verified"
+      : "mismatch";
+  const vaultImportTrustState = useMemo<TrustState>(() => {
+    const hasTrustError = Boolean(vaultImportError && /verification|signature|mismatch|integrity/i.test(vaultImportError));
+    if (vaultImportMode === "plain") {
+      if (!vaultImportDescriptor?.signed) return "unsigned";
+      if (!vaultImportVerifyPassphrase.trim()) return "mismatch";
+      return hasTrustError ? "mismatch" : "verified";
+    }
+    if (hasTrustError) return "mismatch";
+    return vaultImportVerifyPassphrase.trim() ? "verified" : "unsigned";
+  }, [vaultImportDescriptor?.signed, vaultImportError, vaultImportMode, vaultImportVerifyPassphrase]);
 
   const filteredNotes = useMemo(
     () =>
@@ -1073,6 +1089,11 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
         </label>
         {vaultExportSign ? (
           <>
+            <div className="status-line">
+              <span>trust state</span>
+              <span className={trustTagClass(vaultExportTrustState)}>{vaultExportTrustState}</span>
+              {vaultExportKeyHint.trim() ? <span className="microcopy">hint: {vaultExportKeyHint.trim()}</span> : null}
+            </div>
             <label className="action-dialog-field">
               <span>Signing passphrase</span>
               <input
@@ -1144,6 +1165,10 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
       >
         {vaultImportMode === "encrypted" ? (
           <>
+            <div className="status-line">
+              <span>trust state</span>
+              <span className={trustTagClass(vaultImportTrustState)}>{vaultImportTrustState}</span>
+            </div>
             <label className="action-dialog-field">
               <span>Export passphrase</span>
               <input
@@ -1175,6 +1200,11 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
           </>
         ) : vaultImportDescriptor?.signed ? (
           <>
+            <div className="status-line">
+              <span>trust state</span>
+              <span className={trustTagClass(vaultImportTrustState)}>{vaultImportTrustState}</span>
+              {vaultImportDescriptor.keyHint ? <span className="microcopy">hint: {vaultImportDescriptor.keyHint}</span> : null}
+            </div>
             <p className="action-dialog-note">
               Signed snapshot detected{vaultImportDescriptor.keyHint ? ` (hint: ${vaultImportDescriptor.keyHint})` : ""}. Verification is required before import.
             </p>
@@ -1194,7 +1224,13 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
             </label>
           </>
         ) : (
-          <p className="action-dialog-note">Unsigned snapshot. Continue only if you trust this file.</p>
+          <>
+            <div className="status-line">
+              <span>trust state</span>
+              <span className={trustTagClass(vaultImportTrustState)}>{vaultImportTrustState}</span>
+            </div>
+            <p className="action-dialog-note">Unsigned snapshot. Continue only if you trust this file.</p>
+          </>
         )}
         {vaultImportError ? <p className="action-dialog-error">{vaultImportError}</p> : null}
       </ActionDialog>
@@ -1249,4 +1285,10 @@ function gradeTagClass(grade: SecretGrade): string {
   if (grade === "critical" || grade === "weak") return "tag tag-danger";
   if (grade === "fair") return "tag";
   return "tag tag-accent";
+}
+
+function trustTagClass(state: TrustState): string {
+  if (state === "verified") return "tag tag-accent";
+  if (state === "mismatch") return "tag tag-danger";
+  return "tag";
 }

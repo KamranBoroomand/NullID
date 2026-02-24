@@ -59,11 +59,8 @@ jobs:
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
-      - name: Package release bundle
-        run: npm run release:bundle -- --tag "${{ steps.release_tag.outputs.tag }}"
-
-      - name: Verify release checksums
-        run: npm run release:verify
+      - name: Release dry-run gate (bundle + verify)
+        run: npm run release:dry-run -- --tag "${{ steps.release_tag.outputs.tag }}"
 
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
