@@ -6,7 +6,6 @@ import { execFileSync } from "node:child_process";
 const argv = process.argv.slice(2);
 const root = process.cwd();
 const tauriRoot = path.resolve(root, "desktop", "tauri", "src-tauri");
-const tauriProjectRoot = path.resolve(tauriRoot, "..");
 const confPath = path.join(tauriRoot, "tauri.conf.json");
 const cargoPath = path.join(tauriRoot, "Cargo.toml");
 const mainPath = path.join(tauriRoot, "src", "main.rs");
@@ -22,15 +21,9 @@ if (typeof frontendDist !== "string" || !frontendDist.trim()) {
   throw new Error("tauri.conf.json missing build.frontendDist");
 }
 
-const frontendDistCandidates = [
-  path.resolve(path.dirname(confPath), frontendDist),
-  path.resolve(tauriProjectRoot, frontendDist),
-];
-const frontendDistPath = frontendDistCandidates.find((candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isDirectory());
-if (!frontendDistPath) {
-  throw new Error(
-    `frontendDist directory missing: ${frontendDistCandidates.map((candidate) => path.relative(root, candidate)).join(", ")}`,
-  );
+const frontendDistPath = path.resolve(path.dirname(confPath), frontendDist);
+if (!fs.existsSync(frontendDistPath) || !fs.statSync(frontendDistPath).isDirectory()) {
+  throw new Error(`frontendDist directory missing: ${path.relative(root, frontendDistPath)}`);
 }
 
 if (!skipCargo) {

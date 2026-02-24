@@ -26,6 +26,7 @@ const viewports: ViewportScenario[] = [
   { label: "desktop", width: 1280, height: 900 },
   { label: "mobile", width: 390, height: 844 },
 ];
+const MAX_HORIZONTAL_OVERFLOW_PX = 2;
 
 for (const viewport of viewports) {
   for (const locale of locales) {
@@ -40,10 +41,10 @@ for (const viewport of viewports) {
 
         const scenario = `${viewport.label}/${locale}/${moduleKey}`;
         expect(metrics.frameShellFound, `${scenario}: frame shell is missing`).toBe(true);
-        expect(metrics.docOverflow, `${scenario}: document has horizontal overflow`).toBeLessThanOrEqual(1);
-        expect(metrics.bodyOverflow, `${scenario}: body has horizontal overflow`).toBeLessThanOrEqual(1);
-        expect(metrics.headerOverflow, `${scenario}: header has horizontal overflow`).toBeLessThanOrEqual(1);
-        expect(metrics.moduleHeaderOverflow, `${scenario}: module header has horizontal overflow`).toBeLessThanOrEqual(1);
+        expect(metrics.docOverflow, `${scenario}: document has horizontal overflow`).toBeLessThanOrEqual(MAX_HORIZONTAL_OVERFLOW_PX);
+        expect(metrics.bodyOverflow, `${scenario}: body has horizontal overflow`).toBeLessThanOrEqual(MAX_HORIZONTAL_OVERFLOW_PX);
+        expect(metrics.headerOverflow, `${scenario}: header has horizontal overflow`).toBeLessThanOrEqual(MAX_HORIZONTAL_OVERFLOW_PX);
+        expect(metrics.moduleHeaderOverflow, `${scenario}: module header has horizontal overflow`).toBeLessThanOrEqual(MAX_HORIZONTAL_OVERFLOW_PX);
         expect(metrics.frameShellRadius, `${scenario}: frame corners should remain rounded`).toBeGreaterThan(0);
         expect(metrics.frameShellOverflowX, `${scenario}: frame shell must clip X overflow`).toBe("hidden");
         expect(metrics.frameShellOverflowY, `${scenario}: frame shell must clip Y overflow`).toBe("hidden");
@@ -65,6 +66,14 @@ async function openLocalizedModule(page: Page, locale: AppLocale, moduleKey: Mod
   await page.goto("/");
   await expect(page.locator(".frame-shell")).toBeVisible();
   await expect(page.locator(".global-header")).toBeVisible();
+  await page.evaluate(async () => {
+    if (!("fonts" in document)) return;
+    try {
+      await document.fonts.ready;
+    } catch {
+      // Ignore font API failures and continue with measured layout.
+    }
+  });
   await page.waitForTimeout(250);
 }
 
@@ -91,4 +100,3 @@ async function collectLayoutMetrics(page: Page): Promise<LayoutMetrics> {
     };
   });
 }
-

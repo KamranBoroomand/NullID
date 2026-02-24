@@ -26,7 +26,7 @@ const tauriConf = {
   "build": {
     "beforeDevCommand": "npm run dev -- --host 127.0.0.1 --port 4173",
     "beforeBuildCommand": "npm run build",
-    "frontendDist": "../../dist",
+    "frontendDist": "../../../dist",
     "devUrl": "http://127.0.0.1:4173"
   },
   "app": {
@@ -43,8 +43,8 @@ const tauriConf = {
     "active": false,
     "targets": "all",
     "icon": [
-      "../../public/icons/icon-192.png",
-      "../../public/icons/icon-512.png"
+      "../../../public/icons/icon-192.png",
+      "../../../public/icons/icon-512.png"
     ]
   }
 };
