@@ -24,7 +24,7 @@
     "audit:deps": "npm audit --audit-level=high",
     "security:check": "npm run audit:headers && npm run lint && npm run test",
     "test": "tsc -p tsconfig.test.json && node --test build-test/__tests__/*.js",
-    "e2e": "playwright test",
+    "e2e": "playwright test tests/e2e/app.spec.ts tests/e2e/i18n-layout.spec.ts",
     "test:visual": "playwright test tests/e2e/visual-regression.spec.ts",
     "test:visual:update": "playwright test tests/e2e/visual-regression.spec.ts --update-snapshots",
     "visual:drift-report": "node scripts/collect-visual-drift.mjs",
