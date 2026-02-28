@@ -36,7 +36,7 @@
     "validate": "npm run typecheck && npm run i18n:check && npm run lint && npm run test && npm run e2e && npm run build && npm run verify:build"
   },
   "dependencies": {
-    "@noble/hashes": "^1.4.0",
+    "@noble/hashes": "^2.0.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
