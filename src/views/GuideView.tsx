@@ -23,18 +23,18 @@ const trustSignals = [
   },
 ];
 
-const operatorNotes = [
+const workflowNotes = [
   {
-    role: "Incident response",
-    quote: "Batch sanitization and signed policy packs made evidence sharing repeatable across teams.",
+    role: "Incident workflow",
+    note: "Use :sanitize policy packs before sharing logs, then export the safe-share bundle with hashes.",
   },
   {
-    role: "Security engineering",
-    quote: "Local-only hashing and envelope tooling let us verify artifacts in restricted environments.",
+    role: "Artifact verification",
+    note: "Use :hash manifests and :enc envelopes to exchange integrity-checked artifacts across restricted environments.",
   },
   {
-    role: "Privacy review",
-    quote: "Metadata stripping plus preview diagnostics reduced accidental EXIF leaks before publishing.",
+    role: "Privacy publishing",
+    note: "Run :meta cleanup and codec diagnostics before publishing media outside trusted channels.",
   },
 ];
 
@@ -75,21 +75,21 @@ export function GuideView() {
             ))}
           </ul>
         </article>
-        <article className="panel guide-card" aria-label={tr("Operator testimonials")}>
+        <article className="panel guide-card" aria-label={tr("Workflow notes")}>
           <div className="guide-card-header">
             <div className="guide-card-title">
               <span className="guide-key">:proof</span>
               <div className="guide-title-wrap">
-                <span className="guide-name">{tr("Operator Notes")}</span>
-                <span className="guide-summary">{tr("Field feedback from common workflows")}</span>
+                <span className="guide-name">{tr("Workflow Notes")}</span>
+                <span className="guide-summary">{tr("Operational guidance for common workflows")}</span>
               </div>
             </div>
           </div>
           <ul className="microcopy guide-list">
-            {operatorNotes.map((note) => (
+            {workflowNotes.map((note) => (
               <li key={note.role}>
                 <span className="note-title">{tr(note.role)}</span>
-                <span className="note-body"> {tr(note.quote)}</span>
+                <span className="note-body"> {tr(note.note)}</span>
               </li>
             ))}
           </ul>

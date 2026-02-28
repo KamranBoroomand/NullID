@@ -24,6 +24,9 @@ Offline-first security toolbox for hashing, redaction, sanitization, encryption,
 ## Overview
 NullID is a Vite + React + TypeScript single-page app designed as a local security workbench. It also ships a local Node CLI (`scripts/nullid-local.mjs`) so browser and automation workflows stay aligned.
 
+Current release line:
+- `0.1.x` (release-candidate baseline)
+
 Focused modules in the app:
 - Hash and Verify
 - Text Redaction
@@ -59,8 +62,8 @@ CLI commands include:
 
 ## Core Capabilities
 - Hash and verify: SHA-256, SHA-512, and SHA-1 (legacy) for text/files with digest comparison.
-- Text redaction: detector-based masking for common secrets/PII with overlap-safe conflict handling.
-- Log sanitization: presets and custom policies, structured-format support (`text/json/ndjson/csv/xml/yaml`), and safe-share bundle export.
+- Text redaction: detector-based masking for common secrets/PII (including GitHub/Slack tokens and private key blocks) with overlap-safe conflict handling.
+- Log sanitization: presets and custom policies, structured-format support (`text/json/ndjson/csv/xml/yaml`), safe-share bundle export, and token/key-block stripping controls.
 - Metadata inspection/cleanup: image metadata parsing with local clean re-encode flows; CLI support for PDF and Office cleanup.
 - Encryption and vault workflows: versioned `NULLID:ENC:1` envelopes with authenticated encryption, configurable KDF profiles, and encrypted local vault storage.
 - Password storage hashing lab: local salted hash generation/verification with `Argon2id` (recommended), `PBKDF2-SHA256` (compat), and legacy SHA options kept for migrations.
@@ -170,17 +173,18 @@ Primary npm scripts:
 | `npm run assets:brand` | `node scripts/generate-brand-assets.mjs` | Regenerate social/app icon assets from template. |
 | `npm run preview` | `vite preview` | Preview production build locally. |
 | `npm run typecheck` | `tsc -b` | Run TypeScript project checks. |
-| `npm run lint` | `node scripts/lint.js` | Enforce offline policy (no runtime network calls in `src/`). |
-| `npm run audit:headers` | `node scripts/verify-security-headers.mjs` | Verify static-host header configs include required security baseline headers. |
+| `npm run i18n:check` | `node scripts/check-i18n-coverage.mjs` | Fail if any `t(...)` key or `tr(...)` phrase used in source is missing from translation catalogs. |
+| `npm run lint` | `node scripts/lint.js` | Enforce offline policy via AST scan (disallowed network primitives/URL literals in `src/`). |
+| `npm run audit:headers` | `node scripts/verify-security-headers.mjs` | Verify static-host header configs and strict security directive values. |
 | `npm run audit:deps` | `npm audit --audit-level=high` | Run dependency vulnerability audit (network required). |
 | `npm run security:check` | `npm run audit:headers && npm run lint && npm run test` | Run local security checks (header baseline + no-network policy + unit tests). |
 | `npm run test` | `tsc -p tsconfig.test.json && node --test build-test/__tests__/*.js` | Compile and run utility tests. |
-| `npm run e2e` | `playwright test` | Run Playwright end-to-end tests. |
+| `npm run e2e` | `playwright test tests/e2e/app.spec.ts tests/e2e/i18n-layout.spec.ts` | Run Playwright behavior and i18n layout suites. |
 | `npm run test:visual` | `playwright test tests/e2e/visual-regression.spec.ts` | Run desktop visual regression matrix (core modules × light/dark themes). |
 | `npm run test:visual:update` | `playwright test tests/e2e/visual-regression.spec.ts --update-snapshots` | Refresh visual snapshot baselines after intentional UI changes. |
 | `npm run visual:drift-report` | `node scripts/collect-visual-drift.mjs` | Build drift summary artifacts (`json` + markdown) from Playwright diff output. |
 | `npm run test:e2e:i18n-layout` | `playwright test tests/e2e/i18n-layout.spec.ts` | Run RU/FA layout integrity tests. |
-| `npm run validate` | `npm run typecheck && npm run lint && npm run test && npm run e2e && npm run build && npm run verify:build` | Full local quality pipeline. |
+| `npm run validate` | `npm run typecheck && npm run i18n:check && npm run lint && npm run test && npm run e2e && npm run build && npm run verify:build` | Full local quality pipeline. |
 
 Team references:
 - CI templates: `.github/workflow-templates/nullid-pr-sanitize.yml`, `.github/workflow-templates/nullid-artifact-checks.yml`
@@ -194,6 +198,11 @@ Team references:
 - Platform breadth notes: `docs/phase3-workflows.md`
 - Signed workflow conventions: `docs/signed-workflow-conventions.md`
 - Release checklist: `docs/release-security-checklist.md`
+- Release readiness tracker: `docs/release-readiness.md`
+- Security policy: `SECURITY.md`
+- Contribution guide: `CONTRIBUTING.md`
+- Support guide: `SUPPORT.md`
+- Changelog: `CHANGELOG.md`
 
 ## Deployment
 NullID deploys as static files.
@@ -261,9 +270,13 @@ scripts/           # CLI and build/release automation
 tests/e2e/         # Playwright specs
 docs/              # roadmap, threat model, release and workflow docs
 desktop/tauri/     # optional desktop packaging path
+.github/           # workflows, issue templates, policy automation
 ```
 
 ## Contributing
+See `CONTRIBUTING.md` for full contribution standards and PR validation requirements.
+
+Quick checklist:
 1. Install dependencies with `npm ci`.
 2. Run `npm run validate` before opening a PR.
 3. Add/update tests for behavior changes.
@@ -290,7 +303,7 @@ No runtime service integration is expected. Core processing is local, and lint c
 No. It uses standard primitives and includes integrity controls, but it is not presented as externally audited or formally certified.
 
 ## Roadmap
-Status updated: February 24, 2026.
+Status updated: February 28, 2026.
 
 Current focus:
 - [x] Expand visual snapshot matrix to include desktop coverage and theme variants (desktop baseline snapshots exist for each core module and theme mode).

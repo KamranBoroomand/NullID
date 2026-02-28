@@ -1,6 +1,7 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { deflateSync, inflateSync } from "node:zlib";
 import { chromium } from "@playwright/test";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -8,6 +9,8 @@ const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "..");
 const publicDir = path.join(projectRoot, "public");
 const iconsDir = path.join(publicDir, "icons");
+const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+const CRC32_TABLE = buildCrc32Table();
 
 const iconSvg = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="NullID icon">
@@ -189,6 +192,132 @@ async function renderPng(browser, options) {
   await page.close();
 }
 
+async function ensurePngRgba(filePath) {
+  const input = await readFile(filePath);
+  if (!input.subarray(0, 8).equals(PNG_SIGNATURE)) {
+    throw new Error(`not a PNG file: ${filePath}`);
+  }
+
+  const chunks = [];
+  for (let offset = 8; offset < input.length;) {
+    const length = input.readUInt32BE(offset);
+    const type = input.toString("ascii", offset + 4, offset + 8);
+    const dataStart = offset + 8;
+    const dataEnd = dataStart + length;
+    chunks.push({ type, data: input.subarray(dataStart, dataEnd) });
+    offset = dataEnd + 4;
+  }
+
+  const ihdr = chunks.find((chunk) => chunk.type === "IHDR");
+  if (!ihdr) throw new Error(`missing IHDR chunk: ${filePath}`);
+  const width = ihdr.data.readUInt32BE(0);
+  const height = ihdr.data.readUInt32BE(4);
+  const bitDepth = ihdr.data[8];
+  const colorType = ihdr.data[9];
+
+  if (colorType === 6) return;
+  if (bitDepth !== 8 || colorType !== 2) {
+    throw new Error(`unsupported PNG color format for ${filePath}: bitDepth=${bitDepth}, colorType=${colorType}`);
+  }
+
+  const idat = Buffer.concat(chunks.filter((chunk) => chunk.type === "IDAT").map((chunk) => chunk.data));
+  const decoded = inflateSync(idat);
+  const inputStride = width * 3;
+  const inputRowLength = 1 + inputStride;
+  if (decoded.length !== inputRowLength * height) {
+    throw new Error(`unexpected PNG row size: ${filePath}`);
+  }
+
+  const reconstructedRows = [];
+  const bpp = 3;
+  let cursor = 0;
+  for (let y = 0; y < height; y++) {
+    const filter = decoded[cursor++];
+    const row = decoded.subarray(cursor, cursor + inputStride);
+    cursor += inputStride;
+    const out = Buffer.alloc(inputStride);
+    for (let i = 0; i < inputStride; i++) {
+      const left = i >= bpp ? out[i - bpp] : 0;
+      const up = y > 0 ? reconstructedRows[y - 1][i] : 0;
+      const upLeft = y > 0 && i >= bpp ? reconstructedRows[y - 1][i - bpp] : 0;
+      if (filter === 0) out[i] = row[i];
+      else if (filter === 1) out[i] = (row[i] + left) & 0xff;
+      else if (filter === 2) out[i] = (row[i] + up) & 0xff;
+      else if (filter === 3) out[i] = (row[i] + ((left + up) >> 1)) & 0xff;
+      else if (filter === 4) out[i] = (row[i] + paethPredictor(left, up, upLeft)) & 0xff;
+      else throw new Error(`unsupported PNG filter type ${filter} in ${filePath}`);
+    }
+    reconstructedRows.push(out);
+  }
+
+  const outputStride = width * 4;
+  const outputRows = Buffer.alloc((1 + outputStride) * height);
+  let outCursor = 0;
+  for (let y = 0; y < height; y++) {
+    outputRows[outCursor++] = 0; // use filter type 0 for deterministic output
+    const source = reconstructedRows[y];
+    for (let x = 0; x < width; x++) {
+      const src = x * 3;
+      outputRows[outCursor++] = source[src];
+      outputRows[outCursor++] = source[src + 1];
+      outputRows[outCursor++] = source[src + 2];
+      outputRows[outCursor++] = 255;
+    }
+  }
+
+  const rebuiltIhdr = Buffer.from(ihdr.data);
+  rebuiltIhdr[9] = 6; // RGBA
+  const passthrough = chunks.filter((chunk) => !["IHDR", "IDAT", "IEND"].includes(chunk.type));
+  const rebuilt = Buffer.concat([
+    PNG_SIGNATURE,
+    pngChunk("IHDR", rebuiltIhdr),
+    ...passthrough.map((chunk) => pngChunk(chunk.type, chunk.data)),
+    pngChunk("IDAT", deflateSync(outputRows, { level: 9 })),
+    pngChunk("IEND", Buffer.alloc(0)),
+  ]);
+
+  await writeFile(filePath, rebuilt);
+}
+
+function pngChunk(type, data) {
+  const typeBuffer = Buffer.from(type, "ascii");
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length, 0);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(Buffer.concat([typeBuffer, data])), 0);
+  return Buffer.concat([length, typeBuffer, data, crc]);
+}
+
+function crc32(buffer) {
+  let current = 0xffffffff;
+  for (const byte of buffer) {
+    current = CRC32_TABLE[(current ^ byte) & 0xff] ^ (current >>> 8);
+  }
+  return (current ^ 0xffffffff) >>> 0;
+}
+
+function buildCrc32Table() {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let current = n;
+    for (let bit = 0; bit < 8; bit++) {
+      current = (current & 1) ? (0xedb88320 ^ (current >>> 1)) : (current >>> 1);
+    }
+    table[n] = current >>> 0;
+  }
+  return table;
+}
+
+function paethPredictor(a, b, c) {
+  const p = a + b - c;
+  const pa = Math.abs(p - a);
+  const pb = Math.abs(p - b);
+  const pc = Math.abs(p - c);
+  if (pa <= pb && pa <= pc) return a;
+  if (pb <= pc) return b;
+  return c;
+}
+
 async function main() {
   await mkdir(iconsDir, { recursive: true });
   const browser = await chromium.launch();
@@ -244,6 +373,15 @@ async function main() {
       html: previewHtml,
       path: path.join(projectRoot, "nullid-preview.png"),
     });
+
+    await Promise.all([
+      ensurePngRgba(path.join(iconsDir, "icon-512.png")),
+      ensurePngRgba(path.join(iconsDir, "icon-512-maskable.png")),
+      ensurePngRgba(path.join(iconsDir, "icon-192.png")),
+      ensurePngRgba(path.join(iconsDir, "apple-touch-icon.png")),
+      ensurePngRgba(path.join(iconsDir, "favicon-32.png")),
+      ensurePngRgba(path.join(iconsDir, "favicon-16.png")),
+    ]);
   } finally {
     await browser.close();
   }

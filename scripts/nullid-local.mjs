@@ -263,7 +263,7 @@ function runRedact(argv) {
   const outputPath = argv[1];
   if (!inputPath || !outputPath) {
     throw new Error(
-      "Usage: redact <input-file> <output-file> [--mode full|partial] [--detectors email,phone,token,ip,id,iban,card,ipv6,awskey,awssecret]",
+      "Usage: redact <input-file> <output-file> [--mode full|partial] [--detectors email,phone,token,ip,id,iban,card,ipv6,awskey,awssecret,github,slack,privatekey]",
     );
   }
 
@@ -905,7 +905,7 @@ Commands:
   sanitize <input-file> <output-file> [--preset nginx|apache|auth|json] [--policy <policy-json>] [--baseline <nullid.policy.json>] [--merge-mode strict-override|prefer-stricter] [--json-aware true|false] [--format auto|text|json|ndjson|csv|xml|yaml]
   sanitize-dir <input-dir> <output-dir> [--preset ...|--policy ...|--baseline ...] [--format auto|text|json|ndjson|csv|xml|yaml] [--ext .log,.txt,.json] [--report <json-file>]
   bundle <input-file> <output-json> [--preset ...|--policy ...|--baseline ...] [--format auto|text|json|ndjson|csv|xml|yaml]
-  redact <input-file> <output-file> [--mode full|partial] [--detectors email,phone,token,ip,id,iban,card,ipv6,awskey,awssecret]
+  redact <input-file> <output-file> [--mode full|partial] [--detectors email,phone,token,ip,id,iban,card,ipv6,awskey,awssecret,github,slack,privatekey]
   enc <input-file> <output-envelope-file> [--pass <passphrase>|--pass-env <VAR>] [--profile compat|strong|paranoid] [--iterations <n>] [--kdf-hash sha256|sha512]
   dec <input-envelope-file> <output-file> [--pass <passphrase>|--pass-env <VAR>]
   pwgen [--kind password|passphrase] [...options]
@@ -964,10 +964,50 @@ function sanitizeWithOptions(input, options) {
 }
 
 const presetRules = {
-  nginx: ["maskIp", "maskIpv6", "stripCookies", "dropUA", "scrubJwt", "maskBearer", "maskUser", "normalizeTs", "maskAwsKey", "maskAwsSecret", "maskCard", "maskIban"],
-  apache: ["maskIp", "maskIpv6", "maskEmail", "scrubJwt", "maskBearer", "normalizeTs", "maskCard", "maskIban"],
-  auth: ["maskIp", "maskIpv6", "maskUser"],
-  json: ["maskIp", "maskIpv6", "stripJsonSecrets", "maskUser", "maskAwsKey", "maskAwsSecret", "maskCard", "maskIban"],
+  nginx: [
+    "maskIp",
+    "maskIpv6",
+    "stripCookies",
+    "dropUA",
+    "scrubJwt",
+    "maskBearer",
+    "maskUser",
+    "normalizeTs",
+    "maskAwsKey",
+    "maskAwsSecret",
+    "maskGithubToken",
+    "maskSlackToken",
+    "stripPrivateKeyBlock",
+    "maskCard",
+    "maskIban",
+  ],
+  apache: [
+    "maskIp",
+    "maskIpv6",
+    "maskEmail",
+    "scrubJwt",
+    "maskBearer",
+    "normalizeTs",
+    "maskGithubToken",
+    "maskSlackToken",
+    "stripPrivateKeyBlock",
+    "maskCard",
+    "maskIban",
+  ],
+  auth: ["maskIp", "maskIpv6", "maskUser", "maskGithubToken", "maskSlackToken", "stripPrivateKeyBlock"],
+  json: [
+    "maskIp",
+    "maskIpv6",
+    "stripJsonSecrets",
+    "maskUser",
+    "maskAwsKey",
+    "maskAwsSecret",
+    "maskGithubToken",
+    "maskSlackToken",
+    "stripPrivateKeyBlock",
+    "maskCard",
+    "maskIban",
+  ],
 };
 
 const allRuleKeys = [
@@ -980,6 +1020,9 @@ const allRuleKeys = [
   "maskIban",
   "maskAwsKey",
   "maskAwsSecret",
+  "maskGithubToken",
+  "maskSlackToken",
+  "stripPrivateKeyBlock",
   "stripCookies",
   "dropUA",
   "normalizeTs",
@@ -1148,6 +1191,19 @@ function applySanitize(input, options) {
   applyRule(policy.rulesState.maskAwsKey, "maskAwsKey", (value) => replaceWithCount(value, /\bAKIA[0-9A-Z]{16}\b/g, "[aws-key]"));
   applyRule(policy.rulesState.maskAwsSecret, "maskAwsSecret", (value) =>
     replaceWithCount(value, /\baws_secret_access_key\s*[:=]\s*[A-Za-z0-9/+=]{40}\b/gi, "aws_secret_access_key=[redacted]"),
+  );
+  applyRule(policy.rulesState.maskGithubToken, "maskGithubToken", (value) =>
+    replaceWithCount(value, /\b(?:ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{20,})\b/g, "[github-token]"),
+  );
+  applyRule(policy.rulesState.maskSlackToken, "maskSlackToken", (value) =>
+    replaceWithCount(value, /\bxox(?:b|p|a|r|s)-[A-Za-z0-9-]{10,}\b/g, "[slack-token]"),
+  );
+  applyRule(policy.rulesState.stripPrivateKeyBlock, "stripPrivateKeyBlock", (value) =>
+    replaceWithCount(
+      value,
+      /-----BEGIN (?:[A-Z0-9 ]*?)PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9 ]*?)PRIVATE KEY-----/g,
+      "[private-key]",
+    ),
   );
   applyRule(policy.rulesState.stripCookies, "stripCookies", (value) => replaceWithCount(value, /cookie=[^ ;\n]+/gi, "cookie=[stripped]"));
   applyRule(policy.rulesState.dropUA, "dropUA", (value) => replaceWithCount(value, /ua=[^\s]+|user-agent:[^\n]+/gi, "ua=[dropped]"));
@@ -1487,6 +1543,27 @@ function buildRedactDetectors() {
       regex: /\baws_secret_access_key\s*[:=]\s*[A-Za-z0-9/+=]{40}\b/gi,
       severity: "high",
       mask: "[aws-secret]",
+    },
+    {
+      key: "github",
+      label: "GitHub token",
+      regex: /\b(?:ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{20,})\b/g,
+      severity: "high",
+      mask: "[github-token]",
+    },
+    {
+      key: "slack",
+      label: "Slack token",
+      regex: /\bxox(?:b|p|a|r|s)-[A-Za-z0-9-]{10,}\b/g,
+      severity: "high",
+      mask: "[slack-token]",
+    },
+    {
+      key: "privatekey",
+      label: "Private key block",
+      regex: /-----BEGIN (?:[A-Z0-9 ]*?)PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9 ]*?)PRIVATE KEY-----/g,
+      severity: "high",
+      mask: "[private-key]",
     },
   ];
 }

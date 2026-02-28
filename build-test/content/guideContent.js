@@ -19,7 +19,7 @@ export const guideTools = [
     {
         key: "redact",
         title: "Text Redaction",
-        whatItDoes: "Detects and masks PII/secrets (email, phone, IP/IPv6, IDs, IBAN, valid credit cards via Luhn, AWS keys/secrets, bearer tokens) with severity filtering and exportable risk reports.",
+        whatItDoes: "Detects and masks PII/secrets (email, phone, IP/IPv6, IDs, IBAN, valid credit cards via Luhn, AWS keys/secrets, GitHub/Slack tokens, private key blocks, bearer tokens) with severity filtering and exportable risk reports.",
         whatWhen: ["Sanitize chat transcripts or documents before sharing", "Remove account numbers or tokens from support logs"],
         howSteps: [
             "Paste text and choose mask mode (full/partial).",
@@ -36,7 +36,7 @@ export const guideTools = [
     {
         key: "sanitize",
         title: "Log Sanitizer",
-        whatItDoes: "Rule-based scrubbing for logs with diff preview, signed local policy packs, simulation matrix comparisons, rule-impact ranking, batch file sanitization, baseline policy merge, and safe-share bundle export.",
+        whatItDoes: "Rule-based scrubbing for logs with diff preview, signed local policy packs, simulation matrix comparisons, rule-impact ranking, batch file sanitization, baseline policy merge, and safe-share bundle export (including GitHub/Slack token and private-key block stripping).",
         whatWhen: ["Share log snippets in tickets", "Normalize noisy logs for demos/docs", "Generate portable sanitized bundles with integrity metadata"],
         howSteps: [
             "Paste logs or load a preset, toggle rules, and enable JSON-aware cleaning if applicable.",

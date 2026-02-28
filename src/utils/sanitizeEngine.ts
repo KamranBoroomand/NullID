@@ -10,6 +10,9 @@ export type RuleKey =
   | "maskIban"
   | "maskAwsKey"
   | "maskAwsSecret"
+  | "maskGithubToken"
+  | "maskSlackToken"
+  | "stripPrivateKeyBlock"
   | "stripCookies"
   | "dropUA"
   | "normalizeTs"
@@ -125,6 +128,27 @@ const rules: Rule[] = [
       replaceWithCount(input, /\baws_secret_access_key\s*[:=]\s*[A-Za-z0-9/+=]{40}\b/gi, "aws_secret_access_key=[redacted]"),
   },
   {
+    key: "maskGithubToken",
+    label: "Mask GitHub token",
+    apply: (input) =>
+      replaceWithCount(input, /\b(?:ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{20,})\b/g, "[github-token]"),
+  },
+  {
+    key: "maskSlackToken",
+    label: "Mask Slack token",
+    apply: (input) => replaceWithCount(input, /\bxox(?:b|p|a|r|s)-[A-Za-z0-9-]{10,}\b/g, "[slack-token]"),
+  },
+  {
+    key: "stripPrivateKeyBlock",
+    label: "Strip private key blocks",
+    apply: (input) =>
+      replaceWithCount(
+        input,
+        /-----BEGIN (?:[A-Z0-9 ]*?)PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9 ]*?)PRIVATE KEY-----/g,
+        "[private-key]",
+      ),
+  },
+  {
     key: "stripCookies",
     label: "Strip cookies",
     apply: (input) => replaceWithCount(input, /cookie=[^ ;\n]+/gi, "cookie=[stripped]"),
@@ -170,6 +194,9 @@ export const sanitizePresets: Record<PresetKey, { label: string; description: st
       "normalizeTs",
       "maskAwsKey",
       "maskAwsSecret",
+      "maskGithubToken",
+      "maskSlackToken",
+      "stripPrivateKeyBlock",
       "maskCard",
       "maskIban",
     ],
@@ -179,13 +206,27 @@ export const sanitizePresets: Record<PresetKey, { label: string; description: st
     description: "IPs, emails, JWT",
     sample:
       `10.0.0.2 - bob@example.com [14/Mar/2025:11:12:33 +0000] "GET /admin" 403 512 "-" "Mozilla/5.0" token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9`,
-    rules: ["maskIp", "maskIpv6", "maskEmail", "maskPhoneIntl", "maskIranNationalId", "scrubJwt", "maskBearer", "normalizeTs", "maskCard", "maskIban"],
+    rules: [
+      "maskIp",
+      "maskIpv6",
+      "maskEmail",
+      "maskPhoneIntl",
+      "maskIranNationalId",
+      "scrubJwt",
+      "maskBearer",
+      "normalizeTs",
+      "maskGithubToken",
+      "maskSlackToken",
+      "stripPrivateKeyBlock",
+      "maskCard",
+      "maskIban",
+    ],
   },
   auth: {
     label: "auth log",
     description: "usernames + IPs",
     sample: `Mar 14 08:15:22 host sshd[1201]: Failed password for root from 203.0.113.10 port 22 ssh2`,
-    rules: ["maskIp", "maskIpv6", "maskPhoneIntl", "maskIranNationalId", "maskUser"],
+    rules: ["maskIp", "maskIpv6", "maskPhoneIntl", "maskIranNationalId", "maskUser", "maskGithubToken", "maskSlackToken", "stripPrivateKeyBlock"],
   },
   json: {
     label: "JSON log",
@@ -200,6 +241,9 @@ export const sanitizePresets: Record<PresetKey, { label: string; description: st
       "maskUser",
       "maskAwsKey",
       "maskAwsSecret",
+      "maskGithubToken",
+      "maskSlackToken",
+      "stripPrivateKeyBlock",
       "maskCard",
       "maskIban",
     ],

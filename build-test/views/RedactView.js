@@ -98,6 +98,27 @@ const detectors = [
         severity: "high",
         mask: "[aws-secret]",
     },
+    {
+        key: "github",
+        label: "GitHub token",
+        regex: /\b(?:ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{20,})\b/g,
+        severity: "high",
+        mask: "[github-token]",
+    },
+    {
+        key: "slack",
+        label: "Slack token",
+        regex: /\bxox(?:b|p|a|r|s)-[A-Za-z0-9-]{10,}\b/g,
+        severity: "high",
+        mask: "[slack-token]",
+    },
+    {
+        key: "privatekey",
+        label: "Private key block",
+        regex: /-----BEGIN (?:[A-Z0-9 ]*?)PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9 ]*?)PRIVATE KEY-----/g,
+        severity: "high",
+        mask: "[private-key]",
+    },
 ];
 export function RedactView({ onOpenGuide }) {
     const { push } = useToast();

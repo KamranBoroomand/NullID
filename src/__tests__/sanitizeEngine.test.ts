@@ -71,4 +71,19 @@ describe("sanitize engine", () => {
     assert.equal(result.applied.includes("maskIp"), true);
     assert.equal(result.applied.includes("maskCard"), true);
   });
+
+  it("masks platform tokens and private key blocks", () => {
+    const state = buildRulesState(["maskGithubToken", "maskSlackToken", "stripPrivateKeyBlock"]);
+    const syntheticGithubToken = `${["gh", "p_"].join("")}${["0123456789abcdef", "0123456789abcdef", "0123"].join("")}`;
+    const syntheticSlackToken = `${["xox", "b"].join("")}-${["123456789012", "abcdefghijklmnop"].join("-")}`;
+    const input =
+      `gh=${syntheticGithubToken}\nslack=${syntheticSlackToken}\n-----BEGIN PRIVATE KEY-----\nabc123\n-----END PRIVATE KEY-----`;
+    const result = applySanitizeRules(input, state, [], false);
+    assert.equal(result.output.includes("[github-token]"), true);
+    assert.equal(result.output.includes("[slack-token]"), true);
+    assert.equal(result.output.includes("[private-key]"), true);
+    assert.equal(result.applied.includes("maskGithubToken"), true);
+    assert.equal(result.applied.includes("maskSlackToken"), true);
+    assert.equal(result.applied.includes("stripPrivateKeyBlock"), true);
+  });
 });

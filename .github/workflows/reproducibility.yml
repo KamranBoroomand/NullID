@@ -27,6 +27,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: i18n coverage
+        run: npm run i18n:check
+
       - name: Build reproducible artifacts
         env:
           SOURCE_DATE_EPOCH: 1735689600

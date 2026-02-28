@@ -111,9 +111,9 @@ export const guidePhraseTranslations: Record<string, { fa: string; ru: string }>
     fa: "برای رمزگشایی پاکت را جای‌گذاری کنید یا فایل را بارگذاری کنید، سپس عبارت عبور را وارد کنید.",
     ru: "Для расшифровки вставьте конверт или загрузите файл, затем введите парольную фразу.",
   },
-  "Detects and masks PII/secrets (email, phone, IP/IPv6, IDs, IBAN, valid credit cards via Luhn, AWS keys/secrets, bearer tokens) with severity filtering and exportable risk reports.": {
-    fa: "PII/اسرار (ایمیل، تلفن، IP/IPv6، شناسه‌ها، IBAN، کارت معتبر با Luhn، کلید/سکرت AWS، bearer token) را با فیلتر شدت تشخیص داده و ماسک می‌کند و گزارش ریسک قابل‌خروجی می‌دهد.",
-    ru: "Обнаруживает и маскирует PII/секреты (email, телефон, IP/IPv6, ID, IBAN, валидные карты по Luhn, AWS key/secret, bearer token) с фильтром серьезности и экспортируемыми отчетами риска.",
+  "Detects and masks PII/secrets (email, phone, IP/IPv6, IDs, IBAN, valid credit cards via Luhn, AWS keys/secrets, GitHub/Slack tokens, private key blocks, bearer tokens) with severity filtering and exportable risk reports.": {
+    fa: "PII/اسرار (ایمیل، تلفن، IP/IPv6، شناسه‌ها، IBAN، کارت معتبر با Luhn، کلید/سکرت AWS، توکن‌های GitHub/Slack، بلوک‌های کلید خصوصی و bearer token) را با فیلتر شدت تشخیص داده و ماسک می‌کند و گزارش ریسک قابل‌خروجی می‌دهد.",
+    ru: "Обнаруживает и маскирует PII/секреты (email, телефон, IP/IPv6, ID, IBAN, валидные карты по Luhn, AWS key/secret, GitHub/Slack токены, блоки приватных ключей, bearer token) с фильтром серьезности и экспортируемыми отчетами риска.",
   },
   "Deterministic crypto envelope": {
     fa: "پاکت رمزنگاری قطعی",
@@ -347,9 +347,9 @@ export const guidePhraseTranslations: Record<string, { fa: string; ru: string }>
     fa: "تفاوت قبل/بعد را بررسی کنید؛ برای نمایشگر باریک، wrap را فعال کنید.",
     ru: "Проверьте diff до/после; включите перенос строк для узких экранов.",
   },
-  "Rule-based scrubbing for logs with diff preview, signed local policy packs, simulation matrix comparisons, rule-impact ranking, batch file sanitization, baseline policy merge, and safe-share bundle export.": {
-    fa: "پاک‌سازی قانون‌محور لاگ با پیش‌نمایش diff، بسته‌های سیاست محلی امضاشده، مقایسه ماتریس شبیه‌سازی، رتبه‌بندی اثر قوانین، پاک‌سازی دسته‌ای فایل، ادغام baseline سیاست و خروجی بسته safe-share.",
-    ru: "Правиловая очистка логов с предпросмотром diff, подписанными локальными policy packs, сравнением симуляционных матриц, ранжированием влияния правил, пакетной санитизацией файлов, слиянием baseline-политики и экспортом safe-share пакета.",
+  "Rule-based scrubbing for logs with diff preview, signed local policy packs, simulation matrix comparisons, rule-impact ranking, batch file sanitization, baseline policy merge, and safe-share bundle export (including GitHub/Slack token and private-key block stripping).": {
+    fa: "پاک‌سازی قانون‌محور لاگ با پیش‌نمایش diff، بسته‌های سیاست محلی امضاشده، مقایسه ماتریس شبیه‌سازی، رتبه‌بندی اثر قوانین، پاک‌سازی دسته‌ای فایل، ادغام baseline سیاست و خروجی بسته safe-share (همراه با حذف توکن‌های GitHub/Slack و بلوک‌های کلید خصوصی).",
+    ru: "Правиловая очистка логов с предпросмотром diff, подписанными локальными policy packs, сравнением симуляционных матриц, ранжированием влияния правил, пакетной санитизацией файлов, слиянием baseline-политики и экспортом safe-share пакета (включая удаление GitHub/Slack токенов и блоков приватных ключей).",
   },
   "Run batch mode for multiple files, then export outputs/report.": {
     fa: "حالت دسته‌ای را برای چند فایل اجرا کنید و سپس خروجی‌ها/گزارش را بگیرید.",
@@ -468,4 +468,3 @@ export const guidePhraseTranslations: Record<string, { fa: string; ru: string }>
     ru: "Wipe очищает хранилища vault в IndexedDB/localStorage.",
   },
 };
-

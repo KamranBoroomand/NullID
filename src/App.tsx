@@ -88,6 +88,11 @@ function AppShell() {
   const [profileImportDescriptor, setProfileImportDescriptor] = useState<ProfileDescriptor | null>(null);
   const [profileImportPassphrase, setProfileImportPassphrase] = useState("");
   const [profileImportError, setProfileImportError] = useState<string | null>(null);
+  const [wipeDialogOpen, setWipeDialogOpen] = useState(false);
+  const [wipeConfirmText, setWipeConfirmText] = useState("");
+  const [wipeIncludeVault, setWipeIncludeVault] = useState(true);
+  const [wipeBusy, setWipeBusy] = useState(false);
+  const [wipeError, setWipeError] = useState<string | null>(null);
   const importProfileInputRef = useRef<HTMLInputElement>(null);
   const modules = useMemo<ModuleDefinition[]>(
     () => [
@@ -294,6 +299,47 @@ function AppShell() {
     }
   }, [closeProfileImportDialog, pendingProfileImportFile, profileImportDescriptor, profileImportPassphrase, push]);
 
+  const openWipeDialog = useCallback(() => {
+    setWipeDialogOpen(true);
+    setWipeConfirmText("");
+    setWipeIncludeVault(true);
+    setWipeError(null);
+  }, []);
+
+  const closeWipeDialog = useCallback(() => {
+    if (wipeBusy) return;
+    setWipeDialogOpen(false);
+    setWipeConfirmText("");
+    setWipeError(null);
+  }, [wipeBusy]);
+
+  const confirmWipe = useCallback(async () => {
+    if (wipeConfirmText.trim().toUpperCase() !== "WIPE") {
+      setWipeError("type WIPE to confirm");
+      return;
+    }
+    setWipeBusy(true);
+    try {
+      clearManagedLocalState({ includeVault: wipeIncludeVault });
+      if (wipeIncludeVault) {
+        await wipeVault();
+      }
+      setActiveModule("hash");
+      push(wipeIncludeVault ? "local data wiped (including vault)" : "local settings wiped", "danger");
+      setStatus({ message: "data wiped", tone: "danger" });
+      setWipeDialogOpen(false);
+      setWipeConfirmText("");
+      setWipeError(null);
+    } catch (error) {
+      console.error(error);
+      const message = error instanceof Error ? error.message : "wipe failed";
+      setWipeError(message);
+      push(message, "danger");
+    } finally {
+      setWipeBusy(false);
+    }
+  }, [push, setActiveModule, wipeConfirmText, wipeIncludeVault]);
+
   const navigationCommands: CommandItem[] = useMemo(
     () =>
       modules.map((module) => ({
@@ -321,13 +367,7 @@ function AppShell() {
         label: t("app.command.wipe"),
         description: t("app.command.clearPrefs"),
         group: t("app.command.systemGroup"),
-        action: async () => {
-          localStorage.clear();
-          await wipeVault();
-          setActiveModule("hash");
-          push("local data wiped", "danger");
-          setStatus({ message: "data wiped", tone: "danger" });
-        },
+        action: openWipeDialog,
       },
       {
         id: "export-profile",
@@ -416,7 +456,7 @@ function AppShell() {
     }
 
     return base;
-  }, [activeModule, hashActions, openProfileExportDialog, push, setLocale, startOnboarding, t, toggleTheme]);
+  }, [activeModule, hashActions, openProfileExportDialog, openWipeDialog, push, setLocale, startOnboarding, t, toggleTheme]);
 
   const commandList = useMemo(() => [...navigationCommands, ...contextualCommands], [contextualCommands, navigationCommands]);
 
@@ -581,11 +621,7 @@ function AppShell() {
             onToggleTheme={toggleTheme}
             onLocaleChange={setLocale}
             onOpenCommands={openPalette}
-            onWipe={() => {
-              localStorage.clear();
-              void wipeVault();
-              push("local data wiped", "danger");
-            }}
+            onWipe={openWipeDialog}
           />
         }
         workspace={
@@ -607,6 +643,68 @@ function AppShell() {
         onClose={closePalette}
         onSelect={handleCommandSelect}
       />
+      <ActionDialog
+        open={wipeDialogOpen}
+        title={tr("Wipe local data")}
+        description={tr("This only clears NullID-managed local state on this origin. Type WIPE to continue.")}
+        confirmLabel={wipeBusy ? tr("wiping…") : tr("wipe now")}
+        confirmDisabled={wipeBusy || wipeConfirmText.trim().toUpperCase() !== "WIPE"}
+        danger
+        onCancel={closeWipeDialog}
+        onConfirm={() => void confirmWipe()}
+      >
+        <p className="action-dialog-note">
+          {tr("Recommended: export your profile first. Vault backups can be exported from :vault before wiping.")}
+        </p>
+        <div className="action-dialog-row">
+          <button
+            type="button"
+            className="button"
+            onClick={() => {
+              setWipeDialogOpen(false);
+              openProfileExportDialog();
+            }}
+          >
+            {tr("export profile first")}
+          </button>
+          <button
+            type="button"
+            className="button"
+            onClick={() => {
+              setWipeDialogOpen(false);
+              handleSelectModule("vault");
+            }}
+          >
+            {tr("open :vault backup")}
+          </button>
+        </div>
+        <label className="action-dialog-field">
+          <span>{tr("Also wipe vault data")}</span>
+          <input
+            type="checkbox"
+            checked={wipeIncludeVault}
+            onChange={(event) => setWipeIncludeVault(event.target.checked)}
+            aria-label={tr("Also wipe vault data")}
+            disabled={wipeBusy}
+          />
+        </label>
+        <label className="action-dialog-field">
+          <span>{tr("Type WIPE to confirm")}</span>
+          <input
+            className="action-dialog-input"
+            value={wipeConfirmText}
+            onChange={(event) => {
+              setWipeConfirmText(event.target.value);
+              if (wipeError) setWipeError(null);
+            }}
+            aria-label={tr("Type WIPE to confirm")}
+            placeholder="WIPE"
+            autoComplete="off"
+            disabled={wipeBusy}
+          />
+        </label>
+        {wipeError ? <p className="action-dialog-error">{wipeError}</p> : null}
+      </ActionDialog>
       <ActionDialog
         open={profileExportOpen}
         title={tr("Export profile snapshot")}
@@ -781,4 +879,19 @@ function trustTagClass(state: TrustState): string {
   if (state === "verified") return "tag tag-accent";
   if (state === "mismatch") return "tag tag-danger";
   return "tag";
+}
+
+function clearManagedLocalState(options: { includeVault: boolean }) {
+  const prefixes = ["nullid:", "nullid-history:"];
+  const keysToRemove: string[] = [];
+
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+    if (!key) continue;
+    if (!prefixes.some((prefix) => key.startsWith(prefix))) continue;
+    if (!options.includeVault && key.startsWith("nullid:vault:")) continue;
+    keysToRemove.push(key);
+  }
+
+  keysToRemove.forEach((key) => localStorage.removeItem(key));
 }

@@ -48,6 +48,14 @@ This roadmap tracks the major expansion areas required to make NullID a complete
 - [x] Extend archive sanitization manifest contract with per-file findings + severity totals and regression tests.
 - [x] Add signed import/export trust-state labels (`unsigned`, `verified`, `mismatch`) across profile/policy/vault flows.
 
+## Phase 7: GA Readiness (Planned)
+- [ ] Validate production-domain headers/CSP on final hosting endpoint.
+- [ ] Publish release key custody/rotation/revocation runbook.
+- [ ] Execute full restore drill for signed profile/policy/vault exports.
+- [ ] Complete accessibility pass (keyboard/screen-reader) across all modules.
+- [ ] Finalize browser/device support matrix and smoke coverage.
+- [ ] Complete native review pass for RU/FA localization quality.
+
 ## Delivery Notes
 - Each phase is designed to remain fully offline-first.
 - Browser and CLI behavior should stay schema-compatible where applicable.

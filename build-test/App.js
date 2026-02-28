@@ -56,6 +56,11 @@ function AppShell() {
     const [profileImportDescriptor, setProfileImportDescriptor] = useState(null);
     const [profileImportPassphrase, setProfileImportPassphrase] = useState("");
     const [profileImportError, setProfileImportError] = useState(null);
+    const [wipeDialogOpen, setWipeDialogOpen] = useState(false);
+    const [wipeConfirmText, setWipeConfirmText] = useState("");
+    const [wipeIncludeVault, setWipeIncludeVault] = useState(true);
+    const [wipeBusy, setWipeBusy] = useState(false);
+    const [wipeError, setWipeError] = useState(null);
     const importProfileInputRef = useRef(null);
     const modules = useMemo(() => [
         { key: "hash", title: t("module.hash.title"), subtitle: t("module.hash.subtitle") },
@@ -238,6 +243,47 @@ function AppShell() {
             setProfileImportError(message);
         }
     }, [closeProfileImportDialog, pendingProfileImportFile, profileImportDescriptor, profileImportPassphrase, push]);
+    const openWipeDialog = useCallback(() => {
+        setWipeDialogOpen(true);
+        setWipeConfirmText("");
+        setWipeIncludeVault(true);
+        setWipeError(null);
+    }, []);
+    const closeWipeDialog = useCallback(() => {
+        if (wipeBusy)
+            return;
+        setWipeDialogOpen(false);
+        setWipeConfirmText("");
+        setWipeError(null);
+    }, [wipeBusy]);
+    const confirmWipe = useCallback(async () => {
+        if (wipeConfirmText.trim().toUpperCase() !== "WIPE") {
+            setWipeError("type WIPE to confirm");
+            return;
+        }
+        setWipeBusy(true);
+        try {
+            clearManagedLocalState({ includeVault: wipeIncludeVault });
+            if (wipeIncludeVault) {
+                await wipeVault();
+            }
+            setActiveModule("hash");
+            push(wipeIncludeVault ? "local data wiped (including vault)" : "local settings wiped", "danger");
+            setStatus({ message: "data wiped", tone: "danger" });
+            setWipeDialogOpen(false);
+            setWipeConfirmText("");
+            setWipeError(null);
+        }
+        catch (error) {
+            console.error(error);
+            const message = error instanceof Error ? error.message : "wipe failed";
+            setWipeError(message);
+            push(message, "danger");
+        }
+        finally {
+            setWipeBusy(false);
+        }
+    }, [push, setActiveModule, wipeConfirmText, wipeIncludeVault]);
     const navigationCommands = useMemo(() => modules.map((module) => ({
         id: `:${module.key}`,
         label: module.title,
@@ -260,13 +306,7 @@ function AppShell() {
                 label: t("app.command.wipe"),
                 description: t("app.command.clearPrefs"),
                 group: t("app.command.systemGroup"),
-                action: async () => {
-                    localStorage.clear();
-                    await wipeVault();
-                    setActiveModule("hash");
-                    push("local data wiped", "danger");
-                    setStatus({ message: "data wiped", tone: "danger" });
-                },
+                action: openWipeDialog,
             },
             {
                 id: "export-profile",
@@ -349,7 +389,7 @@ function AppShell() {
             });
         }
         return base;
-    }, [activeModule, hashActions, openProfileExportDialog, push, setLocale, startOnboarding, t, toggleTheme]);
+    }, [activeModule, hashActions, openProfileExportDialog, openWipeDialog, push, setLocale, startOnboarding, t, toggleTheme]);
     const commandList = useMemo(() => [...navigationCommands, ...contextualCommands], [contextualCommands, navigationCommands]);
     const openPalette = useCallback(() => setPaletteOpen(true), []);
     const closePalette = useCallback(() => setPaletteOpen(false), []);
@@ -464,11 +504,17 @@ function AppShell() {
                     const file = event.target.files?.[0];
                     await beginProfileImportFlow(file);
                     event.target.value = "";
-                } }), _jsx(Frame, { stacked: isStacked, compact: isCompact, buildMarker: buildMarker, modulePane: _jsx(ModuleList, { modules: modules, active: resolvedActiveModule, onSelect: handleSelectModule }), header: _jsx(GlobalHeader, { brand: "NullID", pageTitle: moduleLookup[resolvedActiveModule].title, pageToken: `:${resolvedActiveModule}`, status: status, theme: theme, locale: locale, compact: isCompact, onToggleTheme: toggleTheme, onLocaleChange: setLocale, onOpenCommands: openPalette, onWipe: () => {
-                        localStorage.clear();
-                        void wipeVault();
-                        push("local data wiped", "danger");
-                    } }), workspace: _jsx("div", { className: "workspace", children: _jsx(WorkspaceView, { active: resolvedActiveModule, onRegisterHashActions: setHashActions, onStatus: handleStatus, onOpenGuide: goToGuide }) }) }), _jsx(CommandPalette, { open: paletteOpen, commands: commandList, completions: modules.map((module) => module.key), historyKey: "command-bar", onClose: closePalette, onSelect: handleCommandSelect }), _jsxs(ActionDialog, { open: profileExportOpen, title: tr("Export profile snapshot"), description: tr("Export local nullid:* settings as JSON. Signed exports require a verification passphrase on import."), confirmLabel: tr("export profile"), onCancel: closeProfileExportDialog, onConfirm: () => void confirmProfileExport(), confirmDisabled: profileExportSign && !profileExportPassphrase.trim(), children: [_jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: tr("Sign metadata") }), _jsx("input", { type: "checkbox", checked: profileExportSign, onChange: (event) => setProfileExportSign(event.target.checked), "aria-label": tr("Sign profile metadata") })] }), profileExportSign ? (_jsxs(_Fragment, { children: [_jsxs("div", { className: "status-line", children: [_jsx("span", { children: "trust state" }), _jsx("span", { className: trustTagClass(profileExportTrustState), children: profileExportTrustState }), profileExportKeyHint.trim() ? _jsxs("span", { className: "microcopy", children: ["hint: ", profileExportKeyHint.trim()] }) : null] }), _jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: tr("Signing passphrase") }), _jsx("input", { className: "action-dialog-input", type: "password", value: profileExportPassphrase, onChange: (event) => {
+                } }), _jsx(Frame, { stacked: isStacked, compact: isCompact, buildMarker: buildMarker, modulePane: _jsx(ModuleList, { modules: modules, active: resolvedActiveModule, onSelect: handleSelectModule }), header: _jsx(GlobalHeader, { brand: "NullID", pageTitle: moduleLookup[resolvedActiveModule].title, pageToken: `:${resolvedActiveModule}`, status: status, theme: theme, locale: locale, compact: isCompact, onToggleTheme: toggleTheme, onLocaleChange: setLocale, onOpenCommands: openPalette, onWipe: openWipeDialog }), workspace: _jsx("div", { className: "workspace", children: _jsx(WorkspaceView, { active: resolvedActiveModule, onRegisterHashActions: setHashActions, onStatus: handleStatus, onOpenGuide: goToGuide }) }) }), _jsx(CommandPalette, { open: paletteOpen, commands: commandList, completions: modules.map((module) => module.key), historyKey: "command-bar", onClose: closePalette, onSelect: handleCommandSelect }), _jsxs(ActionDialog, { open: wipeDialogOpen, title: tr("Wipe local data"), description: tr("This only clears NullID-managed local state on this origin. Type WIPE to continue."), confirmLabel: wipeBusy ? tr("wiping…") : tr("wipe now"), confirmDisabled: wipeBusy || wipeConfirmText.trim().toUpperCase() !== "WIPE", danger: true, onCancel: closeWipeDialog, onConfirm: () => void confirmWipe(), children: [_jsx("p", { className: "action-dialog-note", children: tr("Recommended: export your profile first. Vault backups can be exported from :vault before wiping.") }), _jsxs("div", { className: "action-dialog-row", children: [_jsx("button", { type: "button", className: "button", onClick: () => {
+                                    setWipeDialogOpen(false);
+                                    openProfileExportDialog();
+                                }, children: tr("export profile first") }), _jsx("button", { type: "button", className: "button", onClick: () => {
+                                    setWipeDialogOpen(false);
+                                    handleSelectModule("vault");
+                                }, children: tr("open :vault backup") })] }), _jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: tr("Also wipe vault data") }), _jsx("input", { type: "checkbox", checked: wipeIncludeVault, onChange: (event) => setWipeIncludeVault(event.target.checked), "aria-label": tr("Also wipe vault data"), disabled: wipeBusy })] }), _jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: tr("Type WIPE to confirm") }), _jsx("input", { className: "action-dialog-input", value: wipeConfirmText, onChange: (event) => {
+                                    setWipeConfirmText(event.target.value);
+                                    if (wipeError)
+                                        setWipeError(null);
+                                }, "aria-label": tr("Type WIPE to confirm"), placeholder: "WIPE", autoComplete: "off", disabled: wipeBusy })] }), wipeError ? _jsx("p", { className: "action-dialog-error", children: wipeError }) : null] }), _jsxs(ActionDialog, { open: profileExportOpen, title: tr("Export profile snapshot"), description: tr("Export local nullid:* settings as JSON. Signed exports require a verification passphrase on import."), confirmLabel: tr("export profile"), onCancel: closeProfileExportDialog, onConfirm: () => void confirmProfileExport(), confirmDisabled: profileExportSign && !profileExportPassphrase.trim(), children: [_jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: tr("Sign metadata") }), _jsx("input", { type: "checkbox", checked: profileExportSign, onChange: (event) => setProfileExportSign(event.target.checked), "aria-label": tr("Sign profile metadata") })] }), profileExportSign ? (_jsxs(_Fragment, { children: [_jsxs("div", { className: "status-line", children: [_jsx("span", { children: "trust state" }), _jsx("span", { className: trustTagClass(profileExportTrustState), children: profileExportTrustState }), profileExportKeyHint.trim() ? _jsxs("span", { className: "microcopy", children: ["hint: ", profileExportKeyHint.trim()] }) : null] }), _jsxs("label", { className: "action-dialog-field", children: [_jsx("span", { children: tr("Signing passphrase") }), _jsx("input", { className: "action-dialog-input", type: "password", value: profileExportPassphrase, onChange: (event) => {
                                             setProfileExportPassphrase(event.target.value);
                                             if (profileExportError)
                                                 setProfileExportError(null);
@@ -494,4 +540,19 @@ function trustTagClass(state) {
     if (state === "mismatch")
         return "tag tag-danger";
     return "tag";
+}
+function clearManagedLocalState(options) {
+    const prefixes = ["nullid:", "nullid-history:"];
+    const keysToRemove = [];
+    for (let index = 0; index < localStorage.length; index += 1) {
+        const key = localStorage.key(index);
+        if (!key)
+            continue;
+        if (!prefixes.some((prefix) => key.startsWith(prefix)))
+            continue;
+        if (!options.includeVault && key.startsWith("nullid:vault:"))
+            continue;
+        keysToRemove.push(key);
+    }
+    keysToRemove.forEach((key) => localStorage.removeItem(key));
 }
