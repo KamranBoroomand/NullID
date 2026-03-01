@@ -26,15 +26,22 @@ if (!fs.existsSync(frontendDistPath) || !fs.statSync(frontendDistPath).isDirecto
   throw new Error(`frontendDist directory missing: ${path.relative(root, frontendDistPath)}`);
 }
 
-if (!skipCargo) {
-  try {
-    execFileSync("cargo", ["check", "--manifest-path", cargoPath], { stdio: "inherit" });
-  } catch (error) {
-    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
-      throw new Error("cargo not found in PATH (install Rust toolchain or run with --skip-cargo)");
-    }
-    throw error;
+const bundleIcons = conf?.bundle?.icon;
+if (!Array.isArray(bundleIcons) || bundleIcons.length === 0) {
+  throw new Error("tauri.conf.json missing bundle.icon entries");
+}
+for (const iconEntry of bundleIcons) {
+  if (typeof iconEntry !== "string" || !iconEntry.trim()) {
+    throw new Error("tauri.conf.json contains invalid bundle.icon entry");
   }
+  const iconPath = path.resolve(path.dirname(confPath), iconEntry);
+  if (!fs.existsSync(iconPath) || !fs.statSync(iconPath).isFile()) {
+    throw new Error(`bundle icon missing: ${path.relative(root, iconPath)}`);
+  }
+}
+
+if (!skipCargo) {
+  runCargoCheck(cargoPath);
 }
 
 const summary = {
@@ -43,6 +50,7 @@ const summary = {
   frontendDist: path.relative(root, frontendDistPath),
   cargoChecked: !skipCargo,
   runnerOs: process.platform,
+  iconCount: bundleIcons.length,
 };
 
 console.log(JSON.stringify(summary, null, 2));
@@ -55,4 +63,37 @@ function assertFile(filePath) {
 
 function hasFlag(args, flag) {
   return args.includes(flag);
+}
+
+function runCargoCheck(manifestPath) {
+  const explicitCargo = process.env.CARGO;
+  const commandCandidates = explicitCargo ? [explicitCargo] : ["cargo"];
+
+  if (process.platform === "win32") {
+    const windowsFallbacks = [];
+    if (process.env.CARGO_HOME) {
+      windowsFallbacks.push(path.join(process.env.CARGO_HOME, "bin", "cargo.exe"));
+    }
+    if (process.env.USERPROFILE) {
+      windowsFallbacks.push(path.join(process.env.USERPROFILE, ".cargo", "bin", "cargo.exe"));
+    }
+    commandCandidates.push(...windowsFallbacks);
+  }
+
+  let lastError;
+  for (const command of commandCandidates) {
+    try {
+      execFileSync(command, ["check", "--manifest-path", manifestPath], { stdio: "inherit" });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (!(error && typeof error === "object" && "code" in error && error.code === "ENOENT")) {
+        throw error;
+      }
+    }
+  }
+
+  throw new Error(
+    `cargo not found in PATH (checked: ${commandCandidates.join(", ")}). Install Rust toolchain or run with --skip-cargo`,
+  );
 }

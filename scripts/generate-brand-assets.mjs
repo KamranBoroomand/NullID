@@ -318,6 +318,39 @@ function paethPredictor(a, b, c) {
   return c;
 }
 
+async function writeIcoFromPng(pngPath, icoPath) {
+  const png = await readFile(pngPath);
+  if (!png.subarray(0, 8).equals(PNG_SIGNATURE)) {
+    throw new Error(`not a PNG file: ${pngPath}`);
+  }
+  const ihdrType = png.toString("ascii", 12, 16);
+  if (ihdrType !== "IHDR") {
+    throw new Error(`invalid PNG header: ${pngPath}`);
+  }
+  const width = png.readUInt32BE(16);
+  const height = png.readUInt32BE(20);
+  if (width < 1 || height < 1) {
+    throw new Error(`invalid PNG dimensions in ${pngPath}`);
+  }
+
+  const iconDir = Buffer.alloc(6);
+  iconDir.writeUInt16LE(0, 0); // reserved
+  iconDir.writeUInt16LE(1, 2); // icon type
+  iconDir.writeUInt16LE(1, 4); // image count
+
+  const entry = Buffer.alloc(16);
+  entry[0] = width >= 256 ? 0 : width;
+  entry[1] = height >= 256 ? 0 : height;
+  entry[2] = 0; // color palette size
+  entry[3] = 0; // reserved
+  entry.writeUInt16LE(1, 4); // color planes
+  entry.writeUInt16LE(32, 6); // bits per pixel
+  entry.writeUInt32LE(png.length, 8); // image bytes
+  entry.writeUInt32LE(iconDir.length + entry.length, 12); // image offset
+
+  await writeFile(icoPath, Buffer.concat([iconDir, entry, png]));
+}
+
 async function main() {
   await mkdir(iconsDir, { recursive: true });
   const browser = await chromium.launch();
@@ -340,6 +373,12 @@ async function main() {
       height: 192,
       html: iconHtml,
       path: path.join(iconsDir, "icon-192.png"),
+    });
+    await renderPng(browser, {
+      width: 256,
+      height: 256,
+      html: iconHtml,
+      path: path.join(iconsDir, "icon-256.png"),
     });
     await renderPng(browser, {
       width: 180,
@@ -378,10 +417,13 @@ async function main() {
       ensurePngRgba(path.join(iconsDir, "icon-512.png")),
       ensurePngRgba(path.join(iconsDir, "icon-512-maskable.png")),
       ensurePngRgba(path.join(iconsDir, "icon-192.png")),
+      ensurePngRgba(path.join(iconsDir, "icon-256.png")),
       ensurePngRgba(path.join(iconsDir, "apple-touch-icon.png")),
       ensurePngRgba(path.join(iconsDir, "favicon-32.png")),
       ensurePngRgba(path.join(iconsDir, "favicon-16.png")),
     ]);
+
+    await writeIcoFromPng(path.join(iconsDir, "icon-256.png"), path.join(iconsDir, "icon.ico"));
   } finally {
     await browser.close();
   }

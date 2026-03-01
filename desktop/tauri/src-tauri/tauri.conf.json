@@ -23,6 +23,7 @@
     "active": false,
     "targets": "all",
     "icon": [
+      "../../../public/icons/icon.ico",
       "../../../public/icons/icon-192.png",
       "../../../public/icons/icon-512.png"
     ]
