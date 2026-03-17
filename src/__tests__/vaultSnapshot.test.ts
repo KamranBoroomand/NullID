@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { exportVault, importVault } from "../utils/vault.js";
+import { toBase64Url, utf8ToBytes } from "../utils/encoding.js";
 
 class MemoryStorage implements Storage {
   private map = new Map<string, string>();
@@ -31,6 +32,10 @@ class MemoryStorage implements Storage {
 }
 
 describe("vault snapshot integrity", () => {
+  const fixtureSalt = toBase64Url(utf8ToBytes("signed-salt-1234"));
+  const fixtureIv = toBase64Url(utf8ToBytes("0123456789ab"));
+  const fixtureCiphertext = toBase64Url(utf8ToBytes("0123456789abcdef"));
+
   const setup = () => {
     const storage = new MemoryStorage();
     Object.defineProperty(globalThis, "localStorage", { value: storage, configurable: true, writable: true });
@@ -40,9 +45,9 @@ describe("vault snapshot integrity", () => {
   it("exports signed metadata and verifies during import", async () => {
     setup();
     const legacySnapshot = {
-      meta: { salt: "c2lnbmVkLXNhbHQxMjM0", iterations: 200_000, version: 1 },
-      canary: { ciphertext: "canary-ciphertext", iv: "canary-iv-value" },
-      notes: [{ id: "note-1", ciphertext: "ciphertext-note-value", iv: "note-iv-value", updatedAt: Date.now() }],
+      meta: { salt: fixtureSalt, iterations: 200_000, version: 1 },
+      canary: { ciphertext: fixtureCiphertext, iv: fixtureIv },
+      notes: [{ id: "note-1", ciphertext: fixtureCiphertext, iv: fixtureIv, updatedAt: Date.now() }],
     };
     const legacyFile = new File([JSON.stringify(legacySnapshot)], "legacy-vault.json", { type: "application/json" });
     const legacyResult = await importVault(legacyFile);
@@ -62,9 +67,9 @@ describe("vault snapshot integrity", () => {
   it("rejects tampered signed vault payload", async () => {
     setup();
     const legacySnapshot = {
-      meta: { salt: "dGFtcGVyLXNhbHQxMjM0", iterations: 200_000, version: 1 },
-      canary: { ciphertext: "canary-ciphertext", iv: "canary-iv-value" },
-      notes: [{ id: "note-1", ciphertext: "ciphertext-note-value", iv: "note-iv-value", updatedAt: Date.now() }],
+      meta: { salt: fixtureSalt, iterations: 200_000, version: 1 },
+      canary: { ciphertext: fixtureCiphertext, iv: fixtureIv },
+      notes: [{ id: "note-1", ciphertext: fixtureCiphertext, iv: fixtureIv, updatedAt: Date.now() }],
     };
     const legacyFile = new File([JSON.stringify(legacySnapshot)], "legacy-vault.json", { type: "application/json" });
     await importVault(legacyFile);
@@ -73,7 +78,7 @@ describe("vault snapshot integrity", () => {
     const tampered = JSON.parse(await signedBlob.text()) as {
       vault: { notes: Array<{ id: string; ciphertext: string; iv: string; updatedAt: number }> };
     };
-    tampered.vault.notes.push({ id: "note-2", ciphertext: "other-ciphertext", iv: "other-iv-value", updatedAt: Date.now() });
+    tampered.vault.notes.push({ id: "note-2", ciphertext: fixtureCiphertext, iv: fixtureIv, updatedAt: Date.now() });
     const tamperedFile = new File([JSON.stringify(tampered)], "tampered-vault.json", { type: "application/json" });
     await expectRejects(() => importVault(tamperedFile, { verificationPassphrase: "vault-sign-secret" }), /integrity mismatch/i);
   });
@@ -81,15 +86,42 @@ describe("vault snapshot integrity", () => {
   it("requires verification secret for signed vault metadata", async () => {
     setup();
     const legacySnapshot = {
-      meta: { salt: "c2lnbmVkLXNhbHQxMjM0", iterations: 200_000, version: 1 },
-      canary: { ciphertext: "canary-ciphertext", iv: "canary-iv-value" },
-      notes: [{ id: "note-1", ciphertext: "ciphertext-note-value", iv: "note-iv-value", updatedAt: Date.now() }],
+      meta: { salt: fixtureSalt, iterations: 200_000, version: 1 },
+      canary: { ciphertext: fixtureCiphertext, iv: fixtureIv },
+      notes: [{ id: "note-1", ciphertext: fixtureCiphertext, iv: fixtureIv, updatedAt: Date.now() }],
     };
     const legacyFile = new File([JSON.stringify(legacySnapshot)], "legacy-vault.json", { type: "application/json" });
     await importVault(legacyFile);
     const signedBlob = await exportVault({ signingPassphrase: "vault-sign-secret" });
     const signedFile = new File([await signedBlob.text()], "signed-vault.json", { type: "application/json" });
     await expectRejects(() => importVault(signedFile), /verification passphrase required/i);
+  });
+
+  it("rejects malformed legacy vault metadata and records", async () => {
+    setup();
+    const invalidMeta = new File(
+      [
+        JSON.stringify({
+          meta: { salt: fixtureSalt, iterations: 50_000_000, version: 1 },
+          notes: [],
+        }),
+      ],
+      "invalid-meta.json",
+      { type: "application/json" },
+    );
+    await expectRejects(() => importVault(invalidMeta), /Invalid vault meta iterations/i);
+
+    const invalidNoteIv = new File(
+      [
+        JSON.stringify({
+          meta: { salt: fixtureSalt, iterations: 200_000, version: 1 },
+          notes: [{ id: "note-1", ciphertext: fixtureCiphertext, iv: "not-base64!!!", updatedAt: Date.now() }],
+        }),
+      ],
+      "invalid-note.json",
+      { type: "application/json" },
+    );
+    await expectRejects(() => importVault(invalidNoteIv), /Invalid vault note iv at index 0/i);
   });
 });
 

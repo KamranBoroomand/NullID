@@ -37,8 +37,8 @@ export function setVaultSessionCookie(maxAgeSeconds: number): SessionCookieResul
   }
   document.cookie = parts.join("; ");
   const warning = secure
-    ? "HttpOnly cannot be set from browser JavaScript. Configure server/edge cookie headers for HttpOnly."
-    : "Secure cookie flag is unavailable on this origin. Use HTTPS in production.";
+    ? "Browser-set cookie is a local presence hint only. HttpOnly and real auth cookies must be configured outside the browser."
+    : "Browser-set cookie is a local presence hint only, and Secure is unavailable on this origin. Use HTTPS in production.";
   return { active: true, secure, warning };
 }
 

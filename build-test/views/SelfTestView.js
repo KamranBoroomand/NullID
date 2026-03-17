@@ -56,8 +56,8 @@ const checks = [
     },
     {
         key: "security-headers",
-        title: "CSP/referrer baseline",
-        hint: "Set CSP + response security headers at host/edge (`public/_headers` or `vercel.json`) and keep HTTPS enabled.",
+        title: "CSP/referrer markers",
+        hint: "Page-visible CSP/referrer markers help confirm a baseline, but deployed response headers still need host/edge verification.",
     },
     {
         key: "image-codecs",
@@ -221,14 +221,14 @@ export function SelfTestView({ onOpenGuide }) {
         const hasObjectSrc = csp.includes("object-src");
         const hasReferrer = referrer === "no-referrer";
         if (!hasCsp) {
-            update("security-headers", "fail", "CSP meta policy missing");
+            update("security-headers", "fail", "page-visible CSP marker missing");
             return;
         }
         if (!hasObjectSrc || !hasReferrer) {
             update("security-headers", "warn", `csp=${hasCsp ? "yes" : "no"}, object-src=${hasObjectSrc ? "yes" : "no"}, referrer=${hasReferrer ? "yes" : "no"}`);
             return;
         }
-        update("security-headers", "pass", "CSP/referrer baseline detected");
+        update("security-headers", "pass", "page-visible CSP/referrer markers detected");
     };
     const runCodecProbe = async () => {
         update("image-codecs", "running");
@@ -254,6 +254,7 @@ export function SelfTestView({ onOpenGuide }) {
         setDetails({});
         setMessage("running…");
         await Promise.all([runEncryptRoundtrip(), runFileRoundtrip(), runStorage(), runHash(), runCapabilityChecks()]);
+        setLastRunAt(new Date().toISOString());
         const allResults = Object.values(resultsRef.current);
         const failed = allResults.filter((value) => value === "fail").length;
         const warnings = allResults.filter((value) => value === "warn").length;
@@ -269,7 +270,6 @@ export function SelfTestView({ onOpenGuide }) {
         }
         setMessage("all checks passed");
         push("self-test complete", "accent");
-        setLastRunAt(new Date().toISOString());
     };
     const runSingle = async (key) => {
         if (key === "encrypt")
@@ -343,7 +343,7 @@ export function SelfTestView({ onOpenGuide }) {
             return _jsx("span", { className: "tag tag-danger", children: tr("fail") });
         return _jsx("span", { className: "tag", children: tr("idle") });
     };
-    return (_jsxs("div", { className: "workspace-scroll", children: [_jsx("div", { className: "guide-link", children: _jsx("button", { type: "button", className: "guide-link-button", onClick: () => onOpenGuide?.("guide"), children: t("guide.link") }) }), _jsxs("div", { className: "panel", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: tr("Self-test") }), _jsx("span", { className: "panel-subtext", children: tr("dev diagnostics") })] }), _jsx("p", { className: "microcopy", children: "Runs runtime checks for crypto, storage, browser capability support, and responsiveness. Failed or warning checks include remediation hints." }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", onClick: runAll, children: tr("run all") }), _jsxs("label", { className: "microcopy", style: { display: "flex", alignItems: "center", gap: "0.35rem" }, children: [_jsx("input", { type: "checkbox", checked: autoMonitor, onChange: (event) => setAutoMonitor(event.target.checked), "aria-label": tr("Enable auto monitor") }), tr("auto monitor")] }), _jsx("input", { className: "input", type: "number", min: 30, max: 3600, value: monitorIntervalSec, onChange: (event) => setMonitorIntervalSec(Math.min(3600, Math.max(30, Number(event.target.value)))), "aria-label": tr("Auto monitor interval in seconds") }), _jsx("button", { className: "button", type: "button", onClick: exportReport, children: tr("export report") }), _jsxs("span", { className: "microcopy", children: [tr("status"), ": ", tr(message)] })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: tr("summary") }), _jsxs("span", { className: "tag tag-danger", children: [tr("fail"), " ", summary.fail] }), _jsxs("span", { className: "tag", children: [tr("warn"), " ", summary.warn] }), _jsxs("span", { className: "tag tag-accent", children: [tr("pass"), " ", summary.pass] }), _jsxs("span", { className: "microcopy", children: [tr("health score"), " ", summary.healthScore, "/100"] })] }), _jsxs("div", { className: "microcopy", children: [tr("last run:"), " ", lastRunAt ? formatDateTime(lastRunAt) : tr("never")] }), _jsx("ul", { className: "note-list", children: checks.map((item) => {
+    return (_jsxs("div", { className: "workspace-scroll", children: [_jsx("div", { className: "guide-link", children: _jsx("button", { type: "button", className: "guide-link-button", onClick: () => onOpenGuide?.("selftest"), children: t("guide.link") }) }), _jsxs("div", { className: "panel", children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: tr("Self-test") }), _jsx("span", { className: "panel-subtext", children: tr("dev diagnostics") })] }), _jsx("p", { className: "microcopy", children: tr("Runs runtime checks for crypto, storage, browser capability support, and responsiveness. Failed or warning checks include remediation hints.") }), _jsx("p", { className: "microcopy", children: tr("Self-test checks this browser/runtime only; it does not certify deployed headers, hosting, or cryptographic review.") }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", onClick: runAll, children: tr("run all") }), _jsxs("label", { className: "microcopy", style: { display: "flex", alignItems: "center", gap: "0.35rem" }, children: [_jsx("input", { type: "checkbox", checked: autoMonitor, onChange: (event) => setAutoMonitor(event.target.checked), "aria-label": tr("Enable auto monitor") }), tr("auto monitor")] }), _jsx("input", { className: "input", type: "number", min: 30, max: 3600, value: monitorIntervalSec, onChange: (event) => setMonitorIntervalSec(Math.min(3600, Math.max(30, Number(event.target.value)))), "aria-label": tr("Auto monitor interval in seconds") }), _jsx("button", { className: "button", type: "button", onClick: exportReport, children: tr("export report") }), _jsxs("span", { className: "microcopy", children: [tr("status"), ": ", tr(message)] })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: tr("summary") }), _jsxs("span", { className: "tag tag-danger", children: [tr("fail"), " ", summary.fail] }), _jsxs("span", { className: "tag", children: [tr("warn"), " ", summary.warn] }), _jsxs("span", { className: "tag tag-accent", children: [tr("pass"), " ", summary.pass] }), _jsxs("span", { className: "microcopy", children: [tr("runtime score"), " ", summary.healthScore, "/100"] })] }), _jsx("div", { className: "microcopy", children: tr("Runtime score is a convenience summary, not a security rating.") }), _jsxs("div", { className: "microcopy", children: [tr("last run:"), " ", lastRunAt ? formatDateTime(lastRunAt) : tr("never")] }), _jsx("ul", { className: "note-list", children: checks.map((item) => {
                             const result = results[item.key] ?? "idle";
                             const detail = details[item.key];
                             return (_jsxs("li", { children: [_jsxs("div", { children: [_jsx("div", { className: "note-title", children: item.title }), detail ? _jsx("div", { className: "microcopy", children: detail }) : null, (result === "fail" || result === "warn") && _jsx("div", { className: "microcopy", children: item.hint })] }), _jsxs("div", { className: "controls-row", children: [badge(result), _jsx("button", { className: "button", type: "button", onClick: () => void runSingle(item.key), children: tr("run") })] })] }, item.key));

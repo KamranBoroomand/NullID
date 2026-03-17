@@ -1,5 +1,5 @@
 # NullID
-Offline-first security toolbox for hashing, redaction, sanitization, encryption, and secure local notes, with matching browser and CLI workflows and no external services.
+Offline-first security toolbox for hashing, redaction, sanitization, encryption, secure local notes, and password storage hashing, with a browser-first UI, a local Node CLI for supported automation workflows, and no external services.
 
 ![NullID preview](./nullid-preview.png)
 
@@ -22,7 +22,7 @@ Offline-first security toolbox for hashing, redaction, sanitization, encryption,
 16. [License](#license)
 
 ## Overview
-NullID is a Vite + React + TypeScript single-page app designed as a local security workbench. It also ships a local Node CLI (`scripts/nullid-local.mjs`) so browser and automation workflows stay aligned.
+NullID is a Vite + React + TypeScript single-page app designed as a local security workbench. It also ships a local Node CLI (`scripts/nullid-local.mjs`) so browser usage and automation-friendly offline workflows stay aligned for the tools the CLI exposes.
 
 Current release line:
 - `0.1.x` (release-candidate baseline)
@@ -47,6 +47,8 @@ CLI commands include:
 - `enc`
 - `dec`
 - `pwgen`
+- `pw-hash`
+- `pw-verify`
 - `meta`
 - `pdf-clean`
 - `office-clean`
@@ -66,14 +68,14 @@ CLI commands include:
 - Log sanitization: presets and custom policies, structured-format support (`text/json/ndjson/csv/xml/yaml`), safe-share bundle export, and token/key-block stripping controls.
 - Metadata inspection/cleanup: image metadata parsing with local clean re-encode flows; CLI support for PDF and Office cleanup.
 - Encryption and vault workflows: versioned `NULLID:ENC:1` envelopes with authenticated encryption, configurable KDF profiles, and encrypted local vault storage.
-- Password storage hashing lab: local salted hash generation/verification with `Argon2id` (recommended), `PBKDF2-SHA256` (compat), and legacy SHA options kept for migrations.
-- Secure UX affordances: panic lock (`Ctrl+Shift+L`), unlock rate limiting, optional human-check challenges, optional WebAuthn MFA for vault unlock, clipboard hygiene helpers, signed export/import verification dialogs, and session-cookie signaling.
+- Password storage hashing lab: local salted one-way record generation/verification with `Argon2id` (recommended when available), `PBKDF2-SHA256` (compat), and legacy SHA options kept only for migrations.
+- Secure UX affordances: panic lock (`Ctrl+Shift+L`), unlock rate limiting, optional human-check challenges, optional local WebAuthn MFA for vault unlock, clipboard hygiene helpers, shared-passphrase HMAC export/import verification dialogs, and session-cookie presence signaling.
 - Installable PWA: desktop/mobile support with offline app-shell caching.
 
 ## Tech Stack
 - Frontend: React 18, TypeScript 5, Vite 5
-- Cryptography: WebCrypto (`PBKDF2`, `AES-GCM`) and `@noble/hashes`
-- Storage: IndexedDB with localStorage fallback
+- Cryptography: WebCrypto (`PBKDF2`, `AES-GCM`, runtime-dependent `Argon2id`) and `@noble/hashes`
+- Storage: IndexedDB with localStorage fallback for vault data when restricted runtimes block IndexedDB
 - Testing: Node test runner + Playwright end-to-end coverage
 - Packaging path: optional Tauri bootstrap under `desktop/tauri`
 
@@ -135,6 +137,13 @@ npm run cli -- enc ./secret.txt ./secret.enc --pass-env NULLID_PASS --profile st
 npm run cli -- dec ./secret.enc ./secret.decrypted.txt --pass-env NULLID_PASS
 ```
 
+Generate and verify a password storage record:
+
+```bash
+NULLID_PASSWORD='correct horse battery staple' npm run cli -- pw-hash --password-env NULLID_PASSWORD --algo pbkdf2-sha256
+NULLID_PASSWORD='correct horse battery staple' npm run cli -- pw-verify --record '$pbkdf2-sha256$i=600000$...' --password-env NULLID_PASSWORD
+```
+
 Initialize team policy baseline:
 
 ```bash
@@ -152,6 +161,35 @@ Environment variables:
 Local state behavior:
 - UI/tool preferences use `localStorage` keys under `nullid:*`.
 - Vault data is stored in IndexedDB (`nullid-vault`) with localStorage fallback in restricted environments.
+
+### Choose The Right Primitive
+
+| Need | Use | Why |
+| --- | --- | --- |
+| Integrity / change detection | `Hash & Verify` or CLI `hash` | Same input should produce the same digest; this is for files/text, not for storing user passwords. |
+| Password verification without storing the password | `Password Storage Hashing` in `:pw` or CLI `pw-hash` / `pw-verify` | Stores a salted one-way verifier that can be recomputed later. |
+| Reversible confidentiality | `Encrypt / Decrypt`, `Secure Notes`, or CLI `enc` / `dec` | Produces ciphertext that can be decrypted later with the passphrase/key. |
+
+### Password Storage Hashing
+
+- Password storage hashing is for storing a verifier for a user password, not for protecting arbitrary files or text blobs.
+- The record is one-way: it stores the algorithm, salt, cost settings, and derived hash. There is no decrypt step and no reversible plaintext hidden inside the record.
+- Verification works by recomputing the same algorithm with the stored salt and cost settings, then comparing the derived result to the saved record.
+- Salt is random per record, so two identical passwords should produce different stored hashes.
+- Prefer `Argon2id` when the browser/runtime supports it. Use `PBKDF2-SHA256` when you need the compatibility fallback. `SHA-256` / `SHA-512` remain available only for legacy migration cases because they are fast digests, not slow password KDFs.
+- NullID emits self-contained text records. Save the whole record string, not just the digest, and paste/pass that full record back in when you verify later.
+- Imported records are validated conservatively: malformed base64, unsupported salt/digest lengths, and out-of-range cost parameters are rejected instead of being guessed through.
+- Interoperability note: Argon2id output is PHC-like, but NullID does not promise drop-in compatibility with every external verifier. PBKDF2 and legacy SHA records are NullID-defined formats.
+- Detailed notes and CLI examples live in [`docs/password-storage-hashing.md`](./docs/password-storage-hashing.md).
+
+### Vault Storage Behavior
+
+- Secure Notes encrypts note titles, bodies, tags, and created timestamps inside AES-GCM ciphertext.
+- The app still stores some non-secret record metadata outside ciphertext so it can manage the vault locally: note IDs, per-note `updatedAt`, IVs, the canary record, and vault KDF metadata (`salt`, `iterations`, `version`, `lockedAt`).
+- If IndexedDB is unavailable, NullID falls back to localStorage. Note contents remain encrypted, but ciphertext blobs and metadata keys then live in localStorage until wipe/export/import flows remove or replace them.
+- localStorage fallback is a compatibility path, not a stronger security mode; it inherits localStorage quota and visibility characteristics within that browser profile.
+- Profile export/import excludes localStorage-backed vault blobs and vault-store metadata (`nullid:vault:data:{store}:*`). Legacy fallback keys under `nullid:vault:{store}:*` are still recognized and migrated locally; export the vault separately.
+- Notes report export is plain JSON. If you include note bodies, their plaintext is written into that report.
 
 ## Scripts
 Primary npm scripts:
@@ -236,14 +274,21 @@ Reproducibility notes:
 - Encryption envelope format is explicit and versioned (`NULLID:ENC:1`) with authenticated encryption (AES-GCM + AAD).
 - KDF settings are profile-driven (`compat`, `strong`, `paranoid`) with optional UI/CLI overrides and explicit weak-choice warnings.
 - Vault operations use passphrase-derived keys and canary verification.
-- Vault unlock can enforce local rate limiting, optional human checks, and optional WebAuthn MFA.
-- Session cookie signaling is available in-app with `SameSite=Strict` and `Secure` on HTTPS origins.
+- Vault unlock can enforce local rate limiting, optional human checks, and optional local WebAuthn MFA.
+- Password storage records are one-way verifiers, not encrypted secrets. Verification is recomputation plus comparison, not decryption.
+- In-app profile/policy/vault "signed" exports use shared-passphrase HMAC metadata. They help detect tampering when both parties know the same passphrase; they are not public-key identity signatures.
+- Session cookie signaling is available in-app as a browser-visible presence hint with `SameSite=Strict` and `Secure` on HTTPS origins. It is not a server-side auth boundary.
+- Self-test is a local runtime diagnostic for the current browser/device. It does not certify deployed headers, hosting, or cryptographic review.
 - Build/release trust is reinforced by deterministic manifests, checksums, SBOM, and signed release provenance.
 
 Important limits:
 - NullID is not represented as an externally audited cryptography product.
 - Clipboard history managers and compromised local hosts can still expose data.
+- `Argon2id` availability depends on the runtime's WebCrypto implementation; `PBKDF2-SHA256` is the compatibility fallback.
 - PBKDF2 is CPU-hard, not memory-hard; high-risk deployments may require additional controls.
+- Password hash record interoperability is intentionally conservative: Argon2id is PHC-like, while PBKDF2 and legacy SHA records are NullID-defined.
+- localStorage fallback keeps vault payloads encrypted but still exposes ciphertext blobs and record metadata to that browser profile until wipe.
+- WebAuthn MFA is local/device-bound and not a recovery system; losing the authenticator while locked can strand access unless you already have a separate backup/export.
 - `HttpOnly` cookie flags cannot be set from browser JavaScript and must be configured at the server/edge layer.
 
 Security references:

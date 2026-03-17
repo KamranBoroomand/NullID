@@ -41,6 +41,7 @@ import {
 } from "../utils/unlockHardening";
 import { clearVaultSessionCookie, readVaultSessionCookie, setVaultSessionCookie, type SessionCookieResult } from "../utils/sessionSecurity";
 import { isLocalMfaSupported, registerLocalMfaCredential, verifyLocalMfaCredential, type LocalMfaCredential } from "../utils/localMfa";
+import { VAULT_PREFERENCE_STATE_KEYS } from "../utils/vaultStorageKeys";
 
 type DecryptedNote = { id: string; title: string; body: string; tags: string[]; createdAt: number; updatedAt: number };
 
@@ -68,7 +69,10 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
   const [backendInfo, setBackendInfo] = useState(() => getVaultBackendInfo());
   const [template, setTemplate] = useState<"blank" | "incident" | "credentials" | "checklist">("blank");
   const [keyHintProfiles, setKeyHintProfiles] = usePersistentState<KeyHintProfile[]>(SHARED_KEY_HINT_PROFILE_KEY, []);
-  const [selectedKeyHintProfileId, setSelectedKeyHintProfileId] = usePersistentState<string>("nullid:vault:key-hint-selected", "");
+  const [selectedKeyHintProfileId, setSelectedKeyHintProfileId] = usePersistentState<string>(
+    VAULT_PREFERENCE_STATE_KEYS.selectedKeyHintProfileId,
+    "",
+  );
   const [vaultExportDialogOpen, setVaultExportDialogOpen] = useState(false);
   const [vaultExportMode, setVaultExportMode] = useState<"plain" | "encrypted">("plain");
   const [vaultExportPassphrase, setVaultExportPassphrase] = useState("");
@@ -86,18 +90,21 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [reportIncludeBodies, setReportIncludeBodies] = useState(false);
   const [wipeDialogOpen, setWipeDialogOpen] = useState(false);
-  const [unlockRateLimitEnabled, setUnlockRateLimitEnabled] = usePersistentState<boolean>("nullid:vault:unlock-rate-limit", true);
-  const [unlockHumanCheckEnabled, setUnlockHumanCheckEnabled] = usePersistentState<boolean>("nullid:vault:unlock-human-check", true);
+  const [unlockRateLimitEnabled, setUnlockRateLimitEnabled] = usePersistentState<boolean>(VAULT_PREFERENCE_STATE_KEYS.unlockRateLimitEnabled, true);
+  const [unlockHumanCheckEnabled, setUnlockHumanCheckEnabled] = usePersistentState<boolean>(
+    VAULT_PREFERENCE_STATE_KEYS.unlockHumanCheckEnabled,
+    true,
+  );
   const [unlockThrottle, setUnlockThrottle] = usePersistentState<UnlockThrottleState>(
-    "nullid:vault:unlock-throttle",
+    VAULT_PREFERENCE_STATE_KEYS.unlockThrottle,
     createUnlockThrottleState(),
   );
   const [unlockChallenge, setUnlockChallenge] = useState<HumanCheckChallenge>(() => createHumanCheckChallenge());
   const [unlockChallengeInput, setUnlockChallengeInput] = useState("");
   const [unlockBlockRemaining, setUnlockBlockRemaining] = useState(0);
-  const [sessionCookieEnabled, setSessionCookieEnabled] = usePersistentState<boolean>("nullid:vault:session-cookie-enabled", true);
+  const [sessionCookieEnabled, setSessionCookieEnabled] = usePersistentState<boolean>(VAULT_PREFERENCE_STATE_KEYS.sessionCookieEnabled, true);
   const [sessionCookieState, setSessionCookieState] = useState<SessionCookieResult | null>(null);
-  const [mfaCredential, setMfaCredential] = usePersistentState<LocalMfaCredential | null>("nullid:vault:mfa-credential", null);
+  const [mfaCredential, setMfaCredential] = usePersistentState<LocalMfaCredential | null>(VAULT_PREFERENCE_STATE_KEYS.mfaCredential, null);
   const [mfaBusy, setMfaBusy] = useState(false);
   const [mfaLabelInput, setMfaLabelInput] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -437,7 +444,7 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
         setTags("credentials,rotation");
       } else {
         setTitle("Security checklist");
-        setBody("- [ ] Validate artifact hash\n- [ ] Sanitize logs\n- [ ] Export signed snapshot\n- [ ] Confirm recipient");
+        setBody("- [ ] Validate artifact hash\n- [ ] Sanitize logs\n- [ ] Export snapshot with HMAC metadata\n- [ ] Confirm recipient");
         setTags("checklist,ops");
       }
       if (unlocked) resetLockTimer();
@@ -511,7 +518,7 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
       return;
     }
     if (vaultExportSign && !vaultSigningPassphrase.trim()) {
-      setVaultExportError("signing passphrase required when metadata signing is enabled");
+      setVaultExportError("HMAC passphrase required when HMAC metadata is enabled");
       return;
     }
     try {
@@ -525,12 +532,12 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
           : await exportVault(options);
       const filename = vaultExportMode === "encrypted" ? "nullid-vault.enc" : "nullid-vault.json";
       downloadBlob(blob, filename);
-      push(
-        vaultExportMode === "encrypted"
-          ? `encrypted export ready${vaultExportSign ? " (signed metadata)" : ""}`
-          : `vault export ready${vaultExportSign ? " (signed)" : ""}`,
-        "accent",
-      );
+        push(
+          vaultExportMode === "encrypted"
+          ? `encrypted export ready${vaultExportSign ? " (HMAC metadata)" : ""}`
+          : `vault export ready${vaultExportSign ? " (HMAC metadata)" : ""}`,
+          "accent",
+        );
       closeVaultExportDialog();
     } catch (error) {
       console.error(error);
@@ -587,7 +594,7 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
   const confirmVaultImport = useCallback(async () => {
     if (!vaultImportFile) return;
     if (vaultImportMode === "plain" && vaultImportDescriptor?.signed && !vaultImportVerifyPassphrase.trim()) {
-      setVaultImportError("verification passphrase required for signed snapshots");
+      setVaultImportError("verification passphrase required for HMAC-verified snapshots");
       return;
     }
     if (vaultImportMode === "encrypted" && !vaultImportExportPassphrase.trim()) {
@@ -612,7 +619,7 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
       setActiveId(null);
       clearVaultSessionCookie();
       setSessionCookieState(null);
-      const suffix = result.legacy ? "legacy" : result.signed ? (result.verified ? "signed+verified" : "signed") : "unsigned";
+      const suffix = result.legacy ? "legacy" : result.signed ? (result.verified ? "HMAC+verified" : "HMAC") : "unsigned";
       push(
         `${vaultImportMode === "encrypted" ? "encrypted vault imported" : "vault imported"} (${result.noteCount} notes, ${suffix}); please unlock`,
         vaultImportMode === "encrypted" ? "accent" : "neutral",
@@ -778,7 +785,7 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
                 }}
                 aria-label="Enable session cookie"
               />
-              issue session cookie on unlock
+              set session hint cookie on unlock
             </label>
           </div>
           <div className="controls-row">
@@ -801,9 +808,10 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
           </div>
           <div className="microcopy">
             {mfaCredential
-              ? `MFA credential active${mfaCredential.label ? ` (${mfaCredential.label})` : ""}.`
-              : "MFA is optional. Enable it to require a WebAuthn prompt after passphrase unlock."}
-            {!isLocalMfaSupported() ? " WebAuthn is unavailable in this browser/runtime." : ""}
+              ? `${tr("MFA credential active.")}${mfaCredential.label ? ` (${mfaCredential.label})` : ""} ${tr("This adds a local WebAuthn step on this browser/device, not account recovery.")}`
+              : tr("MFA is optional. Enable it to add a local WebAuthn prompt after passphrase unlock on this browser/device.")}
+            {!isLocalMfaSupported() ? ` ${tr("WebAuthn is unavailable in this browser/runtime.")}` : ""}
+            {` ${tr("Keep a separate vault backup before relying on MFA; losing the authenticator while locked can strand access.")}`}
           </div>
           <div className="controls-row">
             <button className="button" type="button" onClick={() => openVaultExportDialog("plain")} disabled={!unlocked || notes.length === 0}>
@@ -860,14 +868,18 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
             <Chip label={unlocked ? tr("unsealed") : tr("locked")} tone={unlocked ? "accent" : "muted"} />
             <span className="microcopy">{tr("notes")}: {formatNumber(notes.length)}</span>
             <Chip label={`storage: ${backendInfo.kind}`} tone={backendInfo.fallbackReason ? "danger" : "muted"} />
-            {backendInfo.fallbackReason && <span className="microcopy">fallback: {backendInfo.fallbackReason}</span>}
+            {backendInfo.fallbackReason && (
+              <span className="microcopy">
+                {tr("fallback")}: {backendInfo.fallbackReason}. {tr("Ciphertext stays encrypted, but fallback stores blobs and vault metadata in localStorage.")}
+              </span>
+            )}
           </div>
           <div className="status-line">
-            <span>session cookie</span>
+            <span>{tr("session cookie")}</span>
             <Chip label={sessionCookieState?.active ? "active" : "inactive"} tone={sessionCookieState?.active ? "accent" : "muted"} />
             <span className="microcopy">
               {sessionCookieState?.warning ??
-                "Uses SameSite=Strict and Secure (when HTTPS). HttpOnly must be set from server/edge."}
+                tr("Browser-visible presence hint only. SameSite=Strict is set, Secure is added on HTTPS, and HttpOnly/server auth must be configured outside the browser.")}
             </span>
           </div>
           <div className="status-line">
@@ -1053,9 +1065,9 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
       </div>
       <ActionDialog
         open={vaultExportDialogOpen}
-        title={vaultExportMode === "encrypted" ? "Export encrypted vault snapshot" : "Export vault snapshot"}
-        description="Signed exports add integrity metadata that can be verified during import."
-        confirmLabel={vaultExportMode === "encrypted" ? "export encrypted" : "export snapshot"}
+        title={vaultExportMode === "encrypted" ? tr("Export encrypted vault snapshot") : tr("Export vault snapshot")}
+        description={tr("NullID uses shared-passphrase HMAC metadata for export verification. It is not a public-key identity signature.")}
+        confirmLabel={vaultExportMode === "encrypted" ? tr("export encrypted") : tr("export snapshot")}
         onCancel={closeVaultExportDialog}
         onConfirm={() => void confirmVaultExport()}
         confirmDisabled={
@@ -1064,7 +1076,7 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
       >
         {vaultExportMode === "encrypted" ? (
           <label className="action-dialog-field">
-            <span>Export passphrase</span>
+            <span>{tr("Export passphrase")}</span>
             <input
               className="action-dialog-input"
               type="password"
@@ -1073,29 +1085,29 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
                 setVaultExportPassphrase(event.target.value);
                 if (vaultExportError) setVaultExportError(null);
               }}
-              aria-label="Vault export passphrase"
-              placeholder="required for encrypted export"
+              aria-label={tr("Vault export passphrase")}
+              placeholder={tr("required for encrypted export")}
             />
           </label>
         ) : null}
         <label className="action-dialog-field">
-          <span>Sign metadata</span>
+          <span>{tr("Add HMAC metadata")}</span>
           <input
             type="checkbox"
             checked={vaultExportSign}
             onChange={(event) => setVaultExportSign(event.target.checked)}
-            aria-label="Sign vault export metadata"
+            aria-label={tr("Vault export HMAC metadata")}
           />
         </label>
         {vaultExportSign ? (
           <>
             <div className="status-line">
-              <span>trust state</span>
+              <span>{tr("trust state")}</span>
               <span className={trustTagClass(vaultExportTrustState)}>{vaultExportTrustState}</span>
-              {vaultExportKeyHint.trim() ? <span className="microcopy">hint: {vaultExportKeyHint.trim()}</span> : null}
+              {vaultExportKeyHint.trim() ? <span className="microcopy">{tr("hint")}: {vaultExportKeyHint.trim()}</span> : null}
             </div>
             <label className="action-dialog-field">
-              <span>Signing passphrase</span>
+              <span>{tr("HMAC passphrase")}</span>
               <input
                 className="action-dialog-input"
                 type="password"
@@ -1104,13 +1116,13 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
                   setVaultSigningPassphrase(event.target.value);
                   if (vaultExportError) setVaultExportError(null);
                 }}
-                aria-label="Vault signing passphrase"
-                placeholder="required when signing"
+                aria-label={tr("Vault HMAC passphrase")}
+                placeholder={tr("required when HMAC metadata is enabled")}
               />
             </label>
             <div className="action-dialog-row">
               <label className="action-dialog-field">
-                <span>Saved key hint</span>
+                <span>{tr("Saved key hint")}</span>
                 <select
                   className="action-dialog-select"
                   value={selectedKeyHintProfileId}
@@ -1120,9 +1132,9 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
                     const profile = keyHintProfiles.find((entry) => entry.id === nextId);
                     setVaultExportKeyHint(profile?.keyHint ?? "");
                   }}
-                  aria-label="Saved vault key hint profile"
+                  aria-label={tr("Saved vault key hint profile")}
                 >
-                  <option value="">custom key hint</option>
+                  <option value="">{tr("custom key hint")}</option>
                   {keyHintProfiles.map((profile) => (
                     <option key={profile.id} value={profile.id}>
                       {profile.name} · {profile.keyHint}
@@ -1131,46 +1143,46 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
                 </select>
               </label>
               <label className="action-dialog-field">
-                <span>Key hint label</span>
+                <span>{tr("Key hint label")}</span>
                 <input
                   className="action-dialog-input"
                   value={vaultExportKeyHint}
                   onChange={(event) => setVaultExportKeyHint(event.target.value)}
-                  aria-label="Vault key hint"
-                  placeholder="optional verification hint"
+                  aria-label={tr("Vault key hint")}
+                  placeholder={tr("optional verification hint")}
                 />
               </label>
             </div>
             <p className="action-dialog-note">
-              Key hints are local labels only; passphrases are never persisted.
+              {tr("Key hints are local labels only; passphrases are never persisted.")}
               {selectedKeyHintProfile ? ` Active: ${selectedKeyHintProfile.name} (v${selectedKeyHintProfile.version})` : ""}
             </p>
           </>
         ) : (
-          <p className="action-dialog-note">Unsigned exports skip signature verification during import.</p>
+          <p className="action-dialog-note">{tr("Unsigned exports skip HMAC verification during import.")}</p>
         )}
         {vaultExportError ? <p className="action-dialog-error">{vaultExportError}</p> : null}
       </ActionDialog>
       <ActionDialog
         open={vaultImportDialogOpen}
-        title={vaultImportMode === "encrypted" ? "Import encrypted vault snapshot" : "Import vault snapshot"}
+        title={vaultImportMode === "encrypted" ? tr("Import encrypted vault snapshot") : tr("Import vault snapshot")}
         description={
           vaultImportMode === "encrypted"
-            ? "Provide export passphrase and optional verification passphrase."
+            ? tr("Provide export passphrase and optional verification passphrase.")
             : `${vaultImportDescriptor?.noteCount ?? 0} notes · schema ${vaultImportDescriptor?.schemaVersion ?? "unknown"}`
         }
-        confirmLabel={vaultImportMode === "encrypted" ? "import encrypted" : "import snapshot"}
+        confirmLabel={vaultImportMode === "encrypted" ? tr("import encrypted") : tr("import snapshot")}
         onCancel={closeVaultImportDialog}
         onConfirm={() => void confirmVaultImport()}
       >
         {vaultImportMode === "encrypted" ? (
           <>
             <div className="status-line">
-              <span>trust state</span>
+              <span>{tr("trust state")}</span>
               <span className={trustTagClass(vaultImportTrustState)}>{vaultImportTrustState}</span>
             </div>
             <label className="action-dialog-field">
-              <span>Export passphrase</span>
+              <span>{tr("Export passphrase")}</span>
               <input
                 className="action-dialog-input"
                 type="password"
@@ -1179,12 +1191,12 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
                   setVaultImportExportPassphrase(event.target.value);
                   if (vaultImportError) setVaultImportError(null);
                 }}
-                aria-label="Encrypted vault import passphrase"
-                placeholder="required"
+                aria-label={tr("Encrypted vault import passphrase")}
+                placeholder={tr("required")}
               />
             </label>
             <label className="action-dialog-field">
-              <span>Verification passphrase</span>
+              <span>{tr("Verification passphrase")}</span>
               <input
                 className="action-dialog-input"
                 type="password"
@@ -1193,23 +1205,24 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
                   setVaultImportVerifyPassphrase(event.target.value);
                   if (vaultImportError) setVaultImportError(null);
                 }}
-                aria-label="Encrypted vault verification passphrase"
-                placeholder="required when snapshot metadata is signed"
+                aria-label={tr("Encrypted vault verification passphrase")}
+                placeholder={tr("required when snapshot metadata is signed")}
               />
             </label>
           </>
         ) : vaultImportDescriptor?.signed ? (
           <>
             <div className="status-line">
-              <span>trust state</span>
+              <span>{tr("trust state")}</span>
               <span className={trustTagClass(vaultImportTrustState)}>{vaultImportTrustState}</span>
-              {vaultImportDescriptor.keyHint ? <span className="microcopy">hint: {vaultImportDescriptor.keyHint}</span> : null}
+              {vaultImportDescriptor.keyHint ? <span className="microcopy">{tr("hint")}: {vaultImportDescriptor.keyHint}</span> : null}
             </div>
             <p className="action-dialog-note">
-              Signed snapshot detected{vaultImportDescriptor.keyHint ? ` (hint: ${vaultImportDescriptor.keyHint})` : ""}. Verification is required before import.
+              {tr("HMAC-protected snapshot detected")}
+              {vaultImportDescriptor.keyHint ? ` (${tr("hint")}: ${vaultImportDescriptor.keyHint})` : ""}. {tr("NullID uses shared-passphrase HMAC verification before import.")} {tr("Verification is required before import.")}
             </p>
             <label className="action-dialog-field">
-              <span>Verification passphrase</span>
+              <span>{tr("Verification passphrase")}</span>
               <input
                 className="action-dialog-input"
                 type="password"
@@ -1218,18 +1231,18 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
                   setVaultImportVerifyPassphrase(event.target.value);
                   if (vaultImportError) setVaultImportError(null);
                 }}
-                aria-label="Vault verification passphrase"
-                placeholder="required for signed snapshots"
+                aria-label={tr("Vault verification passphrase")}
+                placeholder={tr("required for HMAC-verified snapshots")}
               />
             </label>
           </>
         ) : (
           <>
             <div className="status-line">
-              <span>trust state</span>
+              <span>{tr("trust state")}</span>
               <span className={trustTagClass(vaultImportTrustState)}>{vaultImportTrustState}</span>
             </div>
-            <p className="action-dialog-note">Unsigned snapshot. Continue only if you trust this file.</p>
+            <p className="action-dialog-note">{tr("Unsigned snapshot. Continue only if you trust this file.")}</p>
           </>
         )}
         {vaultImportError ? <p className="action-dialog-error">{vaultImportError}</p> : null}
@@ -1237,7 +1250,7 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
       <ActionDialog
         open={reportDialogOpen}
         title="Export notes report"
-        description="Choose whether note body content should be included in the report."
+        description="Exports plain JSON. Include note bodies only if you are comfortable with plaintext note content in the report."
         confirmLabel="export report"
         onCancel={() => setReportDialogOpen(false)}
         onConfirm={() => {
@@ -1254,6 +1267,7 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
             aria-label="Include note bodies"
           />
         </label>
+        <p className="action-dialog-note">If enabled, exported note bodies are written in plaintext JSON.</p>
       </ActionDialog>
       <ActionDialog
         open={wipeDialogOpen}

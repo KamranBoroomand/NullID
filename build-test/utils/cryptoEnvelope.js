@@ -1,9 +1,13 @@
-import { fromBase64Url, toBase64Url, utf8ToBytes, bytesToUtf8, randomBytes } from "./encoding.js";
+import { decodeBase64UrlStrict, fromBase64Url, toBase64Url, utf8ToBytes, bytesToUtf8, randomBytes } from "./encoding.js";
 export const ENVELOPE_VERSION = 1;
 export const ENVELOPE_PREFIX = "NULLID:ENC:1";
 const AAD = utf8ToBytes("nullid:enc:v1");
-const MIN_KDF_ITERATIONS = 100_000;
-const MAX_KDF_ITERATIONS = 2_000_000;
+const MIN_SALT_BYTES = 8;
+const MAX_SALT_BYTES = 64;
+const ENVELOPE_IV_BYTES = 12;
+const MIN_CIPHERTEXT_BYTES = 16;
+export const MIN_KDF_ITERATIONS = 100_000;
+export const MAX_KDF_ITERATIONS = 2_000_000;
 const DEFAULT_KDF_ITERATIONS = 250_000;
 export const KDF_PROFILES = {
     compat: { iterations: DEFAULT_KDF_ITERATIONS, hash: "SHA-256" },
@@ -82,16 +86,10 @@ export async function encryptBytes(passphrase, bytes, options) {
 }
 export async function decryptBlob(passphrase, blob) {
     const envelope = parseEnvelope(blob);
-    if (envelope.header.version !== ENVELOPE_VERSION || envelope.header.algo !== "AES-GCM") {
-        throw new Error("Unsupported envelope version");
-    }
-    if (envelope.header.kdf?.name !== "PBKDF2" || typeof envelope.header.kdf.salt !== "string") {
-        throw new Error("Unsupported envelope kdf");
-    }
     const salt = fromBase64Url(envelope.header.kdf.salt);
     const { key } = await deriveKey(passphrase, salt, {
-        iterations: clampIterations(envelope.header.kdf.iterations),
-        hash: normalizeHash(envelope.header.kdf.hash),
+        iterations: envelope.header.kdf.iterations,
+        hash: envelope.header.kdf.hash,
     });
     const iv = fromBase64Url(envelope.header.iv);
     const ciphertext = fromBase64Url(envelope.ciphertext);
@@ -111,12 +109,78 @@ function parseEnvelope(blob) {
         throw new Error("Unsupported envelope prefix");
     }
     const encoded = normalized.slice(`${ENVELOPE_PREFIX}.`.length);
-    const envelopeBytes = fromBase64Url(encoded);
+    const envelopeBytes = decodeBase64UrlStrict(encoded, "Invalid envelope format");
+    let parsed;
     try {
-        return JSON.parse(bytesToUtf8(envelopeBytes));
+        parsed = JSON.parse(bytesToUtf8(envelopeBytes));
     }
-    catch (error) {
-        console.error("Envelope parse failed", error);
+    catch {
         throw new Error("Invalid envelope format");
     }
+    return normalizeEnvelope(parsed);
+}
+function normalizeEnvelope(value) {
+    if (!isRecord(value)) {
+        throw new Error("Invalid envelope format");
+    }
+    const header = normalizeEnvelopeHeader(value.header);
+    if (typeof value.ciphertext !== "string") {
+        throw new Error("Invalid envelope ciphertext");
+    }
+    const ciphertext = decodeBase64UrlStrict(value.ciphertext, "Invalid envelope ciphertext");
+    if (ciphertext.byteLength < MIN_CIPHERTEXT_BYTES) {
+        throw new Error("Invalid envelope ciphertext");
+    }
+    return {
+        header,
+        ciphertext: value.ciphertext,
+    };
+}
+function normalizeEnvelopeHeader(value) {
+    if (!isRecord(value)) {
+        throw new Error("Invalid envelope header");
+    }
+    if (value.version !== ENVELOPE_VERSION || value.algo !== "AES-GCM") {
+        throw new Error("Unsupported envelope version");
+    }
+    if (typeof value.iv !== "string") {
+        throw new Error("Invalid envelope iv");
+    }
+    const iv = decodeBase64UrlStrict(value.iv, "Invalid envelope iv");
+    if (iv.byteLength !== ENVELOPE_IV_BYTES) {
+        throw new Error("Invalid envelope iv");
+    }
+    return {
+        version: ENVELOPE_VERSION,
+        algo: "AES-GCM",
+        iv: value.iv,
+        mime: typeof value.mime === "string" ? value.mime : undefined,
+        name: typeof value.name === "string" ? value.name : undefined,
+        kdf: normalizeEnvelopeKdf(value.kdf),
+    };
+}
+function normalizeEnvelopeKdf(value) {
+    if (!isRecord(value) || value.name !== "PBKDF2" || typeof value.salt !== "string") {
+        throw new Error("Unsupported envelope kdf");
+    }
+    const iterations = value.iterations;
+    if (typeof iterations !== "number" || !Number.isInteger(iterations) || iterations < MIN_KDF_ITERATIONS || iterations > MAX_KDF_ITERATIONS) {
+        throw new Error("Invalid envelope kdf iterations");
+    }
+    const salt = decodeBase64UrlStrict(value.salt, "Invalid envelope kdf salt");
+    if (salt.byteLength < MIN_SALT_BYTES || salt.byteLength > MAX_SALT_BYTES) {
+        throw new Error("Invalid envelope kdf salt");
+    }
+    if (value.hash !== "SHA-256" && value.hash !== "SHA-512") {
+        throw new Error("Unsupported envelope kdf hash");
+    }
+    return {
+        name: "PBKDF2",
+        iterations,
+        hash: value.hash,
+        salt: value.salt,
+    };
+}
+function isRecord(value) {
+    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }

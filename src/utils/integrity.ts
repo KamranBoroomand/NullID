@@ -1,6 +1,7 @@
 import { toBase64Url, utf8ToBytes, fromBase64Url } from "./encoding.js";
 
 export type SignatureAlgorithm = "HMAC-SHA-256";
+export const HMAC_SHA256_ALGORITHM: SignatureAlgorithm = "HMAC-SHA-256";
 
 export interface IntegritySignature {
   algorithm: SignatureAlgorithm;

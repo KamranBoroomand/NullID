@@ -6,7 +6,7 @@ import { usePersistentState } from "../hooks/usePersistentState";
 import { useClipboardPrefs, writeClipboard } from "../utils/clipboard";
 import { useI18n } from "../i18n";
 import { analyzeSecret, estimatePassphraseEntropy, estimatePasswordEntropy, generatePassphrase, generatePassphraseBatch, generatePassword, generatePasswordBatch, getPassphraseDictionaryStats, gradeLabel, } from "../utils/passwordToolkit";
-import { PASSWORD_HASH_DEFAULTS, assessPasswordHashChoice, hashPassword, supportsArgon2id, verifyPassword, } from "../utils/passwordHashing";
+import { PASSWORD_HASH_DEFAULTS, PASSWORD_HASH_LIMITS, assessPasswordHashChoice, hashPassword, supportsArgon2id, verifyPassword, } from "../utils/passwordHashing";
 export function PwView({ onOpenGuide }) {
     const { push } = useToast();
     const { t, tr, formatNumber } = useI18n();
@@ -46,7 +46,7 @@ export function PwView({ onOpenGuide }) {
     const [hashArgon2Parallelism, setHashArgon2Parallelism] = usePersistentState("nullid:pw-hash:argon2-parallelism", PASSWORD_HASH_DEFAULTS.argon2Parallelism);
     const [hashInput, setHashInput] = useState("");
     const [hashVerifyInput, setHashVerifyInput] = useState("");
-    const [hashOutput, setHashOutput] = useState("");
+    const [hashRecord, setHashRecord] = useState("");
     const [hashBusy, setHashBusy] = useState(false);
     const [hashError, setHashError] = useState(null);
     const [hashVerifyState, setHashVerifyState] = useState("idle");
@@ -170,52 +170,53 @@ export function PwView({ onOpenGuide }) {
     const copySecret = (value, successMessage) => writeClipboard(value, clipboardPrefs, (message, tone) => push(message, tone === "danger" ? "danger" : tone === "accent" ? "accent" : "neutral"), successMessage);
     const handlePasswordHash = async () => {
         if (!hashInput.trim()) {
-            push("enter a password to hash", "danger");
+            push(tr("enter a password to hash"), "danger");
             return;
         }
         setHashBusy(true);
         try {
             const result = await hashPassword(hashInput, {
                 algorithm: hashAlgorithm,
-                saltBytes: clamp(hashSaltBytes, 8, 64),
-                pbkdf2Iterations: clamp(hashPbkdf2Iterations, 100_000, 2_000_000),
-                argon2Memory: clamp(hashArgon2Memory, 8_192, 262_144),
-                argon2Passes: clamp(hashArgon2Passes, 1, 8),
-                argon2Parallelism: clamp(hashArgon2Parallelism, 1, 4),
+                saltBytes: clamp(hashSaltBytes, PASSWORD_HASH_LIMITS.saltBytes.min, PASSWORD_HASH_LIMITS.saltBytes.max),
+                pbkdf2Iterations: clamp(hashPbkdf2Iterations, PASSWORD_HASH_LIMITS.pbkdf2.iterations.min, PASSWORD_HASH_LIMITS.pbkdf2.iterations.max),
+                argon2Memory: clamp(hashArgon2Memory, PASSWORD_HASH_LIMITS.argon2.memory.min, PASSWORD_HASH_LIMITS.argon2.memory.max),
+                argon2Passes: clamp(hashArgon2Passes, PASSWORD_HASH_LIMITS.argon2.passes.min, PASSWORD_HASH_LIMITS.argon2.passes.max),
+                argon2Parallelism: clamp(hashArgon2Parallelism, PASSWORD_HASH_LIMITS.argon2.parallelism.min, PASSWORD_HASH_LIMITS.argon2.parallelism.max),
             });
-            setHashOutput(result.encoded);
+            setHashRecord(result.encoded);
             setHashError(null);
             setHashVerifyState("idle");
-            push(result.assessment.safety === "weak" ? "hash generated (legacy mode)" : "password hash generated", result.assessment.safety === "weak" ? "danger" : "accent");
+            push(tr(result.assessment.safety === "weak" ? "hash generated (legacy mode)" : "password hash generated"), result.assessment.safety === "weak" ? "danger" : "accent");
         }
         catch (error) {
             console.error(error);
             const message = error instanceof Error ? error.message : "password hash failed";
             setHashError(message);
-            push(message, "danger");
+            push(tr(message), "danger");
         }
         finally {
             setHashBusy(false);
         }
     };
     const handleVerifyHash = async () => {
-        if (!hashOutput.trim() || !hashVerifyInput) {
+        if (!hashRecord.trim() || !hashVerifyInput) {
             setHashVerifyState("error");
-            push("hash output and candidate password are required", "danger");
+            push(tr("password hash record and candidate password are required"), "danger");
             return;
         }
         setHashBusy(true);
         try {
-            const matched = await verifyPassword(hashVerifyInput, hashOutput.trim());
+            const matched = await verifyPassword(hashVerifyInput, hashRecord.trim());
             setHashVerifyState(matched ? "match" : "mismatch");
-            push(matched ? "password match" : "password mismatch", matched ? "accent" : "danger");
+            setHashError(null);
+            push(tr(matched ? "password match" : "password mismatch"), matched ? "accent" : "danger");
         }
         catch (error) {
             console.error(error);
             setHashVerifyState("error");
             const message = error instanceof Error ? error.message : "verification failed";
             setHashError(message);
-            push(message, "danger");
+            push(tr(message), "danger");
         }
         finally {
             setHashBusy(false);
@@ -253,19 +254,29 @@ export function PwView({ onOpenGuide }) {
                                             : generatePassphraseBatch(passphraseSettings, clamp(batchCount, 3, 16))), children: tr("regenerate batch") })] }), _jsxs("table", { className: "table", "aria-label": tr("Batch candidates table"), children: [_jsx("thead", { children: _jsxs("tr", { children: [_jsx("th", { children: tr("candidate") }), _jsx("th", { children: tr("entropy") }), _jsx("th", { children: tr("grade") }), _jsx("th", { children: tr("copy") })] }) }), _jsx("tbody", { children: batchRows.map((row, index) => (_jsxs("tr", { children: [_jsx("td", { className: "microcopy", children: row.value }), _jsxs("td", { children: [row.entropyBits, "b"] }), _jsx("td", { children: _jsx("span", { className: gradeTagClass(row.assessment.grade), children: gradeLabel(row.assessment.grade) }) }), _jsx("td", { children: _jsx("button", { className: "button", type: "button", onClick: () => copySecret(row.value, `${batchMode} copied`), "aria-label": `Copy candidate ${index + 1}`, children: "copy" }) })] }, `${row.value}-${index}`))) })] })] })] }), _jsxs("div", { className: "panel", "aria-label": tr("Password storage hash lab"), children: [_jsxs("div", { className: "panel-heading", children: [_jsx("span", { children: tr("Password Storage Hashing") }), _jsx("span", { className: "panel-subtext", children: tr("salted records with cost factors") })] }), _jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", htmlFor: "pw-hash-algo", children: tr("Algorithm") }), _jsxs("select", { id: "pw-hash-algo", className: "select", value: hashAlgorithm, onChange: (event) => {
                                     setHashAlgorithm(event.target.value);
                                     setHashVerifyState("idle");
-                                }, "aria-label": tr("Password hash algorithm"), children: [_jsx("option", { value: "argon2id", children: "Argon2id (recommended)" }), _jsx("option", { value: "pbkdf2-sha256", children: "PBKDF2-SHA256 (compat)" }), _jsx("option", { value: "sha512", children: "SHA-512 (legacy)" }), _jsx("option", { value: "sha256", children: "SHA-256 (legacy)" })] }), _jsx("label", { className: "section-title", htmlFor: "pw-hash-salt", children: tr("Salt bytes") }), _jsx("input", { id: "pw-hash-salt", className: "input", type: "number", min: 8, max: 64, value: hashSaltBytes, onChange: (event) => setHashSaltBytes(clamp(Number(event.target.value) || 0, 8, 64)), "aria-label": tr("Hash salt bytes") })] }), hashAlgorithm === "pbkdf2-sha256" ? (_jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", htmlFor: "pw-hash-pbkdf2-iterations", children: tr("PBKDF2 iterations") }), _jsx("input", { id: "pw-hash-pbkdf2-iterations", className: "input", type: "number", min: 100000, max: 2000000, step: 50000, value: hashPbkdf2Iterations, onChange: (event) => setHashPbkdf2Iterations(clamp(Number(event.target.value) || 0, 100_000, 2_000_000)), "aria-label": tr("PBKDF2 iterations") })] })) : null, hashAlgorithm === "argon2id" ? (_jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", htmlFor: "pw-hash-argon2-memory", children: tr("Argon2 memory (KiB)") }), _jsx("input", { id: "pw-hash-argon2-memory", className: "input", type: "number", min: 8192, max: 262144, step: 2048, value: hashArgon2Memory, onChange: (event) => setHashArgon2Memory(clamp(Number(event.target.value) || 0, 8_192, 262_144)), "aria-label": tr("Argon2 memory") }), _jsx("label", { className: "section-title", htmlFor: "pw-hash-argon2-passes", children: tr("Passes") }), _jsx("input", { id: "pw-hash-argon2-passes", className: "input", type: "number", min: 1, max: 8, value: hashArgon2Passes, onChange: (event) => setHashArgon2Passes(clamp(Number(event.target.value) || 0, 1, 8)), "aria-label": tr("Argon2 passes") }), _jsx("label", { className: "section-title", htmlFor: "pw-hash-argon2-parallelism", children: tr("Parallelism") }), _jsx("input", { id: "pw-hash-argon2-parallelism", className: "input", type: "number", min: 1, max: 4, value: hashArgon2Parallelism, onChange: (event) => setHashArgon2Parallelism(clamp(Number(event.target.value) || 0, 1, 4)), "aria-label": tr("Argon2 parallelism") })] })) : null, _jsx("textarea", { className: "textarea", value: hashInput, onChange: (event) => setHashInput(event.target.value), placeholder: tr("Password input for hashing (local only)"), "aria-label": tr("Password input for hashing") }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", onClick: () => void handlePasswordHash(), disabled: hashBusy || !hashInput.trim(), children: hashBusy ? tr("working…") : tr("generate hash") }), _jsx("button", { className: "button", type: "button", onClick: () => copySecret(hashOutput, "hash copied"), disabled: !hashOutput, children: tr("copy hash") }), _jsx("button", { className: "button", type: "button", onClick: () => {
+                                }, "aria-label": tr("Password hash algorithm"), children: [_jsx("option", { value: "argon2id", children: "Argon2id (recommended)" }), _jsx("option", { value: "pbkdf2-sha256", children: "PBKDF2-SHA256 (compat)" }), _jsx("option", { value: "sha512", children: "SHA-512 (legacy)" }), _jsx("option", { value: "sha256", children: "SHA-256 (legacy)" })] }), _jsx("label", { className: "section-title", htmlFor: "pw-hash-salt", children: tr("Salt bytes") }), _jsx("input", { id: "pw-hash-salt", className: "input", type: "number", min: PASSWORD_HASH_LIMITS.saltBytes.min, max: PASSWORD_HASH_LIMITS.saltBytes.max, value: hashSaltBytes, onChange: (event) => setHashSaltBytes(clamp(Number(event.target.value) || 0, PASSWORD_HASH_LIMITS.saltBytes.min, PASSWORD_HASH_LIMITS.saltBytes.max)), "aria-label": tr("Hash salt bytes") })] }), hashAlgorithm === "pbkdf2-sha256" ? (_jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", htmlFor: "pw-hash-pbkdf2-iterations", children: tr("PBKDF2 iterations") }), _jsx("input", { id: "pw-hash-pbkdf2-iterations", className: "input", type: "number", min: PASSWORD_HASH_LIMITS.pbkdf2.iterations.min, max: PASSWORD_HASH_LIMITS.pbkdf2.iterations.max, step: 50000, value: hashPbkdf2Iterations, onChange: (event) => setHashPbkdf2Iterations(clamp(Number(event.target.value) || 0, PASSWORD_HASH_LIMITS.pbkdf2.iterations.min, PASSWORD_HASH_LIMITS.pbkdf2.iterations.max)), "aria-label": tr("PBKDF2 iterations") })] })) : null, hashAlgorithm === "argon2id" ? (_jsxs("div", { className: "controls-row", children: [_jsx("label", { className: "section-title", htmlFor: "pw-hash-argon2-memory", children: tr("Argon2 memory (KiB)") }), _jsx("input", { id: "pw-hash-argon2-memory", className: "input", type: "number", min: PASSWORD_HASH_LIMITS.argon2.memory.min, max: PASSWORD_HASH_LIMITS.argon2.memory.max, step: 2048, value: hashArgon2Memory, onChange: (event) => setHashArgon2Memory(clamp(Number(event.target.value) || 0, PASSWORD_HASH_LIMITS.argon2.memory.min, PASSWORD_HASH_LIMITS.argon2.memory.max)), "aria-label": tr("Argon2 memory") }), _jsx("label", { className: "section-title", htmlFor: "pw-hash-argon2-passes", children: tr("Passes") }), _jsx("input", { id: "pw-hash-argon2-passes", className: "input", type: "number", min: PASSWORD_HASH_LIMITS.argon2.passes.min, max: PASSWORD_HASH_LIMITS.argon2.passes.max, value: hashArgon2Passes, onChange: (event) => setHashArgon2Passes(clamp(Number(event.target.value) || 0, PASSWORD_HASH_LIMITS.argon2.passes.min, PASSWORD_HASH_LIMITS.argon2.passes.max)), "aria-label": tr("Argon2 passes") }), _jsx("label", { className: "section-title", htmlFor: "pw-hash-argon2-parallelism", children: tr("Parallelism") }), _jsx("input", { id: "pw-hash-argon2-parallelism", className: "input", type: "number", min: PASSWORD_HASH_LIMITS.argon2.parallelism.min, max: PASSWORD_HASH_LIMITS.argon2.parallelism.max, value: hashArgon2Parallelism, onChange: (event) => setHashArgon2Parallelism(clamp(Number(event.target.value) || 0, PASSWORD_HASH_LIMITS.argon2.parallelism.min, PASSWORD_HASH_LIMITS.argon2.parallelism.max)), "aria-label": tr("Argon2 parallelism") })] })) : null, _jsx("textarea", { className: "textarea", value: hashInput, onChange: (event) => {
+                            setHashInput(event.target.value);
+                            setHashError(null);
+                        }, placeholder: tr("Password input for hashing (local only)"), "aria-label": tr("Password input for hashing") }), _jsxs("div", { className: "controls-row", children: [_jsx("button", { className: "button", type: "button", onClick: () => void handlePasswordHash(), disabled: hashBusy || !hashInput.trim(), children: hashBusy ? tr("working…") : tr("generate hash") }), _jsx("button", { className: "button", type: "button", onClick: () => copySecret(hashRecord, tr("password hash record copied")), disabled: !hashRecord, children: tr("copy record") }), _jsx("button", { className: "button", type: "button", onClick: () => {
                                     setHashInput("");
                                     setHashVerifyInput("");
-                                    setHashOutput("");
+                                    setHashRecord("");
                                     setHashError(null);
                                     setHashVerifyState("idle");
-                                }, children: tr("clear") })] }), _jsx("textarea", { className: "textarea", value: hashOutput, readOnly: true, placeholder: tr("Generated password hash record"), "aria-label": tr("Generated password hash") }), _jsxs("div", { className: "controls-row", children: [_jsx("input", { className: "input", type: "password", value: hashVerifyInput, onChange: (event) => setHashVerifyInput(event.target.value), placeholder: tr("Password candidate for verification"), "aria-label": tr("Password candidate") }), _jsx("button", { className: "button", type: "button", onClick: () => void handleVerifyHash(), disabled: !hashOutput || !hashVerifyInput || hashBusy, children: tr("verify") })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: tr("safety") }), _jsx("span", { className: hashSafetyTagClass(hashChoiceAssessment.safety), children: hashChoiceAssessment.safety === "strong" ? tr("strong") : hashChoiceAssessment.safety === "fair" ? tr("fair") : tr("weak") }), _jsx("span", { className: hashVerifyState === "match" ? "tag tag-accent" : hashVerifyState === "mismatch" || hashVerifyState === "error" ? "tag tag-danger" : "tag", children: hashVerifyState === "match"
+                                }, children: tr("clear") })] }), _jsx("label", { className: "section-title", htmlFor: "pw-hash-record", children: tr("Password hash record") }), _jsx("textarea", { id: "pw-hash-record", className: "textarea", value: hashRecord, onChange: (event) => {
+                            setHashRecord(event.target.value);
+                            setHashError(null);
+                            setHashVerifyState("idle");
+                        }, placeholder: tr("Password hash record (generated or pasted)"), "aria-label": tr("Password hash record") }), _jsxs("div", { className: "controls-row", children: [_jsx("input", { className: "input", type: "password", value: hashVerifyInput, onChange: (event) => {
+                                    setHashVerifyInput(event.target.value);
+                                    setHashError(null);
+                                }, placeholder: tr("Password candidate for verification"), "aria-label": tr("Password candidate") }), _jsx("button", { className: "button", type: "button", onClick: () => void handleVerifyHash(), disabled: !hashRecord || !hashVerifyInput || hashBusy, children: tr("verify") })] }), _jsxs("div", { className: "status-line", children: [_jsx("span", { children: tr("safety") }), _jsx("span", { className: hashSafetyTagClass(hashChoiceAssessment.safety), children: hashChoiceAssessment.safety === "strong" ? tr("strong") : hashChoiceAssessment.safety === "fair" ? tr("fair") : tr("weak") }), _jsx("span", { className: hashVerifyState === "match" ? "tag tag-accent" : hashVerifyState === "mismatch" || hashVerifyState === "error" ? "tag tag-danger" : "tag", children: hashVerifyState === "match"
                                     ? tr("verified")
                                     : hashVerifyState === "mismatch"
                                         ? tr("mismatch")
                                         : hashVerifyState === "error"
                                             ? tr("error")
-                                            : tr("idle") }), argon2Available === false && hashAlgorithm === "argon2id" ? (_jsx("span", { className: "microcopy", children: tr("Argon2id is not available in this runtime. Choose PBKDF2 or use a browser with Argon2id support.") })) : null] }), hashChoiceAssessment.warnings.length > 0 ? (_jsx("ul", { className: "note-list", children: hashChoiceAssessment.warnings.map((warning) => (_jsx("li", { children: warning }, warning))) })) : (_jsx("div", { className: "microcopy", children: tr("Current hash profile meets the recommended baseline.") })), hashError ? _jsx("div", { className: "microcopy", style: { color: "var(--danger)" }, children: hashError }) : null, _jsx("div", { className: "microcopy", children: tr("Legacy SHA options are kept for compatibility only. Prefer Argon2id for new password storage records.") })] })] }));
+                                            : tr("idle") }), argon2Available === false && hashAlgorithm === "argon2id" ? (_jsx("span", { className: "microcopy", children: tr("Argon2id is not available in this runtime. Choose PBKDF2 or use a browser with Argon2id support.") })) : null] }), hashChoiceAssessment.warnings.length > 0 ? (_jsx("ul", { className: "note-list", children: hashChoiceAssessment.warnings.map((warning) => (_jsx("li", { children: tr(warning) }, warning))) })) : (_jsx("div", { className: "microcopy", children: tr("Current hash profile meets the recommended baseline.") })), hashError ? _jsx("div", { className: "microcopy", style: { color: "var(--danger)" }, children: tr(hashError) }) : null, _jsx("div", { className: "microcopy", children: tr("Paste or save the full password hash record. Verification recomputes and compares; it does not decrypt the password.") }), _jsx("div", { className: "microcopy", children: tr("Argon2id is preferred when available. PBKDF2-SHA256 is the compatibility fallback. Legacy SHA options are migration-only for password storage.") })] })] }));
 }
 function gradeTagClass(grade) {
     if (grade === "critical" || grade === "weak")

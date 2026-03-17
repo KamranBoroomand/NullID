@@ -60,7 +60,26 @@ test("password storage hash lab keeps legacy options but warns", async ({ page }
   await expect(page.getByText("Fast SHA digests are legacy-only for password storage")).toBeVisible();
   await page.getByLabel("Password input for hashing").fill("playwright-secret");
   await page.getByRole("button", { name: /generate hash/i }).click();
-  await expect(page.getByLabel("Generated password hash")).not.toHaveValue("");
+  await expect(page.getByLabel("Password hash record")).not.toHaveValue("");
+});
+
+test("password storage hash lab verifies a pasted saved record", async ({ page }) => {
+  await openApp(page);
+  await page.getByRole("button", { name: /Password & Passphrase/i }).click();
+  await page.getByLabel("Password hash algorithm").selectOption("sha256");
+  await page.getByLabel("Password input for hashing").fill("playwright-secret");
+  await page.getByRole("button", { name: /generate hash/i }).click();
+
+  const recordField = page.getByLabel("Password hash record");
+  const savedRecord = await recordField.inputValue();
+  await expect(savedRecord.length).toBeGreaterThan(0);
+
+  await page.getByRole("button", { name: /^clear$/i }).click();
+  await recordField.fill(savedRecord);
+  await page.getByLabel("Password candidate").fill("playwright-secret");
+  await page.getByRole("button", { name: /^verify$/i }).click();
+
+  await expect(page.getByText(/^verified$/i)).toBeVisible();
 });
 
 test("download envelope button triggers download", async ({ page }) => {
@@ -120,6 +139,15 @@ test("sanitize module batch-processes local files", async ({ page }) => {
   ]);
   await expect(page.getByText("batch-a.log")).toBeVisible();
   await expect(page.getByText("batch-b.log")).toBeVisible();
+});
+
+test("self-test records last run even when warnings are present", async ({ page }) => {
+  await openApp(page);
+  await page.getByRole("button", { name: /Self-test/i }).click();
+  const lastRun = page.locator(".panel .microcopy").filter({ hasText: /last run:/i }).first();
+  await expect(lastRun).toContainText(/never/i);
+  await page.getByRole("button", { name: /^run all$/i }).click();
+  await expect(lastRun).not.toContainText(/never/i);
 });
 
 test("mobile navigation scrolls and allows selection", async ({ browser }) => {

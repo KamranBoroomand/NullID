@@ -1,10 +1,17 @@
 import { getVaultBackend, getAllValues, getValue, putValue, clearStore } from "./storage.js";
-import { fromBase64Url, toBase64Url, utf8ToBytes, bytesToUtf8, randomBytes } from "./encoding.js";
-import { decryptText, encryptText } from "./cryptoEnvelope.js";
-import { sha256Base64Url, signHash, verifyHashSignature, type IntegritySignature } from "./integrity.js";
+import { decodeBase64UrlStrict, fromBase64Url, toBase64Url, utf8ToBytes, bytesToUtf8, randomBytes } from "./encoding.js";
+import { MAX_KDF_ITERATIONS, decryptText, encryptText } from "./cryptoEnvelope.js";
+import type { IntegritySignature } from "./integrity.js";
+import { createSnapshotIntegrity, verifySnapshotIntegrity } from "./snapshotIntegrity.js";
+import { getVaultFallbackKeyCandidates } from "./vaultStorageKeys.js";
 
 const AAD = utf8ToBytes("nullid:vault:v1");
 const VAULT_EXPORT_SCHEMA_VERSION = 2;
+const MIN_VAULT_ITERATIONS = 10_000;
+const MIN_VAULT_SALT_BYTES = 8;
+const MAX_VAULT_SALT_BYTES = 64;
+const VAULT_IV_BYTES = 12;
+const MIN_VAULT_CIPHERTEXT_BYTES = 16;
 
 export interface VaultMeta {
   salt: string;
@@ -78,16 +85,22 @@ export async function ensureVaultMeta(): Promise<VaultMeta> {
   const backend = await getVaultBackend();
   const existing = await getValue<VaultMeta & { lockedAt: number }>(backend, "meta", "meta");
   if (existing) {
-    const normalized: VaultMeta = {
-      salt: existing.salt,
-      iterations: existing.iterations,
-      version: existing.version ?? 1,
-      lockedAt: existing.lockedAt ?? Date.now(),
+    const normalized = normalizeMeta(existing);
+    const resolved: VaultMeta = {
+      salt: normalized.salt,
+      iterations: normalized.iterations,
+      version: normalized.version ?? 1,
+      lockedAt: normalized.lockedAt ?? Date.now(),
     };
-    if (!existing.version) {
-      await putValue(backend, "meta", "meta", normalized);
+    if (
+      existing.version !== resolved.version ||
+      existing.lockedAt !== resolved.lockedAt ||
+      existing.salt !== resolved.salt ||
+      existing.iterations !== resolved.iterations
+    ) {
+      await putValue(backend, "meta", "meta", resolved);
     }
-    return normalized;
+    return resolved;
   }
   const salt = toBase64Url(randomBytes(16));
   const meta: VaultMeta = { salt, iterations: 200_000, version: 1, lockedAt: Date.now() };
@@ -109,7 +122,7 @@ export async function unlockVault(passphrase: string): Promise<CryptoKey> {
 }
 
 async function deriveVaultKey(passphrase: string, meta: VaultMeta) {
-  const salt = fromBase64Url(meta.salt);
+  const salt = decodeVaultSalt(meta.salt);
   const keyMaterial = await crypto.subtle.importKey("raw", utf8ToBytes(passphrase).buffer as ArrayBuffer, "PBKDF2", false, ["deriveKey"]);
   return crypto.subtle.deriveKey(
     { name: "PBKDF2", salt: salt.buffer as ArrayBuffer, iterations: meta.iterations, hash: "SHA-256" },
@@ -134,8 +147,9 @@ async function storeCanary(key: CryptoKey) {
 }
 
 async function verifyCanary(key: CryptoKey, payload: string, ivText: string) {
-  const ciphertext = fromBase64Url(payload);
-  const iv = fromBase64Url(ivText);
+  const normalized = normalizeCanary({ ciphertext: payload, iv: ivText });
+  const ciphertext = fromBase64Url(normalized.ciphertext);
+  const iv = fromBase64Url(normalized.iv);
   await crypto.subtle.decrypt(
     { name: "AES-GCM", iv: iv.buffer as ArrayBuffer, additionalData: AAD.buffer as ArrayBuffer },
     key,
@@ -186,15 +200,15 @@ export async function deleteNote(id: string) {
       tx.onerror = () => reject(tx.error);
     });
   }
-  localStorage.removeItem(`nullid:vault:notes:${id}`);
+  getVaultFallbackKeyCandidates("notes", id).forEach((key) => localStorage.removeItem(key));
 }
 
 export async function decryptNote(
   key: CryptoKey,
   note: VaultNote,
 ): Promise<{ title: string; body: string; tags?: string[]; createdAt?: number; updatedAt?: number }> {
-  const iv = fromBase64Url(note.iv);
-  const ciphertext = fromBase64Url(note.ciphertext);
+  const iv = decodeVaultIv(note.iv, "Invalid stored vault note iv");
+  const ciphertext = decodeVaultCiphertext(note.ciphertext, "Invalid stored vault note ciphertext");
   const bytes = new Uint8Array(
     await crypto.subtle.decrypt(
       { name: "AES-GCM", iv: iv.buffer as ArrayBuffer, additionalData: AAD.buffer as ArrayBuffer },
@@ -219,27 +233,21 @@ async function readVaultSnapshot(options?: VaultExportOptions): Promise<string> 
 async function buildVaultSnapshot(options?: VaultExportOptions): Promise<VaultSnapshotExport> {
   const vault = await readVaultSnapshotData();
   const exportedAt = new Date().toISOString();
-  const payloadHash = await sha256Base64Url({
+  const payload = {
     schemaVersion: VAULT_EXPORT_SCHEMA_VERSION,
     exportedAt,
     vault,
-  });
+  };
+  const { integrity, signature } = await createSnapshotIntegrity(payload, "noteCount", vault.notes.length, options);
   const snapshot: VaultSnapshotExport = {
     schemaVersion: VAULT_EXPORT_SCHEMA_VERSION,
     kind: "vault",
     exportedAt,
     vault,
-    integrity: {
-      noteCount: vault.notes.length,
-      payloadHash,
-    },
+    integrity,
   };
-  if (options?.signingPassphrase) {
-    snapshot.signature = {
-      algorithm: "HMAC-SHA-256",
-      value: await signHash(payloadHash, options.signingPassphrase),
-      keyHint: options.keyHint?.trim().slice(0, 64) || undefined,
-    };
+  if (signature) {
+    snapshot.signature = signature;
   }
   return snapshot;
 }
@@ -345,40 +353,26 @@ async function validateSignedVaultSnapshot(
   }
 
   const snapshot = normalizeSnapshotData(payload.vault);
-  const noteCount = payload.integrity.noteCount;
-  const payloadHash = payload.integrity.payloadHash;
-  if (typeof noteCount !== "number" || !Number.isInteger(noteCount) || noteCount < 0 || typeof payloadHash !== "string" || payloadHash.length < 16) {
-    throw new Error("Invalid vault integrity metadata");
-  }
-  if (snapshot.notes.length !== noteCount) {
-    throw new Error("Vault integrity mismatch (note count)");
-  }
-
-  const computedHash = await sha256Base64Url({
-    schemaVersion: VAULT_EXPORT_SCHEMA_VERSION,
-    exportedAt: payload.exportedAt,
-    vault: snapshot,
+  const { signed, verified } = await verifySnapshotIntegrity({
+    subject: "Vault snapshot",
+    countKey: "noteCount",
+    actualCount: snapshot.notes.length,
+    payload: {
+      schemaVersion: VAULT_EXPORT_SCHEMA_VERSION,
+      exportedAt: payload.exportedAt,
+      vault: snapshot,
+    },
+    integrity: payload.integrity,
+    signature: payload.signature,
+    verificationPassphrase: options?.verificationPassphrase,
+    missingIntegrityMessage: "Vault integrity metadata missing",
+    invalidIntegrityMessage: "Invalid vault integrity metadata",
+    countMismatchMessage: "Vault integrity mismatch (note count)",
+    hashMismatchMessage: "Vault integrity mismatch (hash)",
+    invalidSignatureMessage: "Invalid vault signature metadata",
+    verificationRequiredMessage: "Vault snapshot is signed; verification passphrase required",
+    verificationFailedMessage: "Vault signature verification failed",
   });
-  if (computedHash !== payloadHash) {
-    throw new Error("Vault integrity mismatch (hash)");
-  }
-
-  let signed = false;
-  let verified = false;
-  if (payload.signature !== undefined) {
-    if (!isRecord(payload.signature) || payload.signature.algorithm !== "HMAC-SHA-256" || typeof payload.signature.value !== "string") {
-      throw new Error("Invalid vault signature metadata");
-    }
-    signed = true;
-    const verifySecret = options?.verificationPassphrase;
-    if (!verifySecret) {
-      throw new Error("Vault snapshot is signed; verification passphrase required");
-    }
-    verified = await verifyHashSignature(payloadHash, payload.signature.value, verifySecret);
-    if (!verified) {
-      throw new Error("Vault signature verification failed");
-    }
-  }
 
   return { snapshot, signed, verified };
 }
@@ -404,10 +398,14 @@ function normalizeMeta(value: unknown): VaultMeta {
   const iterations = value.iterations;
   const version = value.version;
   const lockedAt = value.lockedAt;
-  if (typeof salt !== "string" || salt.length < 8) {
+  if (typeof salt !== "string") {
     throw new Error("Invalid vault meta salt");
   }
-  if (typeof iterations !== "number" || !Number.isInteger(iterations) || iterations < 10_000) {
+  const saltBytes = decodeVaultSalt(salt);
+  if (saltBytes.byteLength < MIN_VAULT_SALT_BYTES || saltBytes.byteLength > MAX_VAULT_SALT_BYTES) {
+    throw new Error("Invalid vault meta salt");
+  }
+  if (typeof iterations !== "number" || !Number.isInteger(iterations) || iterations < MIN_VAULT_ITERATIONS || iterations > MAX_KDF_ITERATIONS) {
     throw new Error("Invalid vault meta iterations");
   }
   if (version !== undefined && version !== null && (typeof version !== "number" || !Number.isInteger(version) || version < 1)) {
@@ -428,6 +426,8 @@ function normalizeCanary(value: unknown): VaultCanary {
   if (!isRecord(value) || typeof value.ciphertext !== "string" || typeof value.iv !== "string") {
     throw new Error("Invalid vault canary payload");
   }
+  decodeVaultCiphertext(value.ciphertext, "Invalid vault canary payload");
+  decodeVaultIv(value.iv, "Invalid vault canary payload");
   return {
     ciphertext: value.ciphertext,
     iv: value.iv,
@@ -445,12 +445,14 @@ function normalizeNote(value: unknown, index: number): VaultNote {
   if (typeof id !== "string" || !id.trim()) {
     throw new Error(`Invalid vault note id at index ${index}`);
   }
-  if (typeof ciphertext !== "string" || ciphertext.length < 8) {
+  if (typeof ciphertext !== "string") {
     throw new Error(`Invalid vault note ciphertext at index ${index}`);
   }
-  if (typeof iv !== "string" || iv.length < 8) {
+  decodeVaultCiphertext(ciphertext, `Invalid vault note ciphertext at index ${index}`);
+  if (typeof iv !== "string") {
     throw new Error(`Invalid vault note iv at index ${index}`);
   }
+  decodeVaultIv(iv, `Invalid vault note iv at index ${index}`);
   if (typeof updatedAt !== "number" || !Number.isFinite(updatedAt) || updatedAt <= 0) {
     throw new Error(`Invalid vault note timestamp at index ${index}`);
   }
@@ -464,6 +466,26 @@ function normalizeNote(value: unknown, index: number): VaultNote {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function decodeVaultSalt(value: string): Uint8Array {
+  return decodeBase64UrlStrict(value, "Invalid vault meta salt");
+}
+
+function decodeVaultIv(value: string, errorMessage: string): Uint8Array {
+  const bytes = decodeBase64UrlStrict(value, errorMessage);
+  if (bytes.byteLength !== VAULT_IV_BYTES) {
+    throw new Error(errorMessage);
+  }
+  return bytes;
+}
+
+function decodeVaultCiphertext(value: string, errorMessage: string): Uint8Array {
+  const bytes = decodeBase64UrlStrict(value, errorMessage);
+  if (bytes.byteLength < MIN_VAULT_CIPHERTEXT_BYTES) {
+    throw new Error(errorMessage);
+  }
+  return bytes;
 }
 
 async function applySnapshot(snapshot: VaultSnapshotData) {

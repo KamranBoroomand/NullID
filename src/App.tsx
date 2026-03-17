@@ -221,13 +221,13 @@ function AppShell() {
   const confirmProfileExport = useCallback(async () => {
     try {
       if (profileExportSign && !profileExportPassphrase.trim()) {
-        setProfileExportError("signing passphrase required");
+        setProfileExportError("HMAC passphrase required");
         return;
       }
       const keyHint = profileExportSign ? sanitizeKeyHint(profileExportKeyHint) || undefined : undefined;
       const signingPassphrase = profileExportSign ? profileExportPassphrase : undefined;
       const result = await downloadProfile(`nullid-profile-${Date.now()}.json`, { signingPassphrase, keyHint });
-      push(`profile exported (${result.entryCount}${result.signed ? ", signed" : ""})`, "accent");
+      push(`profile exported (${result.entryCount}${result.signed ? ", HMAC" : ""})`, "accent");
       setStatus({ message: "profile exported", tone: "accent" });
       closeProfileExportDialog();
     } catch (error) {
@@ -280,14 +280,14 @@ function AppShell() {
   const confirmProfileImport = useCallback(async () => {
     if (!pendingProfileImportFile || !profileImportDescriptor) return;
     if (profileImportDescriptor.signed && !profileImportPassphrase.trim()) {
-      setProfileImportError("verification passphrase required for signed profiles");
+      setProfileImportError("verification passphrase required for HMAC-protected profiles");
       return;
     }
     try {
       const result = await importProfileFile(pendingProfileImportFile, {
         verificationPassphrase: profileImportDescriptor.signed ? profileImportPassphrase.trim() : undefined,
       });
-      const suffix = result.legacy ? "legacy" : result.signed ? (result.verified ? "signed+verified" : "signed") : "unsigned";
+      const suffix = result.legacy ? "legacy" : result.signed ? (result.verified ? "HMAC+verified" : "HMAC") : "unsigned";
       push(`profile imported (${result.applied}, ${suffix})`, "accent");
       setStatus({ message: "profile imported", tone: "accent" });
       closeProfileImportDialog();
@@ -708,19 +708,19 @@ function AppShell() {
       <ActionDialog
         open={profileExportOpen}
         title={tr("Export profile snapshot")}
-        description={tr("Export local nullid:* settings as JSON. Signed exports require a verification passphrase on import.")}
+        description={tr("Export local nullid:* settings as JSON. Optional HMAC metadata can be verified during import with the same passphrase.")}
         confirmLabel={tr("export profile")}
         onCancel={closeProfileExportDialog}
         onConfirm={() => void confirmProfileExport()}
         confirmDisabled={profileExportSign && !profileExportPassphrase.trim()}
       >
         <label className="action-dialog-field">
-          <span>{tr("Sign metadata")}</span>
+          <span>{tr("Add HMAC metadata")}</span>
           <input
             type="checkbox"
             checked={profileExportSign}
             onChange={(event) => setProfileExportSign(event.target.checked)}
-            aria-label={tr("Sign profile metadata")}
+            aria-label={tr("Profile HMAC metadata")}
           />
         </label>
         {profileExportSign ? (
@@ -731,7 +731,7 @@ function AppShell() {
               {profileExportKeyHint.trim() ? <span className="microcopy">hint: {profileExportKeyHint.trim()}</span> : null}
             </div>
             <label className="action-dialog-field">
-              <span>{tr("Signing passphrase")}</span>
+              <span>{tr("HMAC passphrase")}</span>
               <input
                 className="action-dialog-input"
                 type="password"
@@ -740,8 +740,8 @@ function AppShell() {
                   setProfileExportPassphrase(event.target.value);
                   if (profileExportError) setProfileExportError(null);
                 }}
-                aria-label={tr("Profile signing passphrase")}
-                placeholder={tr("required when signing")}
+                aria-label={tr("Profile HMAC passphrase")}
+                placeholder={tr("required when HMAC metadata is enabled")}
               />
             </label>
             <div className="action-dialog-row">
@@ -798,7 +798,7 @@ function AppShell() {
             </p>
           </>
         ) : (
-          <p className="action-dialog-note">{tr("Unsigned profile exports can still be imported, but signature verification is unavailable.")}</p>
+          <p className="action-dialog-note">{tr("Unsigned profile exports can still be imported, but HMAC verification is unavailable.")}</p>
         )}
         {profileExportError ? <p className="action-dialog-error">{profileExportError}</p> : null}
       </ActionDialog>
@@ -822,7 +822,7 @@ function AppShell() {
               {profileImportDescriptor.keyHint ? <span className="microcopy">{tr("hint")}: {profileImportDescriptor.keyHint}</span> : null}
             </div>
             <p className="action-dialog-note">
-              {tr("Signed profile detected")}{profileImportDescriptor.keyHint ? ` (${tr("hint")}: ${profileImportDescriptor.keyHint})` : ""}. {tr("Verification is required before import.")}
+              {tr("HMAC-protected profile detected")}{profileImportDescriptor.keyHint ? ` (${tr("hint")}: ${profileImportDescriptor.keyHint})` : ""}. {tr("NullID uses shared-passphrase HMAC verification before import.")}
             </p>
             <label className="action-dialog-field">
               <span>{tr("Verification passphrase")}</span>
@@ -835,7 +835,7 @@ function AppShell() {
                   if (profileImportError) setProfileImportError(null);
                 }}
                 aria-label={tr("Profile verification passphrase")}
-                placeholder={tr("required for signed profile")}
+                placeholder={tr("required for HMAC-protected profile")}
               />
             </label>
           </>

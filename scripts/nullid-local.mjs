@@ -22,66 +22,100 @@ const sensitiveKeys = new Set([
   "access_token",
   "refresh_token",
 ]);
+const passwordHashSpec = JSON.parse(fs.readFileSync(new URL("../src/utils/passwordHashingSpec.json", import.meta.url), "utf8"));
+const passwordHashAlgorithms = new Set(passwordHashSpec.algorithms);
+const PASSWORD_HASH_MIN_SALT_BYTES = passwordHashSpec.saltBytes.min;
+const PASSWORD_HASH_DEFAULT_SALT_BYTES = passwordHashSpec.saltBytes.default;
+const PASSWORD_HASH_MAX_SALT_BYTES = passwordHashSpec.saltBytes.max;
+const PASSWORD_HASH_DEFAULT_DERIVED_BYTES = passwordHashSpec.record.derivedBytes;
+const PASSWORD_HASH_DEFAULT_DERIVED_BITS = passwordHashSpec.record.derivedBits;
+const PASSWORD_HASH_ARGON2_VERSION = passwordHashSpec.record.argon2Version;
+
+const PASSWORD_HASH_MIN_PBKDF2_ITERATIONS = passwordHashSpec.pbkdf2.iterations.min;
+const PASSWORD_HASH_DEFAULT_PBKDF2_ITERATIONS = passwordHashSpec.pbkdf2.iterations.default;
+const PASSWORD_HASH_MAX_PBKDF2_ITERATIONS = passwordHashSpec.pbkdf2.iterations.max;
+const PASSWORD_HASH_PBKDF2_RECOMMENDED_MIN = passwordHashSpec.pbkdf2.iterations.recommendedMin;
+
+const PASSWORD_HASH_MIN_ARGON2_MEMORY = passwordHashSpec.argon2.memory.min;
+const PASSWORD_HASH_DEFAULT_ARGON2_MEMORY = passwordHashSpec.argon2.memory.default;
+const PASSWORD_HASH_MAX_ARGON2_MEMORY = passwordHashSpec.argon2.memory.max;
+const PASSWORD_HASH_ARGON2_MEMORY_RECOMMENDED_MIN = passwordHashSpec.argon2.memory.recommendedMin;
+
+const PASSWORD_HASH_MIN_ARGON2_PASSES = passwordHashSpec.argon2.passes.min;
+const PASSWORD_HASH_DEFAULT_ARGON2_PASSES = passwordHashSpec.argon2.passes.default;
+const PASSWORD_HASH_MAX_ARGON2_PASSES = passwordHashSpec.argon2.passes.max;
+const PASSWORD_HASH_ARGON2_PASSES_RECOMMENDED_MIN = passwordHashSpec.argon2.passes.recommendedMin;
+
+const PASSWORD_HASH_MIN_ARGON2_PARALLELISM = passwordHashSpec.argon2.parallelism.min;
+const PASSWORD_HASH_DEFAULT_ARGON2_PARALLELISM = passwordHashSpec.argon2.parallelism.default;
+const PASSWORD_HASH_MAX_ARGON2_PARALLELISM = passwordHashSpec.argon2.parallelism.max;
+
+const PASSWORD_HASH_B64_SEGMENT = passwordHashSpec.record.base64Segment;
+const PASSWORD_HASH_B64_SEGMENT_RE = new RegExp(`^${PASSWORD_HASH_B64_SEGMENT}$`, "u");
+const PASSWORD_HASH_WARNINGS = passwordHashSpec.warnings;
+const PASSWORD_HASH_ERRORS = passwordHashSpec.errors;
 
 const command = process.argv[2];
 const args = process.argv.slice(3);
+let passwordHashArgon2SupportCache = null;
 
-function main() {
+async function main() {
   if (!command || command === "help" || command === "--help" || command === "-h") {
     printUsage();
-    process.exit(0);
+    return;
   }
 
-  try {
-    switch (command) {
-      case "hash":
-        runHash(args);
-        break;
-      case "sanitize":
-        runSanitize(args);
-        break;
-      case "sanitize-dir":
-        runSanitizeDir(args);
-        break;
-      case "bundle":
-        runBundle(args);
-        break;
-      case "redact":
-        runRedact(args);
-        break;
-      case "enc":
-        runEncrypt(args);
-        break;
-      case "dec":
-        runDecrypt(args);
-        break;
-      case "pwgen":
-        runPwgen(args);
-        break;
-      case "meta":
-        runMeta(args);
-        break;
-      case "pdf-clean":
-        runPdfClean(args);
-        break;
-      case "office-clean":
-        runOfficeClean(args);
-        break;
-      case "archive-sanitize":
-        runArchiveSanitize(args);
-        break;
-      case "precommit":
-        runPrecommit(args);
-        break;
-      case "policy-init":
-        runPolicyInit(args);
-        break;
-      default:
-        throw new Error(`Unknown command: ${command}`);
-    }
-  } catch (error) {
-    console.error(`[nullid-cli] ${(error instanceof Error ? error.message : String(error)).trim()}`);
-    process.exit(1);
+  switch (command) {
+    case "hash":
+      runHash(args);
+      return;
+    case "sanitize":
+      runSanitize(args);
+      return;
+    case "sanitize-dir":
+      runSanitizeDir(args);
+      return;
+    case "bundle":
+      runBundle(args);
+      return;
+    case "redact":
+      runRedact(args);
+      return;
+    case "enc":
+      runEncrypt(args);
+      return;
+    case "dec":
+      runDecrypt(args);
+      return;
+    case "pwgen":
+      runPwgen(args);
+      return;
+    case "pw-hash":
+      await runPasswordHash(args);
+      return;
+    case "pw-verify":
+      await runPasswordVerify(args);
+      return;
+    case "meta":
+      runMeta(args);
+      return;
+    case "pdf-clean":
+      runPdfClean(args);
+      return;
+    case "office-clean":
+      runOfficeClean(args);
+      return;
+    case "archive-sanitize":
+      runArchiveSanitize(args);
+      return;
+    case "precommit":
+      runPrecommit(args);
+      return;
+    case "policy-init":
+      runPolicyInit(args);
+      return;
+    default:
+      throw new Error(`Unknown command: ${command}`);
   }
 }
 
@@ -468,6 +502,73 @@ function runPwgen(argv) {
   const value = generatePassphrase(settings, wordlist);
   const entropy = estimatePassphraseEntropy(settings, wordlist.length);
   console.log(JSON.stringify({ kind, value, entropyBits: entropy, settings }, null, 2));
+}
+
+async function runPasswordHash(argv) {
+  const algorithm = (getOption(argv, "--algo") || "argon2id").toLowerCase();
+  if (!passwordHashAlgorithms.has(algorithm)) {
+    throw new Error(`Unsupported password hash algorithm: ${algorithm}`);
+  }
+
+  const secret = resolvePasswordSecret(argv);
+  const options = {
+    algorithm,
+    saltBytes: clampInt(getOption(argv, "--salt-bytes"), PASSWORD_HASH_MIN_SALT_BYTES, PASSWORD_HASH_MAX_SALT_BYTES, PASSWORD_HASH_DEFAULT_SALT_BYTES),
+    pbkdf2Iterations: clampInt(
+      getOption(argv, "--pbkdf2-iterations"),
+      PASSWORD_HASH_MIN_PBKDF2_ITERATIONS,
+      PASSWORD_HASH_MAX_PBKDF2_ITERATIONS,
+      PASSWORD_HASH_DEFAULT_PBKDF2_ITERATIONS,
+    ),
+    argon2Memory: clampInt(
+      getOption(argv, "--argon2-memory"),
+      PASSWORD_HASH_MIN_ARGON2_MEMORY,
+      PASSWORD_HASH_MAX_ARGON2_MEMORY,
+      PASSWORD_HASH_DEFAULT_ARGON2_MEMORY,
+    ),
+    argon2Passes: clampInt(
+      getOption(argv, "--argon2-passes"),
+      PASSWORD_HASH_MIN_ARGON2_PASSES,
+      PASSWORD_HASH_MAX_ARGON2_PASSES,
+      PASSWORD_HASH_DEFAULT_ARGON2_PASSES,
+    ),
+    argon2Parallelism: clampInt(
+      getOption(argv, "--argon2-parallelism"),
+      PASSWORD_HASH_MIN_ARGON2_PARALLELISM,
+      PASSWORD_HASH_MAX_ARGON2_PARALLELISM,
+      PASSWORD_HASH_DEFAULT_ARGON2_PARALLELISM,
+    ),
+  };
+  const result = await generatePasswordHashRecord(secret, options);
+  console.log(
+    JSON.stringify(
+      {
+        algorithm: result.algorithm,
+        record: result.record,
+        safety: result.assessment.safety,
+        warnings: result.assessment.warnings,
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+async function runPasswordVerify(argv) {
+  const record = resolvePasswordHashRecord(argv);
+  const secret = resolvePasswordSecret(argv);
+  const parsed = parsePasswordHashRecord(record);
+  const match = await verifyPasswordHashRecord(secret, record);
+  console.log(
+    JSON.stringify(
+      {
+        algorithm: parsed.algorithm,
+        match,
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 function runMeta(argv) {
@@ -909,6 +1010,8 @@ Commands:
   enc <input-file> <output-envelope-file> [--pass <passphrase>|--pass-env <VAR>] [--profile compat|strong|paranoid] [--iterations <n>] [--kdf-hash sha256|sha512]
   dec <input-envelope-file> <output-file> [--pass <passphrase>|--pass-env <VAR>]
   pwgen [--kind password|passphrase] [...options]
+  pw-hash [--algo argon2id|pbkdf2-sha256|sha512|sha256] [--password <value>|--password-env <VAR>|--password-file <path>|--password-stdin] [--salt-bytes <n>] [--pbkdf2-iterations <n>] [--argon2-memory <KiB>] [--argon2-passes <n>] [--argon2-parallelism <n>]
+  pw-verify [--record <hash-record>|--record-file <path>|--record-stdin] [--password <value>|--password-env <VAR>|--password-file <path>|--password-stdin]
   meta <input-file>
   pdf-clean <input.pdf> <output.pdf>
   office-clean <input.docx|input.xlsx|input.pptx> <output-file>
@@ -929,6 +1032,8 @@ Examples:
   NULLID_PASSPHRASE='dev-secret' node scripts/nullid-local.mjs enc ./backup.tar ./backup.tar.nullid --profile strong
   NULLID_PASSPHRASE='dev-secret' node scripts/nullid-local.mjs dec ./backup.tar.nullid ./backup.tar
   node scripts/nullid-local.mjs pwgen --kind passphrase --words 6 --separator _
+  NULLID_PASSWORD='correct horse battery staple' node scripts/nullid-local.mjs pw-hash --password-env NULLID_PASSWORD --algo pbkdf2-sha256
+  NULLID_PASSWORD='correct horse battery staple' node scripts/nullid-local.mjs pw-verify --record '$pbkdf2-sha256$i=600000$...' --password-env NULLID_PASSWORD
   node scripts/nullid-local.mjs meta ./photo.jpg
 `.trim(),
   );
@@ -1729,6 +1834,56 @@ function resolvePassphrase(argv) {
   throw new Error("Passphrase required: use --pass, --pass-env, or NULLID_PASSPHRASE");
 }
 
+function resolvePasswordSecret(argv) {
+  const direct = getOption(argv, "--password");
+  if (direct != null) return direct;
+
+  const passwordFile = getOption(argv, "--password-file");
+  if (passwordFile) {
+    return trimSingleTrailingNewline(fs.readFileSync(path.resolve(passwordFile), "utf8"));
+  }
+
+  const passwordEnv = getOption(argv, "--password-env");
+  if (passwordEnv) {
+    const value = process.env[passwordEnv];
+    if (value == null) {
+      throw new Error(`Password env variable not found: ${passwordEnv}`);
+    }
+    return value;
+  }
+
+  if (hasFlag(argv, "--password-stdin")) {
+    return trimSingleTrailingNewline(readStdinText());
+  }
+
+  if (process.env.NULLID_PASSWORD != null) {
+    return process.env.NULLID_PASSWORD;
+  }
+
+  throw new Error(
+    "Password required: use --password, --password-env, --password-file, --password-stdin, or NULLID_PASSWORD",
+  );
+}
+
+function resolvePasswordHashRecord(argv) {
+  const direct = getOption(argv, "--record");
+  if (direct) return direct.trim();
+
+  const recordFile = getOption(argv, "--record-file");
+  if (recordFile) {
+    return fs.readFileSync(path.resolve(recordFile), "utf8").trim();
+  }
+
+  if (hasFlag(argv, "--record-stdin")) {
+    return readStdinText().trim();
+  }
+
+  const positional = argv[0];
+  if (positional && !positional.startsWith("--")) return positional.trim();
+
+  throw new Error("Password hash record required: use --record, --record-file, or --record-stdin");
+}
+
 function detectMimeFromPath(filePath) {
   const ext = path.extname(filePath).toLowerCase();
   const map = {
@@ -1865,6 +2020,316 @@ function buildWordlist() {
     }
   }
   return list;
+}
+
+function assessPasswordHashChoice(options) {
+  const warnings = [];
+  if (options.algorithm === "argon2id") {
+    const memory = clampInt(
+      options.argon2Memory,
+      PASSWORD_HASH_MIN_ARGON2_MEMORY,
+      PASSWORD_HASH_MAX_ARGON2_MEMORY,
+      PASSWORD_HASH_DEFAULT_ARGON2_MEMORY,
+    );
+    const passes = clampInt(
+      options.argon2Passes,
+      PASSWORD_HASH_MIN_ARGON2_PASSES,
+      PASSWORD_HASH_MAX_ARGON2_PASSES,
+      PASSWORD_HASH_DEFAULT_ARGON2_PASSES,
+    );
+    if (memory < PASSWORD_HASH_ARGON2_MEMORY_RECOMMENDED_MIN) warnings.push(PASSWORD_HASH_WARNINGS.argon2MemoryBelowRecommended);
+    if (passes < PASSWORD_HASH_ARGON2_PASSES_RECOMMENDED_MIN) warnings.push(PASSWORD_HASH_WARNINGS.argon2PassesBelowRecommended);
+    return { safety: warnings.length > 0 ? "fair" : "strong", warnings };
+  }
+
+  if (options.algorithm === "pbkdf2-sha256") {
+    const iterations = clampInt(
+      options.pbkdf2Iterations,
+      PASSWORD_HASH_MIN_PBKDF2_ITERATIONS,
+      PASSWORD_HASH_MAX_PBKDF2_ITERATIONS,
+      PASSWORD_HASH_DEFAULT_PBKDF2_ITERATIONS,
+    );
+    if (iterations < PASSWORD_HASH_PBKDF2_RECOMMENDED_MIN) warnings.push(PASSWORD_HASH_WARNINGS.pbkdf2IterationsBelowRecommended);
+    return { safety: warnings.length > 0 ? "fair" : "strong", warnings };
+  }
+
+  warnings.push(PASSWORD_HASH_WARNINGS.legacyFastSha);
+  warnings.push(PASSWORD_HASH_WARNINGS.preferSlowKdf);
+  return { safety: "weak", warnings };
+}
+
+function derivePasswordHashPbkdf2(secret, salt, iterations) {
+  return crypto.pbkdf2Sync(Buffer.from(secret, "utf8"), salt, iterations, PASSWORD_HASH_DEFAULT_DERIVED_BYTES, "sha256");
+}
+
+async function derivePasswordHashArgon2id(secret, salt, options) {
+  const subtle = crypto.webcrypto?.subtle;
+  if (!subtle) {
+    throw new Error(PASSWORD_HASH_ERRORS.argon2Unavailable);
+  }
+  const keyMaterial = await subtle.importKey("raw-secret", Buffer.from(secret, "utf8"), "Argon2id", false, ["deriveBits"]);
+  const bits = await subtle.deriveBits(
+    {
+      name: "Argon2id",
+      nonce: salt,
+      memory: options.memory,
+      passes: options.passes,
+      parallelism: options.parallelism,
+    },
+    keyMaterial,
+    PASSWORD_HASH_DEFAULT_DERIVED_BITS,
+  );
+  return Buffer.from(bits);
+}
+
+function derivePasswordHashSha(secret, salt, algorithm) {
+  return crypto.createHash(algorithm).update(Buffer.concat([salt, Buffer.from(secret, "utf8")])).digest();
+}
+
+async function supportsPasswordHashArgon2() {
+  if (passwordHashArgon2SupportCache !== null) return passwordHashArgon2SupportCache;
+  try {
+    const subtle = crypto.webcrypto?.subtle;
+    if (!subtle) {
+      throw new Error("WebCrypto subtle unavailable");
+    }
+    const key = await subtle.importKey("raw-secret", Buffer.from("probe", "utf8"), "Argon2id", false, ["deriveBits"]);
+    await subtle.deriveBits(
+      {
+        name: "Argon2id",
+        nonce: crypto.randomBytes(16),
+        memory: PASSWORD_HASH_MIN_ARGON2_MEMORY,
+        passes: 1,
+        parallelism: 1,
+      },
+      key,
+      128,
+    );
+    passwordHashArgon2SupportCache = true;
+  } catch {
+    passwordHashArgon2SupportCache = false;
+  }
+  return passwordHashArgon2SupportCache;
+}
+
+async function generatePasswordHashRecord(secret, options) {
+  if (!secret) {
+    throw new Error(PASSWORD_HASH_ERRORS.passwordRequired);
+  }
+
+  const saltBytes = clampInt(
+    options.saltBytes,
+    PASSWORD_HASH_MIN_SALT_BYTES,
+    PASSWORD_HASH_MAX_SALT_BYTES,
+    PASSWORD_HASH_DEFAULT_SALT_BYTES,
+  );
+  const salt = crypto.randomBytes(saltBytes);
+  const assessment = assessPasswordHashChoice(options);
+
+  if (options.algorithm === "argon2id") {
+    if (!(await supportsPasswordHashArgon2())) {
+      throw new Error(PASSWORD_HASH_ERRORS.argon2Unavailable);
+    }
+    const memory = clampInt(
+      options.argon2Memory,
+      PASSWORD_HASH_MIN_ARGON2_MEMORY,
+      PASSWORD_HASH_MAX_ARGON2_MEMORY,
+      PASSWORD_HASH_DEFAULT_ARGON2_MEMORY,
+    );
+    const passes = clampInt(
+      options.argon2Passes,
+      PASSWORD_HASH_MIN_ARGON2_PASSES,
+      PASSWORD_HASH_MAX_ARGON2_PASSES,
+      PASSWORD_HASH_DEFAULT_ARGON2_PASSES,
+    );
+    const parallelism = clampInt(
+      options.argon2Parallelism,
+      PASSWORD_HASH_MIN_ARGON2_PARALLELISM,
+      PASSWORD_HASH_MAX_ARGON2_PARALLELISM,
+      PASSWORD_HASH_DEFAULT_ARGON2_PARALLELISM,
+    );
+    const digest = await derivePasswordHashArgon2id(secret, salt, { memory, passes, parallelism });
+    return {
+      algorithm: options.algorithm,
+      record: `$argon2id$v=${PASSWORD_HASH_ARGON2_VERSION}$m=${memory},t=${passes},p=${parallelism}$${toBase64Url(salt)}$${toBase64Url(digest)}`,
+      assessment,
+    };
+  }
+
+  if (options.algorithm === "pbkdf2-sha256") {
+    const iterations = clampInt(
+      options.pbkdf2Iterations,
+      PASSWORD_HASH_MIN_PBKDF2_ITERATIONS,
+      PASSWORD_HASH_MAX_PBKDF2_ITERATIONS,
+      PASSWORD_HASH_DEFAULT_PBKDF2_ITERATIONS,
+    );
+    const digest = derivePasswordHashPbkdf2(secret, salt, iterations);
+    return {
+      algorithm: options.algorithm,
+      record: `$pbkdf2-sha256$i=${iterations}$${toBase64Url(salt)}$${toBase64Url(digest)}`,
+      assessment,
+    };
+  }
+
+  const digest = derivePasswordHashSha(secret, salt, options.algorithm);
+  return {
+    algorithm: options.algorithm,
+    record: `$${options.algorithm}$s=${toBase64Url(salt)}$${toBase64Url(digest)}`,
+    assessment,
+  };
+}
+
+function decodePasswordHashSegment(value, errorMessage) {
+  if (!PASSWORD_HASH_B64_SEGMENT_RE.test(value)) {
+    throw new Error(errorMessage);
+  }
+  const normalized = String(value).replace(/-/g, "+").replace(/_/g, "/");
+  const hasPadding = normalized.includes("=");
+  if (hasPadding && normalized.length % 4 !== 0) {
+    throw new Error(errorMessage);
+  }
+  if (!hasPadding && normalized.length % 4 === 1) {
+    throw new Error(errorMessage);
+  }
+  const padded = hasPadding ? normalized : normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+  const bytes = Buffer.from(padded, "base64");
+  if (bytes.toString("base64") !== padded) {
+    throw new Error(errorMessage);
+  }
+  return bytes;
+}
+
+function validatePasswordHashSaltLength(salt) {
+  if (salt.length < PASSWORD_HASH_MIN_SALT_BYTES || salt.length > PASSWORD_HASH_MAX_SALT_BYTES) {
+    throw new Error(PASSWORD_HASH_ERRORS.invalidSaltLength);
+  }
+}
+
+function validatePasswordHashDigestLength(algorithm, digest) {
+  const expectedLength = algorithm === "sha512" ? 64 : PASSWORD_HASH_DEFAULT_DERIVED_BYTES;
+  if (digest.length !== expectedLength) {
+    throw new Error(PASSWORD_HASH_ERRORS.invalidDigestLength);
+  }
+}
+
+function validatePasswordHashPbkdf2Iterations(iterations) {
+  if (!Number.isSafeInteger(iterations) || iterations < PASSWORD_HASH_MIN_PBKDF2_ITERATIONS || iterations > PASSWORD_HASH_MAX_PBKDF2_ITERATIONS) {
+    throw new Error(PASSWORD_HASH_ERRORS.invalidPbkdf2Iterations);
+  }
+}
+
+function validatePasswordHashArgon2Params(memory, passes, parallelism) {
+  const params = [memory, passes, parallelism];
+  if (!params.every((value) => Number.isSafeInteger(value))) {
+    throw new Error(PASSWORD_HASH_ERRORS.invalidArgon2Params);
+  }
+  if (
+    memory < PASSWORD_HASH_MIN_ARGON2_MEMORY ||
+    memory > PASSWORD_HASH_MAX_ARGON2_MEMORY ||
+    passes < PASSWORD_HASH_MIN_ARGON2_PASSES ||
+    passes > PASSWORD_HASH_MAX_ARGON2_PASSES ||
+    parallelism < PASSWORD_HASH_MIN_ARGON2_PARALLELISM ||
+    parallelism > PASSWORD_HASH_MAX_ARGON2_PARALLELISM
+  ) {
+    throw new Error(PASSWORD_HASH_ERRORS.invalidArgon2Params);
+  }
+}
+
+function parsePasswordHashRecord(record) {
+  const argonMatch = record.match(
+    new RegExp(
+      `^\\$argon2id\\$v=${PASSWORD_HASH_ARGON2_VERSION}\\$m=(\\d+),t=(\\d+),p=(\\d+)\\$(${PASSWORD_HASH_B64_SEGMENT})\\$(${PASSWORD_HASH_B64_SEGMENT})$`,
+      "u",
+    ),
+  );
+  if (argonMatch) {
+    const argon2Memory = Number(argonMatch[1]);
+    const argon2Passes = Number(argonMatch[2]);
+    const argon2Parallelism = Number(argonMatch[3]);
+    validatePasswordHashArgon2Params(argon2Memory, argon2Passes, argon2Parallelism);
+    const salt = decodePasswordHashSegment(argonMatch[4], PASSWORD_HASH_ERRORS.invalidSaltEncoding);
+    validatePasswordHashSaltLength(salt);
+    const digest = decodePasswordHashSegment(argonMatch[5], PASSWORD_HASH_ERRORS.invalidDigestEncoding);
+    validatePasswordHashDigestLength("argon2id", digest);
+    return {
+      algorithm: "argon2id",
+      argon2Memory,
+      argon2Passes,
+      argon2Parallelism,
+      salt,
+      digest,
+    };
+  }
+
+  const pbkdf2Match = record.match(
+    new RegExp(`^\\$pbkdf2-sha256\\$i=(\\d+)\\$(${PASSWORD_HASH_B64_SEGMENT})\\$(${PASSWORD_HASH_B64_SEGMENT})$`, "u"),
+  );
+  if (pbkdf2Match) {
+    const pbkdf2Iterations = Number(pbkdf2Match[1]);
+    validatePasswordHashPbkdf2Iterations(pbkdf2Iterations);
+    const salt = decodePasswordHashSegment(pbkdf2Match[2], PASSWORD_HASH_ERRORS.invalidSaltEncoding);
+    validatePasswordHashSaltLength(salt);
+    const digest = decodePasswordHashSegment(pbkdf2Match[3], PASSWORD_HASH_ERRORS.invalidDigestEncoding);
+    validatePasswordHashDigestLength("pbkdf2-sha256", digest);
+    return {
+      algorithm: "pbkdf2-sha256",
+      pbkdf2Iterations,
+      salt,
+      digest,
+    };
+  }
+
+  const shaMatch = record.match(
+    new RegExp(`^\\$(sha256|sha512)\\$s=(${PASSWORD_HASH_B64_SEGMENT})\\$(${PASSWORD_HASH_B64_SEGMENT})$`, "u"),
+  );
+  if (shaMatch) {
+    const algorithm = shaMatch[1];
+    const salt = decodePasswordHashSegment(shaMatch[2], PASSWORD_HASH_ERRORS.invalidSaltEncoding);
+    validatePasswordHashSaltLength(salt);
+    const digest = decodePasswordHashSegment(shaMatch[3], PASSWORD_HASH_ERRORS.invalidDigestEncoding);
+    validatePasswordHashDigestLength(algorithm, digest);
+    return {
+      algorithm,
+      salt,
+      digest,
+    };
+  }
+
+  throw new Error(PASSWORD_HASH_ERRORS.unsupportedFormat);
+}
+
+async function verifyPasswordHashRecord(secret, record) {
+  if (!secret) return false;
+  const parsed = parsePasswordHashRecord(record);
+
+  if (parsed.algorithm === "argon2id") {
+    if (!(await supportsPasswordHashArgon2())) {
+      throw new Error(PASSWORD_HASH_ERRORS.argon2UnavailableVerify);
+    }
+    const digest = await derivePasswordHashArgon2id(secret, parsed.salt, {
+      memory: parsed.argon2Memory ?? PASSWORD_HASH_DEFAULT_ARGON2_MEMORY,
+      passes: parsed.argon2Passes ?? PASSWORD_HASH_DEFAULT_ARGON2_PASSES,
+      parallelism: parsed.argon2Parallelism ?? PASSWORD_HASH_DEFAULT_ARGON2_PARALLELISM,
+    });
+    return equalPasswordHashBytes(digest, parsed.digest);
+  }
+
+  if (parsed.algorithm === "pbkdf2-sha256") {
+    const digest = derivePasswordHashPbkdf2(
+      secret,
+      parsed.salt,
+      parsed.pbkdf2Iterations ?? PASSWORD_HASH_DEFAULT_PBKDF2_ITERATIONS,
+    );
+    return equalPasswordHashBytes(digest, parsed.digest);
+  }
+
+  const digest = derivePasswordHashSha(secret, parsed.salt, parsed.algorithm);
+  return equalPasswordHashBytes(digest, parsed.digest);
+}
+
+function equalPasswordHashBytes(left, right) {
+  if (left.length !== right.length) return false;
+  return crypto.timingSafeEqual(left, right);
 }
 
 function randomIndex(max) {
@@ -2059,6 +2524,14 @@ function parseBoolean(value, fallback) {
   return fallback;
 }
 
+function readStdinText() {
+  return fs.readFileSync(0, "utf8");
+}
+
+function trimSingleTrailingNewline(value) {
+  return value.replace(/\r?\n$/u, "");
+}
+
 function clampInt(value, min, max, fallback) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
@@ -2110,4 +2583,7 @@ function fromBase64Url(value) {
   return Buffer.from(normalized + "=".repeat(padLength), "base64");
 }
 
-main();
+main().catch((error) => {
+  console.error(`[nullid-cli] ${(error instanceof Error ? error.message : String(error)).trim()}`);
+  process.exit(1);
+});

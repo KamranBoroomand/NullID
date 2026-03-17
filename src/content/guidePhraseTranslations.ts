@@ -159,6 +159,10 @@ export const guidePhraseTranslations: Record<string, { fa: string; ru: string }>
     fa: "برای پشتیبان آفلاین، خروجی/ورودی (ساده یا رمزگذاری‌شده) بگیرید؛ اعتبارسنجی اختیاری فرادادهٔ امضاشده هم موجود است.",
     ru: "Используйте экспорт/импорт (обычный или шифрованный) для офлайн-бэкапа; доступна опциональная проверка подписанных метаданных.",
   },
+  "Rule-based scrubbing for logs with diff preview, reusable local policy packs, optional shared-passphrase HMAC metadata, simulation matrix comparisons, rule-impact ranking, batch file sanitization, baseline policy merge, and safe-share bundle export (including GitHub/Slack token and private-key block stripping).": {
+    fa: "پاک‌سازی قانون‌محور لاگ با پیش‌نمایش diff، بسته‌های سیاست محلی قابل‌استفاده‌مجدد، فراداده اختیاری HMAC با عبارت عبور مشترک، مقایسه ماتریس شبیه‌سازی، رتبه‌بندی اثر قوانین، پاک‌سازی دسته‌ای فایل، ادغام baseline سیاست و خروجی بسته safe-share (همراه با حذف توکن‌های GitHub/Slack و بلوک‌های کلید خصوصی).",
+    ru: "Правиловая очистка логов с предпросмотром diff, переиспользуемыми локальными policy packs, опциональными HMAC-метаданными по общей парольной фразе, сравнением симуляционных матриц, ранжированием влияния правил, пакетной санитизацией файлов, слиянием baseline-политики и экспортом safe-share пакета (включая удаление GitHub/Slack токенов и блоков приватных ключей).",
+  },
   "Generate a batch shortlist, then copy the candidate that fits your policy.": {
     fa: "یک فهرست کوتاه دسته‌ای بسازید و گزینه‌ای که با سیاست شما سازگار است را کپی کنید.",
     ru: "Сгенерируйте пакетный shortlist и скопируйте кандидат, соответствующий вашей политике.",
@@ -403,9 +407,9 @@ export const guidePhraseTranslations: Record<string, { fa: string; ru: string }>
     fa: "ورودی‌های امضاشده بدون عبارت عبور اعتبارسنجی صحیح رد می‌شوند.",
     ru: "Подписанные импорты без корректной проверочной фразы отклоняются.",
   },
-  "Signing key hints are labels only; passphrases are never stored and must be re-entered.": {
-    fa: "راهنمای کلید امضا فقط برچسب است؛ عبارت‌های عبور هرگز ذخیره نمی‌شوند و باید دوباره وارد شوند.",
-    ru: "Подсказки ключа подписи — только метки; парольные фразы не сохраняются и вводятся заново.",
+  "Verification key hints are labels only; HMAC passphrases are never stored and must be re-entered.": {
+    fa: "راهنمای کلید اعتبارسنجی فقط برچسب است؛ عبارت‌های عبور HMAC هرگز ذخیره نمی‌شوند و باید دوباره وارد شوند.",
+    ru: "Подсказки ключа проверки — только метки; HMAC-фразы не сохраняются и вводятся заново.",
   },
   "Status/toast messages surface copy failures (e.g., permission denied).": {
     fa: "پیام‌های وضعیت/Toast خطاهای کپی را نشان می‌دهند (مثلاً عدم مجوز).",
@@ -427,6 +431,10 @@ export const guidePhraseTranslations: Record<string, { fa: string; ru: string }>
     fa: "برای مشتق‌کردن کلید با عبارت عبور باز کنید؛ یادداشت‌ها فقط در حافظه رمزگشایی می‌شوند.",
     ru: "Разблокируйте парольной фразой для вывода ключа; заметки расшифровываются только в памяти.",
   },
+  "Enable unlock rate limits, human checks, and optional WebAuthn MFA when local misuse resistance matters.": {
+    fa: "وقتی مقاومت در برابر سوءاستفادهٔ محلی مهم است، محدودسازی نرخ بازکردن، بررسی انسانی و MFA اختیاری WebAuthn را فعال کنید.",
+    ru: "Когда важна защита от локального злоупотребления, включайте лимиты на попытки разблокировки, human check и опциональную WebAuthn MFA.",
+  },
   "Use auto-clearing clipboard to reduce residue.": {
     fa: "برای کاهش باقی‌مانده، از کلیپ‌بورد با پاک‌سازی خودکار استفاده کنید.",
     ru: "Используйте автоочистку буфера обмена, чтобы уменьшить остаточные следы.",
@@ -447,6 +455,10 @@ export const guidePhraseTranslations: Record<string, { fa: string; ru: string }>
     fa: "برای بسته‌های سیاست از خروجی امضاشده استفاده کنید و قبل از ورود امضا را اعتبارسنجی کنید.",
     ru: "Используйте подписанный экспорт для policy packs и проверяйте подпись перед импортом.",
   },
+  "Add HMAC metadata to policy exports when import-time authenticity checks matter.": {
+    fa: "وقتی بررسی اصالت هنگام ورود مهم است، به خروجی‌های policy فراداده HMAC اضافه کنید.",
+    ru: "Добавляйте HMAC-метаданные в экспорты policy, когда важна проверка подлинности при импорте.",
+  },
   "Use the command palette (System → Export profile) to download a JSON snapshot.": {
     fa: "با Command Palette (System ← Export profile) یک snapshot JSON دانلود کنید.",
     ru: "Используйте палитру команд (System → Export profile), чтобы скачать JSON-снимок.",
@@ -459,6 +471,42 @@ export const guidePhraseTranslations: Record<string, { fa: string; ru: string }>
     fa: "دانلودها یا آرتیفکت‌ها را بدون خروج از مرورگر اعتبارسنجی کنید",
     ru: "Проверяйте загрузки и артефакты, не покидая браузер",
   },
+  "Runs local runtime checks for crypto, storage, browser capability support, and responsiveness, and can export a diagnostic report.": {
+    fa: "بررسی‌های محلی محیط اجرا برای رمزنگاری، ذخیره‌سازی، پشتیبانی قابلیت‌های مرورگر و پاسخ‌گویی را اجرا می‌کند و می‌تواند گزارش عیب‌یابی خروجی بگیرد.",
+    ru: "Запускает локальные проверки среды выполнения для криптографии, хранилища, поддержки возможностей браузера и отзывчивости, а также умеет экспортировать диагностический отчет.",
+  },
+  "Validate a browser/device before relying on NullID workflows": {
+    fa: "پیش از اتکا به فرایندهای NullID، مرورگر/دستگاه را اعتبارسنجی کنید",
+    ru: "Проверьте браузер/устройство, прежде чем полагаться на сценарии NullID",
+  },
+  "Check why clipboard, vault, or media features are degraded in a restricted runtime": {
+    fa: "بررسی کنید چرا قابلیت‌های کلیپ‌بورد، گاوصندوق یا رسانه در یک محیط اجرای محدود ضعیف شده‌اند",
+    ru: "Проверьте, почему функции буфера обмена, сейфа или медиа ограничены в ограниченной среде выполнения",
+  },
+  "Run all to probe crypto round-trips, storage backend health, capability support, and hash responsiveness.": {
+    fa: "Run all را اجرا کنید تا رفت‌وبرگشت رمزنگاری، سلامت backend ذخیره‌سازی، پشتیبانی قابلیت‌ها و پاسخ‌گویی هش بررسی شود.",
+    ru: "Запустите Run all, чтобы проверить крипто-раундтрипы, состояние backend-хранилища, поддержку возможностей и отзывчивость хэширования.",
+  },
+  "Review failed or warning checks; each row includes a remediation hint.": {
+    fa: "بررسی‌های شکست‌خورده یا هشدارها را مرور کنید؛ هر ردیف یک راهنمای رفع مشکل دارد.",
+    ru: "Просмотрите проверки со статусом fail или warn; каждая строка содержит подсказку по исправлению.",
+  },
+  "Enable auto monitor for repeated checks in long-running sessions, then export a JSON report when you need to share local diagnostics.": {
+    fa: "برای بررسی‌های تکراری در نشست‌های طولانی auto monitor را فعال کنید و وقتی لازم است عیب‌یابی محلی را به اشتراک بگذارید، گزارش JSON خروجی بگیرید.",
+    ru: "Включайте auto monitor для повторных проверок в длинных сеансах, а когда нужно поделиться локальной диагностикой, экспортируйте JSON-отчет.",
+  },
+  "Self-test is a local environment diagnostic, not a security certification or cryptography audit.": {
+    fa: "خودآزمون یک عیب‌یابی محیط محلی است، نه گواهی امنیتی یا ممیزی رمزنگاری.",
+    ru: "Self-test — это локальная диагностика среды, а не сертификат безопасности и не криптографический аудит.",
+  },
+  "Some checks are heuristics and may warn on hardened browsers even when a workflow still partially works.": {
+    fa: "بعضی بررسی‌ها ابتکاری هستند و ممکن است در مرورگرهای سخت‌گیر هشدار بدهند، حتی وقتی بخشی از جریان کار هنوز عمل می‌کند.",
+    ru: "Часть проверок эвристическая и может предупреждать в ужесточенных браузерах, даже если сценарий еще частично работает.",
+  },
+  "Clipboard, service worker, and browser-policy results reflect current runtime permissions and can change between sessions.": {
+    fa: "نتایج کلیپ‌بورد، service worker و سیاست مرورگر بازتاب مجوزهای فعلی محیط اجرا هستند و می‌توانند بین نشست‌ها تغییر کنند.",
+    ru: "Результаты по буферу обмена, service worker и политике браузера отражают текущие разрешения среды и могут меняться между сеансами.",
+  },
   "Vault content lives in IndexedDB and is not included; export the vault separately.": {
     fa: "محتوای vault در IndexedDB است و شامل نمی‌شود؛ vault را جداگانه خروجی بگیرید.",
     ru: "Содержимое vault хранится в IndexedDB и не включается; экспортируйте vault отдельно.",
@@ -466,5 +514,65 @@ export const guidePhraseTranslations: Record<string, { fa: string; ru: string }>
   "Wipe clears IndexedDB/localStorage vault stores.": {
     fa: "عملیات Wipe، ذخیره‌گاه‌های vault در IndexedDB/localStorage را پاک می‌کند.",
     ru: "Wipe очищает хранилища vault в IndexedDB/localStorage.",
+  },
+  "Profiles, policy packs, and vault snapshots support optional shared-passphrase HMAC verification.": {
+    fa: "پروفایل‌ها، policy packها و snapshotهای vault از اعتبارسنجی اختیاری HMAC با عبارت عبور مشترک پشتیبانی می‌کنند.",
+    ru: "Профили, policy pack и снимки vault поддерживают опциональную HMAC-проверку по общей парольной фразе.",
+  },
+  "Export/import (plain or encrypted) for offline backup; optional shared-passphrase HMAC verification is available.": {
+    fa: "برای پشتیبان آفلاین خروجی/ورودی (ساده یا رمزگذاری‌شده) بگیرید؛ اعتبارسنجی اختیاری HMAC با عبارت عبور مشترک هم در دسترس است.",
+    ru: "Используйте экспорт/импорт (обычный или шифрованный) для офлайн-бэкапа; доступна опциональная HMAC-проверка по общей парольной фразе.",
+  },
+  "Session-cookie signaling is a browser-visible presence hint only; it is not a server-side auth boundary.": {
+    fa: "سیگنال‌دهی session-cookie فقط یک نشانه حضور قابل‌مشاهده برای مرورگر است؛ این یک مرز احراز هویت سمت سرور نیست.",
+    ru: "Сигнал session-cookie — это лишь видимый браузеру признак присутствия; это не серверная граница аутентификации.",
+  },
+  "WebAuthn MFA is local/device-bound and is not a recovery system; keep backups before relying on it.": {
+    fa: "MFA مبتنی بر WebAuthn محلی/وابسته به دستگاه است و سامانه بازیابی نیست؛ پیش از اتکا به آن پشتیبان نگه دارید.",
+    ru: "WebAuthn MFA локальна и привязана к устройству; это не система восстановления, поэтому держите резервные копии заранее.",
+  },
+  "HMAC-verified exports require the same verification passphrase during import.": {
+    fa: "خروجی‌های دارای اعتبارسنجی HMAC در زمان ورود به همان عبارت عبور تایید نیاز دارند.",
+    ru: "Экспорты с HMAC-проверкой требуют ту же проверочную фразу при импорте.",
+  },
+  "Notes reports export plain JSON; including note bodies writes plaintext content into that report.": {
+    fa: "گزارش‌های یادداشت به‌صورت JSON ساده خروجی می‌شوند؛ اگر متن بدنه یادداشت را اضافه کنید، محتوای آشکار در گزارش نوشته می‌شود.",
+    ru: "Отчеты по заметкам экспортируются как обычный JSON; если включить тела заметок, открытый текст попадет в отчет.",
+  },
+  "The runtime score is a convenience summary, not a security rating.": {
+    fa: "امتیاز runtime فقط یک خلاصه کاربردی است، نه یک رتبه‌بندی امنیتی.",
+    ru: "Оценка runtime — это удобная сводка, а не рейтинг безопасности.",
+  },
+  "The security-header check only inspects page-visible CSP/referrer markers; verify deployed response headers separately.": {
+    fa: "بررسی security-header فقط نشانگرهای قابل‌مشاهده CSP/referrer را در صفحه می‌سنجد؛ هدرهای پاسخِ مستقرشده را جداگانه اعتبارسنجی کنید.",
+    ru: "Проверка security-header смотрит только на видимые на странице маркеры CSP/referrer; реальные response-заголовки проверяйте отдельно.",
+  },
+  "Save or load preferences stored under the nullid:* keys in localStorage, with integrity checks and optional shared-passphrase HMAC metadata.": {
+    fa: "تنظیمات ذخیره‌شده زیر کلیدهای nullid:* در localStorage را با بررسی یکپارچگی و فراداده اختیاری HMAC با عبارت عبور مشترک ذخیره یا بارگذاری کنید.",
+    ru: "Сохраняйте или загружайте настройки из ключей nullid:* в localStorage с проверками целостности и опциональными HMAC-метаданными по общей парольной фразе.",
+  },
+  "Optionally add HMAC metadata with a passphrase during export.": {
+    fa: "در زمان خروجی‌گرفتن، در صورت نیاز فراداده HMAC را با یک عبارت عبور اضافه کنید.",
+    ru: "При экспорте при необходимости добавляйте HMAC-метаданные с парольной фразой.",
+  },
+  "Import via System → Import profile and choose the JSON file; HMAC-protected profiles can be verified with the same passphrase.": {
+    fa: "از مسیر System → Import profile فایل JSON را انتخاب کنید؛ پروفایل‌های محافظت‌شده با HMAC را می‌توان با همان عبارت عبور اعتبارسنجی کرد.",
+    ru: "Импортируйте через System → Import profile и выберите JSON-файл; профили с HMAC можно проверить той же парольной фразой.",
+  },
+  "Vault content lives outside profile snapshots; export the vault separately.": {
+    fa: "محتوای vault خارج از snapshotهای پروفایل نگه داشته می‌شود؛ vault را جداگانه خروجی بگیرید.",
+    ru: "Содержимое vault находится вне снимков профиля; экспортируйте vault отдельно.",
+  },
+  "Vault fallback blobs/metadata stored under nullid:vault:data:{store}:* are excluded from profile export/import; older nullid:vault:{store}:* fallback records are migrated locally and still ignored there.": {
+    fa: "blobها/فراداده‌های fallback vault که زیر nullid:vault:data:{store}:* ذخیره می‌شوند از خروجی/ورودی پروفایل حذف می‌شوند؛ رکوردهای قدیمی fallback زیر nullid:vault:{store}:* به‌صورت محلی مهاجرت داده می‌شوند و همچنان در اینجا نادیده گرفته می‌شوند.",
+    ru: "Fallback-blobs/метаданные vault под nullid:vault:data:{store}:* исключаются из экспорта/импорта профиля; более старые fallback-записи под nullid:vault:{store}:* мигрируются локально и здесь по-прежнему игнорируются.",
+  },
+  "HMAC-protected imports without the correct verification passphrase are rejected.": {
+    fa: "ورودی‌های محافظت‌شده با HMAC بدون عبارت عبور تایید درست رد می‌شوند.",
+    ru: "Импорт с HMAC-защитой без корректной проверочной фразы отклоняется.",
+  },
+  "Use export/profile/policy verification only for integrity/authenticity checks; HMAC metadata does not encrypt the payload.": {
+    fa: "از اعتبارسنجی export/profile/policy فقط برای بررسی یکپارچگی/اصالت استفاده کنید؛ فراداده HMAC داده را رمزگذاری نمی‌کند.",
+    ru: "Используйте проверку export/profile/policy только для целостности и подлинности; HMAC-метаданные не шифруют payload.",
   },
 };

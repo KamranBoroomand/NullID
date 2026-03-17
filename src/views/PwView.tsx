@@ -22,6 +22,7 @@ import {
 } from "../utils/passwordToolkit";
 import {
   PASSWORD_HASH_DEFAULTS,
+  PASSWORD_HASH_LIMITS,
   assessPasswordHashChoice,
   hashPassword,
   supportsArgon2id,
@@ -85,7 +86,7 @@ export function PwView({ onOpenGuide }: PwViewProps) {
   );
   const [hashInput, setHashInput] = useState("");
   const [hashVerifyInput, setHashVerifyInput] = useState("");
-  const [hashOutput, setHashOutput] = useState("");
+  const [hashRecord, setHashRecord] = useState("");
   const [hashBusy, setHashBusy] = useState(false);
   const [hashError, setHashError] = useState<string | null>(null);
   const [hashVerifyState, setHashVerifyState] = useState<"idle" | "match" | "mismatch" | "error">("idle");
@@ -226,50 +227,62 @@ export function PwView({ onOpenGuide }: PwViewProps) {
 
   const handlePasswordHash = async () => {
     if (!hashInput.trim()) {
-      push("enter a password to hash", "danger");
+      push(tr("enter a password to hash"), "danger");
       return;
     }
     setHashBusy(true);
     try {
       const result = await hashPassword(hashInput, {
         algorithm: hashAlgorithm,
-        saltBytes: clamp(hashSaltBytes, 8, 64),
-        pbkdf2Iterations: clamp(hashPbkdf2Iterations, 100_000, 2_000_000),
-        argon2Memory: clamp(hashArgon2Memory, 8_192, 262_144),
-        argon2Passes: clamp(hashArgon2Passes, 1, 8),
-        argon2Parallelism: clamp(hashArgon2Parallelism, 1, 4),
+        saltBytes: clamp(hashSaltBytes, PASSWORD_HASH_LIMITS.saltBytes.min, PASSWORD_HASH_LIMITS.saltBytes.max),
+        pbkdf2Iterations: clamp(
+          hashPbkdf2Iterations,
+          PASSWORD_HASH_LIMITS.pbkdf2.iterations.min,
+          PASSWORD_HASH_LIMITS.pbkdf2.iterations.max,
+        ),
+        argon2Memory: clamp(hashArgon2Memory, PASSWORD_HASH_LIMITS.argon2.memory.min, PASSWORD_HASH_LIMITS.argon2.memory.max),
+        argon2Passes: clamp(hashArgon2Passes, PASSWORD_HASH_LIMITS.argon2.passes.min, PASSWORD_HASH_LIMITS.argon2.passes.max),
+        argon2Parallelism: clamp(
+          hashArgon2Parallelism,
+          PASSWORD_HASH_LIMITS.argon2.parallelism.min,
+          PASSWORD_HASH_LIMITS.argon2.parallelism.max,
+        ),
       });
-      setHashOutput(result.encoded);
+      setHashRecord(result.encoded);
       setHashError(null);
       setHashVerifyState("idle");
-      push(result.assessment.safety === "weak" ? "hash generated (legacy mode)" : "password hash generated", result.assessment.safety === "weak" ? "danger" : "accent");
+      push(
+        tr(result.assessment.safety === "weak" ? "hash generated (legacy mode)" : "password hash generated"),
+        result.assessment.safety === "weak" ? "danger" : "accent",
+      );
     } catch (error) {
       console.error(error);
       const message = error instanceof Error ? error.message : "password hash failed";
       setHashError(message);
-      push(message, "danger");
+      push(tr(message), "danger");
     } finally {
       setHashBusy(false);
     }
   };
 
   const handleVerifyHash = async () => {
-    if (!hashOutput.trim() || !hashVerifyInput) {
+    if (!hashRecord.trim() || !hashVerifyInput) {
       setHashVerifyState("error");
-      push("hash output and candidate password are required", "danger");
+      push(tr("password hash record and candidate password are required"), "danger");
       return;
     }
     setHashBusy(true);
     try {
-      const matched = await verifyPassword(hashVerifyInput, hashOutput.trim());
+      const matched = await verifyPassword(hashVerifyInput, hashRecord.trim());
       setHashVerifyState(matched ? "match" : "mismatch");
-      push(matched ? "password match" : "password mismatch", matched ? "accent" : "danger");
+      setHashError(null);
+      push(tr(matched ? "password match" : "password mismatch"), matched ? "accent" : "danger");
     } catch (error) {
       console.error(error);
       setHashVerifyState("error");
       const message = error instanceof Error ? error.message : "verification failed";
       setHashError(message);
-      push(message, "danger");
+      push(tr(message), "danger");
     } finally {
       setHashBusy(false);
     }
@@ -760,10 +773,14 @@ export function PwView({ onOpenGuide }: PwViewProps) {
             id="pw-hash-salt"
             className="input"
             type="number"
-            min={8}
-            max={64}
+            min={PASSWORD_HASH_LIMITS.saltBytes.min}
+            max={PASSWORD_HASH_LIMITS.saltBytes.max}
             value={hashSaltBytes}
-            onChange={(event) => setHashSaltBytes(clamp(Number(event.target.value) || 0, 8, 64))}
+            onChange={(event) =>
+              setHashSaltBytes(
+                clamp(Number(event.target.value) || 0, PASSWORD_HASH_LIMITS.saltBytes.min, PASSWORD_HASH_LIMITS.saltBytes.max),
+              )
+            }
             aria-label={tr("Hash salt bytes")}
           />
         </div>
@@ -776,11 +793,19 @@ export function PwView({ onOpenGuide }: PwViewProps) {
               id="pw-hash-pbkdf2-iterations"
               className="input"
               type="number"
-              min={100000}
-              max={2000000}
+              min={PASSWORD_HASH_LIMITS.pbkdf2.iterations.min}
+              max={PASSWORD_HASH_LIMITS.pbkdf2.iterations.max}
               step={50000}
               value={hashPbkdf2Iterations}
-              onChange={(event) => setHashPbkdf2Iterations(clamp(Number(event.target.value) || 0, 100_000, 2_000_000))}
+              onChange={(event) =>
+                setHashPbkdf2Iterations(
+                  clamp(
+                    Number(event.target.value) || 0,
+                    PASSWORD_HASH_LIMITS.pbkdf2.iterations.min,
+                    PASSWORD_HASH_LIMITS.pbkdf2.iterations.max,
+                  ),
+                )
+              }
               aria-label={tr("PBKDF2 iterations")}
             />
           </div>
@@ -794,11 +819,15 @@ export function PwView({ onOpenGuide }: PwViewProps) {
               id="pw-hash-argon2-memory"
               className="input"
               type="number"
-              min={8192}
-              max={262144}
+              min={PASSWORD_HASH_LIMITS.argon2.memory.min}
+              max={PASSWORD_HASH_LIMITS.argon2.memory.max}
               step={2048}
               value={hashArgon2Memory}
-              onChange={(event) => setHashArgon2Memory(clamp(Number(event.target.value) || 0, 8_192, 262_144))}
+              onChange={(event) =>
+                setHashArgon2Memory(
+                  clamp(Number(event.target.value) || 0, PASSWORD_HASH_LIMITS.argon2.memory.min, PASSWORD_HASH_LIMITS.argon2.memory.max),
+                )
+              }
               aria-label={tr("Argon2 memory")}
             />
             <label className="section-title" htmlFor="pw-hash-argon2-passes">
@@ -808,10 +837,14 @@ export function PwView({ onOpenGuide }: PwViewProps) {
               id="pw-hash-argon2-passes"
               className="input"
               type="number"
-              min={1}
-              max={8}
+              min={PASSWORD_HASH_LIMITS.argon2.passes.min}
+              max={PASSWORD_HASH_LIMITS.argon2.passes.max}
               value={hashArgon2Passes}
-              onChange={(event) => setHashArgon2Passes(clamp(Number(event.target.value) || 0, 1, 8))}
+              onChange={(event) =>
+                setHashArgon2Passes(
+                  clamp(Number(event.target.value) || 0, PASSWORD_HASH_LIMITS.argon2.passes.min, PASSWORD_HASH_LIMITS.argon2.passes.max),
+                )
+              }
               aria-label={tr("Argon2 passes")}
             />
             <label className="section-title" htmlFor="pw-hash-argon2-parallelism">
@@ -821,10 +854,18 @@ export function PwView({ onOpenGuide }: PwViewProps) {
               id="pw-hash-argon2-parallelism"
               className="input"
               type="number"
-              min={1}
-              max={4}
+              min={PASSWORD_HASH_LIMITS.argon2.parallelism.min}
+              max={PASSWORD_HASH_LIMITS.argon2.parallelism.max}
               value={hashArgon2Parallelism}
-              onChange={(event) => setHashArgon2Parallelism(clamp(Number(event.target.value) || 0, 1, 4))}
+              onChange={(event) =>
+                setHashArgon2Parallelism(
+                  clamp(
+                    Number(event.target.value) || 0,
+                    PASSWORD_HASH_LIMITS.argon2.parallelism.min,
+                    PASSWORD_HASH_LIMITS.argon2.parallelism.max,
+                  ),
+                )
+              }
               aria-label={tr("Argon2 parallelism")}
             />
           </div>
@@ -832,7 +873,10 @@ export function PwView({ onOpenGuide }: PwViewProps) {
         <textarea
           className="textarea"
           value={hashInput}
-          onChange={(event) => setHashInput(event.target.value)}
+          onChange={(event) => {
+            setHashInput(event.target.value);
+            setHashError(null);
+          }}
           placeholder={tr("Password input for hashing (local only)")}
           aria-label={tr("Password input for hashing")}
         />
@@ -840,8 +884,8 @@ export function PwView({ onOpenGuide }: PwViewProps) {
           <button className="button" type="button" onClick={() => void handlePasswordHash()} disabled={hashBusy || !hashInput.trim()}>
             {hashBusy ? tr("working…") : tr("generate hash")}
           </button>
-          <button className="button" type="button" onClick={() => copySecret(hashOutput, "hash copied")} disabled={!hashOutput}>
-            {tr("copy hash")}
+          <button className="button" type="button" onClick={() => copySecret(hashRecord, tr("password hash record copied"))} disabled={!hashRecord}>
+            {tr("copy record")}
           </button>
           <button
             className="button"
@@ -849,7 +893,7 @@ export function PwView({ onOpenGuide }: PwViewProps) {
             onClick={() => {
               setHashInput("");
               setHashVerifyInput("");
-              setHashOutput("");
+              setHashRecord("");
               setHashError(null);
               setHashVerifyState("idle");
             }}
@@ -857,23 +901,34 @@ export function PwView({ onOpenGuide }: PwViewProps) {
             {tr("clear")}
           </button>
         </div>
+        <label className="section-title" htmlFor="pw-hash-record">
+          {tr("Password hash record")}
+        </label>
         <textarea
+          id="pw-hash-record"
           className="textarea"
-          value={hashOutput}
-          readOnly
-          placeholder={tr("Generated password hash record")}
-          aria-label={tr("Generated password hash")}
+          value={hashRecord}
+          onChange={(event) => {
+            setHashRecord(event.target.value);
+            setHashError(null);
+            setHashVerifyState("idle");
+          }}
+          placeholder={tr("Password hash record (generated or pasted)")}
+          aria-label={tr("Password hash record")}
         />
         <div className="controls-row">
           <input
             className="input"
             type="password"
             value={hashVerifyInput}
-            onChange={(event) => setHashVerifyInput(event.target.value)}
+            onChange={(event) => {
+              setHashVerifyInput(event.target.value);
+              setHashError(null);
+            }}
             placeholder={tr("Password candidate for verification")}
             aria-label={tr("Password candidate")}
           />
-          <button className="button" type="button" onClick={() => void handleVerifyHash()} disabled={!hashOutput || !hashVerifyInput || hashBusy}>
+          <button className="button" type="button" onClick={() => void handleVerifyHash()} disabled={!hashRecord || !hashVerifyInput || hashBusy}>
             {tr("verify")}
           </button>
         </div>
@@ -898,15 +953,18 @@ export function PwView({ onOpenGuide }: PwViewProps) {
         {hashChoiceAssessment.warnings.length > 0 ? (
           <ul className="note-list">
             {hashChoiceAssessment.warnings.map((warning) => (
-              <li key={warning}>{warning}</li>
+              <li key={warning}>{tr(warning)}</li>
             ))}
           </ul>
         ) : (
           <div className="microcopy">{tr("Current hash profile meets the recommended baseline.")}</div>
         )}
-        {hashError ? <div className="microcopy" style={{ color: "var(--danger)" }}>{hashError}</div> : null}
+        {hashError ? <div className="microcopy" style={{ color: "var(--danger)" }}>{tr(hashError)}</div> : null}
         <div className="microcopy">
-          {tr("Legacy SHA options are kept for compatibility only. Prefer Argon2id for new password storage records.")}
+          {tr("Paste or save the full password hash record. Verification recomputes and compares; it does not decrypt the password.")}
+        </div>
+        <div className="microcopy">
+          {tr("Argon2id is preferred when available. PBKDF2-SHA256 is the compatibility fallback. Legacy SHA options are migration-only for password storage.")}
         </div>
       </div>
     </div>

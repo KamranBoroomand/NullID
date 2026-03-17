@@ -1,13 +1,11 @@
+import { getVaultFallbackKeyCandidates, getVaultFallbackStorePrefixes, isVaultLocalStorageRecordKey, vaultFallbackStorageKey, } from "./vaultStorageKeys.js";
+export { isVaultLocalStorageRecordKey };
 const DB_NAME = "nullid-vault";
 const DB_VERSION = 2;
-const LS_PREFIX = "nullid:vault:";
 const FALLBACK_BACKEND = { kind: "ls" };
 let cachedBackend = null;
 let backendInit = null;
 let fallbackReason = null;
-function lsKey(store, key) {
-    return `${LS_PREFIX}${store}:${String(key)}`;
-}
 function recordFallback(reason) {
     fallbackReason = reason;
     cachedBackend = FALLBACK_BACKEND;
@@ -85,12 +83,14 @@ export async function clearStore(backend, name) {
         }
     }
     // localStorage backend
-    const prefix = `${LS_PREFIX}${name}:`;
     const keysToRemove = [];
     for (let i = 0; i < localStorage.length; i += 1) {
         const key = localStorage.key(i);
-        if (key && key.startsWith(prefix))
+        if (!key)
+            continue;
+        if (getVaultFallbackStorePrefixes(name).some((prefix) => key.startsWith(prefix))) {
             keysToRemove.push(key);
+        }
     }
     keysToRemove.forEach((key) => localStorage.removeItem(key));
 }
@@ -111,7 +111,10 @@ export async function putValue(backend, store, key, value) {
         }
     }
     try {
-        localStorage.setItem(lsKey(store, key), JSON.stringify(value));
+        localStorage.setItem(vaultFallbackStorageKey(store, key), JSON.stringify(value));
+        getVaultFallbackKeyCandidates(store, key)
+            .slice(1)
+            .forEach((legacyKey) => localStorage.removeItem(legacyKey));
     }
     catch (error) {
         recordFallback(error instanceof Error ? error.message : "localStorage blocked");
@@ -134,10 +137,27 @@ export async function getValue(backend, store, key) {
             recordFallback(error instanceof Error ? error.message : "IDB get failed");
         }
     }
-    const raw = localStorage.getItem(lsKey(store, key));
-    if (!raw)
-        return undefined;
-    return JSON.parse(raw);
+    const [primaryKey, ...legacyKeys] = getVaultFallbackKeyCandidates(store, key);
+    const primaryRaw = localStorage.getItem(primaryKey);
+    if (primaryRaw) {
+        legacyKeys.forEach((legacyKey) => localStorage.removeItem(legacyKey));
+        return JSON.parse(primaryRaw);
+    }
+    for (const legacyKey of legacyKeys) {
+        const raw = localStorage.getItem(legacyKey);
+        if (!raw)
+            continue;
+        const value = JSON.parse(raw);
+        try {
+            localStorage.setItem(primaryKey, raw);
+            localStorage.removeItem(legacyKey);
+        }
+        catch {
+            // Preserve legacy data when migration writes are blocked.
+        }
+        return value;
+    }
+    return undefined;
 }
 export async function getAllValues(backend, store) {
     if (backend.kind === "idb") {
@@ -155,16 +175,39 @@ export async function getAllValues(backend, store) {
             recordFallback(error instanceof Error ? error.message : "IDB getAll failed");
         }
     }
-    const prefix = `${LS_PREFIX}${store}:`;
-    const out = [];
+    const [primaryPrefix, ...legacyPrefixes] = getVaultFallbackStorePrefixes(store);
+    const records = new Map();
     for (let i = 0; i < localStorage.length; i += 1) {
         const k = localStorage.key(i);
-        if (!k || !k.startsWith(prefix))
+        if (!k || !k.startsWith(primaryPrefix))
             continue;
         const raw = localStorage.getItem(k);
         if (!raw)
             continue;
-        out.push(JSON.parse(raw));
+        records.set(k.slice(primaryPrefix.length), JSON.parse(raw));
     }
-    return out;
+    for (const legacyPrefix of legacyPrefixes) {
+        const legacyKeysToRemove = [];
+        for (let i = 0; i < localStorage.length; i += 1) {
+            const key = localStorage.key(i);
+            if (!key || !key.startsWith(legacyPrefix))
+                continue;
+            const raw = localStorage.getItem(key);
+            if (!raw)
+                continue;
+            const recordKey = key.slice(legacyPrefix.length);
+            if (!records.has(recordKey)) {
+                records.set(recordKey, JSON.parse(raw));
+                try {
+                    localStorage.setItem(`${primaryPrefix}${recordKey}`, raw);
+                }
+                catch {
+                    // Preserve legacy data when migration writes are blocked.
+                }
+            }
+            legacyKeysToRemove.push(key);
+        }
+        legacyKeysToRemove.forEach((key) => localStorage.removeItem(key));
+    }
+    return Array.from(records.values());
 }

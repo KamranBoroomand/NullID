@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { decryptBlob, decryptText, encryptBytes, encryptText } from "../utils/cryptoEnvelope.js";
+import { decryptBlob, decryptText, encryptBytes, encryptText, ENVELOPE_PREFIX } from "../utils/cryptoEnvelope.js";
+import { fromBase64Url, toBase64Url, utf8ToBytes, bytesToUtf8 } from "../utils/encoding.js";
 
 describe("crypto envelope", () => {
   it("round trips text", async () => {
@@ -44,4 +45,57 @@ describe("crypto envelope", () => {
     const { plaintext } = await decryptBlob("profile-pass", blob);
     assert.equal(new TextDecoder().decode(plaintext), "kdf-profile");
   });
+
+  it("rejects imported envelopes with out-of-range KDF settings", async () => {
+    const blob = await encryptText("secret", "payload");
+    const mutated = mutateEnvelope(blob, (payload) => {
+      payload.header.kdf.iterations = 5_000_000;
+    });
+    await expectRejects(() => decryptText("secret", mutated), /Invalid envelope kdf iterations/i);
+  });
+
+  it("rejects imported envelopes with unsupported KDF hashes", async () => {
+    const blob = await encryptText("secret", "payload");
+    const mutated = mutateEnvelope(blob, (payload) => {
+      payload.header.kdf.hash = "SHA-1";
+    });
+    await expectRejects(() => decryptText("secret", mutated), /Unsupported envelope kdf hash/i);
+  });
+
+  it("rejects imported envelopes with malformed IVs", async () => {
+    const blob = await encryptText("secret", "payload");
+    const mutated = mutateEnvelope(blob, (payload) => {
+      payload.header.iv = "!!!";
+    });
+    await expectRejects(() => decryptText("secret", mutated), /Invalid envelope iv/i);
+  });
 });
+
+function mutateEnvelope(
+  blob: string,
+  mutate: (payload: {
+    header: { kdf: { iterations: number; hash: string }; iv: string };
+    ciphertext: string;
+  }) => void,
+) {
+  const encoded = blob.slice(`${ENVELOPE_PREFIX}.`.length);
+  const payload = JSON.parse(bytesToUtf8(fromBase64Url(encoded))) as {
+    header: { kdf: { iterations: number; hash: string }; iv: string };
+    ciphertext: string;
+  };
+  mutate(payload);
+  return `${ENVELOPE_PREFIX}.${toBase64Url(utf8ToBytes(JSON.stringify(payload)))}`;
+}
+
+async function expectRejects(fn: () => Promise<unknown>, pattern: RegExp) {
+  let rejected = false;
+  let message = "";
+  try {
+    await fn();
+  } catch (error) {
+    rejected = true;
+    message = error instanceof Error ? error.message : String(error);
+  }
+  assert.equal(rejected, true);
+  assert.equal(pattern.test(message), true);
+}

@@ -1,4 +1,4 @@
-import { sha256Base64Url, signHash, verifyHashSignature } from "./integrity.js";
+import { createSnapshotIntegrity, verifySnapshotIntegrity } from "./snapshotIntegrity.js";
 import { normalizePolicyConfig } from "./sanitizeEngine.js";
 export const POLICY_PACK_SCHEMA_VERSION = 2;
 const LEGACY_POLICY_PACK_SCHEMA_VERSION = 1;
@@ -11,28 +11,22 @@ export async function createPolicyPackSnapshot(packs, options) {
     }))
         .sort((a, b) => a.name.localeCompare(b.name) || a.createdAt.localeCompare(b.createdAt));
     const exportedAt = new Date().toISOString();
-    const payloadHash = await sha256Base64Url({
+    const payload = {
         schemaVersion: POLICY_PACK_SCHEMA_VERSION,
         kind: "sanitize-policy-pack",
         exportedAt,
         packs: normalizedPacks,
-    });
+    };
+    const { integrity, signature } = await createSnapshotIntegrity(payload, "packCount", normalizedPacks.length, options);
     const snapshot = {
         schemaVersion: POLICY_PACK_SCHEMA_VERSION,
         kind: "sanitize-policy-pack",
         exportedAt,
         packs: normalizedPacks,
-        integrity: {
-            packCount: normalizedPacks.length,
-            payloadHash,
-        },
+        integrity,
     };
-    if (options?.signingPassphrase) {
-        snapshot.signature = {
-            algorithm: "HMAC-SHA-256",
-            value: await signHash(payloadHash, options.signingPassphrase),
-            keyHint: options.keyHint?.trim().slice(0, 64) || undefined,
-        };
+    if (signature) {
+        snapshot.signature = signature;
     }
     return snapshot;
 }
@@ -68,45 +62,27 @@ export async function importPolicyPackPayload(input, options) {
         throw new Error(`Unsupported policy schema: ${String(input.schemaVersion ?? "unknown")}`);
     }
     const packs = parseRawPacks(input);
-    if (!isRecord(input.integrity)) {
-        throw new Error("Policy integrity metadata missing");
-    }
-    const integrity = input.integrity;
-    const packCount = typeof integrity.packCount === "number" ? integrity.packCount : Number.NaN;
-    const payloadHash = integrity.payloadHash;
-    if (!Number.isInteger(packCount) || packCount < 0 || typeof payloadHash !== "string" || payloadHash.length < 16) {
-        throw new Error("Invalid policy integrity metadata");
-    }
-    if (packCount !== packs.length) {
-        throw new Error("Policy integrity mismatch (count)");
-    }
-    const computedHash = await sha256Base64Url({
-        schemaVersion: POLICY_PACK_SCHEMA_VERSION,
-        kind: "sanitize-policy-pack",
-        exportedAt: input.exportedAt,
-        packs: packs.map((entry) => ({ name: entry.name, createdAt: entry.createdAt, config: entry.config })),
+    const { signed, verified, keyHint } = await verifySnapshotIntegrity({
+        subject: "Policy pack",
+        countKey: "packCount",
+        actualCount: packs.length,
+        payload: {
+            schemaVersion: POLICY_PACK_SCHEMA_VERSION,
+            kind: "sanitize-policy-pack",
+            exportedAt: input.exportedAt,
+            packs: packs.map((entry) => ({ name: entry.name, createdAt: entry.createdAt, config: entry.config })),
+        },
+        integrity: input.integrity,
+        signature: input.signature,
+        verificationPassphrase: options?.verificationPassphrase,
+        missingIntegrityMessage: "Policy integrity metadata missing",
+        invalidIntegrityMessage: "Invalid policy integrity metadata",
+        countMismatchMessage: "Policy integrity mismatch (count)",
+        hashMismatchMessage: "Policy integrity mismatch (hash)",
+        invalidSignatureMessage: "Invalid policy signature metadata",
+        verificationRequiredMessage: "Policy pack is signed; verification passphrase required",
+        verificationFailedMessage: "Policy signature verification failed",
     });
-    if (computedHash !== payloadHash) {
-        throw new Error("Policy integrity mismatch (hash)");
-    }
-    let signed = false;
-    let verified = false;
-    let keyHint;
-    if (input.signature) {
-        if (!isRecord(input.signature) || input.signature.algorithm !== "HMAC-SHA-256" || typeof input.signature.value !== "string") {
-            throw new Error("Invalid policy signature metadata");
-        }
-        signed = true;
-        keyHint = typeof input.signature.keyHint === "string" ? input.signature.keyHint : undefined;
-        const secret = options?.verificationPassphrase;
-        if (!secret) {
-            throw new Error("Policy pack is signed; verification passphrase required");
-        }
-        verified = await verifyHashSignature(payloadHash, input.signature.value, secret);
-        if (!verified) {
-            throw new Error("Policy signature verification failed");
-        }
-    }
     if (options?.requireVerified && signed && !verified) {
         throw new Error("Policy verification required");
     }

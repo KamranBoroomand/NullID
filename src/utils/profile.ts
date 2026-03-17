@@ -1,4 +1,6 @@
-import { sha256Base64Url, signHash, verifyHashSignature, type IntegritySignature } from "./integrity.js";
+import type { IntegritySignature } from "./integrity.js";
+import { createSnapshotIntegrity, verifySnapshotIntegrity } from "./snapshotIntegrity.js";
+import { isVaultLocalStorageRecordKey } from "./vaultStorageKeys.js";
 
 export const PROFILE_SCHEMA_VERSION = 2;
 const LEGACY_PROFILE_SCHEMA_VERSION = 1;
@@ -46,6 +48,7 @@ export async function collectProfile(options?: ProfileExportOptions): Promise<Pr
   for (let i = 0; i < localStorage.length; i += 1) {
     const key = localStorage.key(i);
     if (!key || !key.startsWith(PREFIX)) continue;
+    if (isVaultLocalStorageRecordKey(key)) continue;
     const value = localStorage.getItem(key);
     try {
       entries[key] = value ? JSON.parse(value) : null;
@@ -55,27 +58,21 @@ export async function collectProfile(options?: ProfileExportOptions): Promise<Pr
   }
 
   const exportedAt = new Date().toISOString();
-  const payloadHash = await sha256Base64Url({
+  const payload = {
     schemaVersion: PROFILE_SCHEMA_VERSION,
     exportedAt,
     entries,
-  });
+  };
+  const { integrity, signature } = await createSnapshotIntegrity(payload, "entryCount", Object.keys(entries).length, options);
   const snapshot: ProfileSnapshot = {
     schemaVersion: PROFILE_SCHEMA_VERSION,
     kind: "profile",
     exportedAt,
     entries,
-    integrity: {
-      entryCount: Object.keys(entries).length,
-      payloadHash,
-    },
+    integrity,
   };
-  if (options?.signingPassphrase) {
-    snapshot.signature = {
-      algorithm: "HMAC-SHA-256",
-      value: await signHash(payloadHash, options.signingPassphrase),
-      keyHint: options.keyHint?.trim().slice(0, 64) || undefined,
-    };
+  if (signature) {
+    snapshot.signature = signature;
   }
   return {
     ...snapshot,
@@ -137,45 +134,32 @@ export async function importProfileFile(file: File, options?: ProfileImportOptio
   if (!isPlainObject(parsed.integrity)) {
     throw new Error("Profile integrity metadata missing");
   }
-  const entryCount = parsed.integrity.entryCount;
-  const payloadHash = parsed.integrity.payloadHash;
-  if (!Number.isInteger(entryCount) || entryCount < 0 || typeof payloadHash !== "string" || payloadHash.length < 16) {
-    throw new Error("Invalid profile integrity metadata");
-  }
   const entries = parsed.entries as Record<string, unknown>;
-  if (Object.keys(entries).length !== entryCount) {
-    throw new Error("Profile integrity mismatch (entry count)");
-  }
 
   if (!Object.values(entries).every((value) => isSupportedValue(value))) {
     throw new Error("Profile payload contains unsupported value types");
   }
 
-  const computedHash = await sha256Base64Url({
-    schemaVersion: PROFILE_SCHEMA_VERSION,
-    exportedAt: parsed.exportedAt,
-    entries,
+  const { signed, verified } = await verifySnapshotIntegrity({
+    subject: "Profile",
+    countKey: "entryCount",
+    actualCount: Object.keys(entries).length,
+    payload: {
+      schemaVersion: PROFILE_SCHEMA_VERSION,
+      exportedAt: parsed.exportedAt,
+      entries,
+    },
+    integrity: parsed.integrity,
+    signature: parsed.signature,
+    verificationPassphrase: options?.verificationPassphrase,
+    missingIntegrityMessage: "Profile integrity metadata missing",
+    invalidIntegrityMessage: "Invalid profile integrity metadata",
+    countMismatchMessage: "Profile integrity mismatch (entry count)",
+    hashMismatchMessage: "Profile integrity mismatch (hash)",
+    invalidSignatureMessage: "Invalid profile signature metadata",
+    verificationRequiredMessage: "Profile is signed; verification passphrase required",
+    verificationFailedMessage: "Profile signature verification failed",
   });
-  if (computedHash !== payloadHash) {
-    throw new Error("Profile integrity mismatch (hash)");
-  }
-
-  let signed = false;
-  let verified = false;
-  if (parsed.signature) {
-    if (!isPlainObject(parsed.signature) || parsed.signature.algorithm !== "HMAC-SHA-256" || typeof parsed.signature.value !== "string") {
-      throw new Error("Invalid profile signature metadata");
-    }
-    signed = true;
-    const verifySecret = options?.verificationPassphrase;
-    if (!verifySecret) {
-      throw new Error("Profile is signed; verification passphrase required");
-    }
-    verified = await verifyHashSignature(payloadHash, parsed.signature.value, verifySecret);
-    if (!verified) {
-      throw new Error("Profile signature verification failed");
-    }
-  }
 
   const applied = applyEntries(entries);
   return { applied, signed, verified, legacy: false };
@@ -196,6 +180,7 @@ function applyEntries(entries: Record<string, unknown>) {
   let applied = 0;
   Object.entries(entries).forEach(([key, value]) => {
     if (!key.startsWith(PREFIX)) return;
+    if (isVaultLocalStorageRecordKey(key)) return;
     localStorage.setItem(key, JSON.stringify(value));
     applied += 1;
   });

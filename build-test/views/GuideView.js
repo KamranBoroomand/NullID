@@ -11,7 +11,7 @@ const trustSignals = [
     },
     {
         title: "Signed export verification",
-        detail: "Profiles, policy packs, and vault snapshots support optional signature verification.",
+        detail: "Profiles, policy packs, and vault snapshots support optional shared-passphrase HMAC verification.",
     },
     {
         title: "Deterministic crypto envelope",

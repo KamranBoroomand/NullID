@@ -266,7 +266,7 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
       return;
     }
     if (policyExportSigned && !policyExportPassphrase.trim()) {
-      setPolicyExportError("signing passphrase required");
+      setPolicyExportError("HMAC passphrase required");
       return;
     }
     try {
@@ -279,8 +279,8 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
       downloadBlob(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }), `${safe}${suffix}.json`);
       push(
         policyExportTarget
-          ? `policy exported${payload.signature ? " (signed)" : ""}`
-          : `all policies exported${payload.signature ? " (signed)" : ""}`,
+          ? `policy exported${payload.signature ? " (HMAC metadata)" : ""}`
+          : `all policies exported${payload.signature ? " (HMAC metadata)" : ""}`,
         "accent",
       );
       closePolicyExportDialog();
@@ -319,7 +319,7 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
   const confirmPolicyImport = async () => {
     if (!pendingPolicyImport) return;
     if (pendingPolicyImport.descriptor.signed && !policyImportPassphrase.trim()) {
-      setPolicyImportError("verification passphrase required for signed policy packs");
+      setPolicyImportError("verification passphrase required for HMAC-protected policy packs");
       return;
     }
     try {
@@ -330,7 +330,7 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
       setPolicyPacks((prev) => mergePolicyPacks(prev, imported.packs));
       setSelectedPolicyId(imported.packs[0].id);
       setPolicyName(imported.packs[0].name);
-      const suffix = imported.legacy ? "legacy" : imported.signed ? (imported.verified ? "signed+verified" : "signed") : "unsigned";
+      const suffix = imported.legacy ? "legacy" : imported.signed ? (imported.verified ? "HMAC+verified" : "HMAC") : "unsigned";
       push(`imported ${imported.packs.length} policy pack(s) :: ${suffix}`, "accent");
       closePolicyImportDialog();
     } catch (error) {
@@ -795,7 +795,7 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
               {tr("export selected")}
             </button>
             <button className="button" type="button" onClick={() => openPolicyExportDialog(selectedPolicy, true)} disabled={!selectedPolicy}>
-              {tr("export signed")}
+              {tr("export with HMAC")}
             </button>
             <button className="button" type="button" onClick={() => openPolicyExportDialog(null)} disabled={policyPacks.length === 0}>
               {tr("export all")}
@@ -830,10 +830,10 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
             />
           </div>
           <div className="microcopy">
-            Signed packs require verify-before-import. Baseline import accepts `nullid.policy.json` and merges with deterministic rules.
+            Packs with HMAC metadata require verification before import. Baseline import accepts `nullid.policy.json` and merges with deterministic rules.
           </div>
           <div className="note-box">
-            <div className="section-title">Signing key hints</div>
+            <div className="section-title">Verification key hints</div>
             <div className="controls-row">
               <input
                 className="input"
@@ -875,7 +875,7 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
               </button>
             </div>
             <div className="microcopy">
-              Hints are local labels only; signing/verification passphrases are never stored.
+              Hints are local labels only; HMAC/verification passphrases are never stored.
               {selectedKeyHintProfile ? ` Active: ${selectedKeyHintProfile.name} (v${selectedKeyHintProfile.version})` : ""}
             </div>
           </div>
@@ -960,31 +960,31 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
       </div>
       <ActionDialog
         open={policyExportDialogOpen}
-        title={policyExportTarget ? `Export policy: ${policyExportTarget.name}` : "Export policy packs"}
-        description="Signed policy exports include integrity metadata and require verification passphrase on import."
-        confirmLabel={policyExportTarget ? "export policy" : "export policies"}
+        title={policyExportTarget ? `${tr("Export policy")}: ${policyExportTarget.name}` : tr("Export policy packs")}
+        description={tr("Policy exports can include HMAC metadata and require the same verification passphrase on import.")}
+        confirmLabel={policyExportTarget ? tr("export policy") : tr("export policies")}
         onCancel={closePolicyExportDialog}
         onConfirm={() => void confirmPolicyExport()}
         confirmDisabled={policyExportSigned && !policyExportPassphrase.trim()}
       >
         <label className="action-dialog-field">
-          <span>Sign export metadata</span>
+          <span>{tr("Add HMAC metadata")}</span>
           <input
             type="checkbox"
             checked={policyExportSigned}
             onChange={(event) => setPolicyExportSigned(event.target.checked)}
-            aria-label="Sign policy export metadata"
+            aria-label={tr("Policy HMAC metadata")}
           />
         </label>
         {policyExportSigned ? (
           <>
             <div className="status-line">
-              <span>trust state</span>
+              <span>{tr("trust state")}</span>
               <span className={trustTagClass(policyExportTrustState)}>{policyExportTrustState}</span>
-              {policyExportKeyHint.trim() ? <span className="microcopy">hint: {policyExportKeyHint.trim()}</span> : null}
+              {policyExportKeyHint.trim() ? <span className="microcopy">{tr("hint")}: {policyExportKeyHint.trim()}</span> : null}
             </div>
             <label className="action-dialog-field">
-              <span>Signing passphrase</span>
+              <span>{tr("HMAC passphrase")}</span>
               <input
                 className="action-dialog-input"
                 type="password"
@@ -993,8 +993,8 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
                   setPolicyExportPassphrase(event.target.value);
                   if (policyExportError) setPolicyExportError(null);
                 }}
-                aria-label="Policy signing passphrase"
-                placeholder="required when signing"
+                aria-label={tr("Policy HMAC passphrase")}
+                placeholder={tr("required when HMAC metadata is enabled")}
               />
             </label>
             <div className="action-dialog-row">
@@ -1031,39 +1031,40 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
               </label>
             </div>
             <p className="action-dialog-note">
-              Hints are local labels only; passphrases are never stored.
+              {tr("Hints are local labels only; passphrases are never stored.")}
               {selectedKeyHintProfile ? ` Active: ${selectedKeyHintProfile.name} (v${selectedKeyHintProfile.version})` : ""}
             </p>
           </>
         ) : (
-          <p className="action-dialog-note">Unsigned packs can be imported, but authenticity verification is unavailable.</p>
+          <p className="action-dialog-note">{tr("Unsigned packs can be imported, but authenticity verification is unavailable.")}</p>
         )}
         {policyExportError ? <p className="action-dialog-error">{policyExportError}</p> : null}
       </ActionDialog>
       <ActionDialog
         open={policyImportDialogOpen}
-        title="Import policy pack"
+        title={tr("Import policy pack")}
         description={
           pendingPolicyImport
             ? `${pendingPolicyImport.descriptor.packCount} pack(s) · schema ${pendingPolicyImport.descriptor.schemaVersion || "unknown"}`
-            : "Verify before import"
+            : tr("Verify before import")
         }
-        confirmLabel="import policy pack"
+        confirmLabel={tr("import policy pack")}
         onCancel={closePolicyImportDialog}
         onConfirm={() => void confirmPolicyImport()}
       >
         {pendingPolicyImport?.descriptor.signed ? (
           <>
             <div className="status-line">
-              <span>trust state</span>
+              <span>{tr("trust state")}</span>
               <span className={trustTagClass(policyImportTrustState)}>{policyImportTrustState}</span>
-              {pendingPolicyImport.descriptor.keyHint ? <span className="microcopy">hint: {pendingPolicyImport.descriptor.keyHint}</span> : null}
+              {pendingPolicyImport.descriptor.keyHint ? <span className="microcopy">{tr("hint")}: {pendingPolicyImport.descriptor.keyHint}</span> : null}
             </div>
             <p className="action-dialog-note">
-              Signed pack detected{pendingPolicyImport.descriptor.keyHint ? ` (hint: ${pendingPolicyImport.descriptor.keyHint})` : ""}. Verification is required before import.
+              {tr("HMAC-protected pack detected")}
+              {pendingPolicyImport.descriptor.keyHint ? ` (${tr("hint")}: ${pendingPolicyImport.descriptor.keyHint})` : ""}. {tr("Verification is required before import.")}
             </p>
             <label className="action-dialog-field">
-              <span>Verification passphrase</span>
+              <span>{tr("Verification passphrase")}</span>
               <input
                 className="action-dialog-input"
                 type="password"
@@ -1072,18 +1073,18 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
                   setPolicyImportPassphrase(event.target.value);
                   if (policyImportError) setPolicyImportError(null);
                 }}
-                aria-label="Policy verification passphrase"
-                placeholder="required for signed packs"
+                aria-label={tr("Policy verification passphrase")}
+                placeholder={tr("required for HMAC-protected packs")}
               />
             </label>
           </>
         ) : (
           <>
             <div className="status-line">
-              <span>trust state</span>
+              <span>{tr("trust state")}</span>
               <span className={trustTagClass(policyImportTrustState)}>{policyImportTrustState}</span>
             </div>
-            <p className="action-dialog-note">Unsigned policy pack. Continue only if you trust the source.</p>
+            <p className="action-dialog-note">{tr("Unsigned policy pack. Continue only if you trust the source.")}</p>
           </>
         )}
         {policyImportError ? <p className="action-dialog-error">{policyImportError}</p> : null}

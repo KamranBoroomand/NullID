@@ -1,3 +1,6 @@
+# macOS Finder noise
+.DS_Store
+
 # Logs
 logs
 *.log
@@ -40,6 +43,8 @@ build/Release
 # Dependency directories
 node_modules/
 jspm_packages/
+playwright-report/
+test-results/
 
 # Snowpack dependency directory (https://snowpack.dev/)
 web_modules/

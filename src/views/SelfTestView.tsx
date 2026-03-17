@@ -70,8 +70,8 @@ const checks: CheckDefinition[] = [
   },
   {
     key: "security-headers",
-    title: "CSP/referrer baseline",
-    hint: "Set CSP + response security headers at host/edge (`public/_headers` or `vercel.json`) and keep HTTPS enabled.",
+    title: "CSP/referrer markers",
+    hint: "Page-visible CSP/referrer markers help confirm a baseline, but deployed response headers still need host/edge verification.",
   },
   {
     key: "image-codecs",
@@ -246,7 +246,7 @@ export function SelfTestView({ onOpenGuide }: SelfTestViewProps) {
     const hasObjectSrc = csp.includes("object-src");
     const hasReferrer = referrer === "no-referrer";
     if (!hasCsp) {
-      update("security-headers", "fail", "CSP meta policy missing");
+      update("security-headers", "fail", "page-visible CSP marker missing");
       return;
     }
     if (!hasObjectSrc || !hasReferrer) {
@@ -257,7 +257,7 @@ export function SelfTestView({ onOpenGuide }: SelfTestViewProps) {
       );
       return;
     }
-    update("security-headers", "pass", "CSP/referrer baseline detected");
+    update("security-headers", "pass", "page-visible CSP/referrer markers detected");
   };
 
   const runCodecProbe = async () => {
@@ -288,6 +288,7 @@ export function SelfTestView({ onOpenGuide }: SelfTestViewProps) {
     setDetails({});
     setMessage("running…");
     await Promise.all([runEncryptRoundtrip(), runFileRoundtrip(), runStorage(), runHash(), runCapabilityChecks()]);
+    setLastRunAt(new Date().toISOString());
     const allResults = Object.values(resultsRef.current);
     const failed = allResults.filter((value) => value === "fail").length;
     const warnings = allResults.filter((value) => value === "warn").length;
@@ -303,7 +304,6 @@ export function SelfTestView({ onOpenGuide }: SelfTestViewProps) {
     }
     setMessage("all checks passed");
     push("self-test complete", "accent");
-    setLastRunAt(new Date().toISOString());
   };
 
   const runSingle = async (key: string) => {
@@ -370,7 +370,7 @@ export function SelfTestView({ onOpenGuide }: SelfTestViewProps) {
   return (
     <div className="workspace-scroll">
       <div className="guide-link">
-        <button type="button" className="guide-link-button" onClick={() => onOpenGuide?.("guide")}>
+        <button type="button" className="guide-link-button" onClick={() => onOpenGuide?.("selftest")}>
           {t("guide.link")}
         </button>
       </div>
@@ -380,8 +380,9 @@ export function SelfTestView({ onOpenGuide }: SelfTestViewProps) {
           <span className="panel-subtext">{tr("dev diagnostics")}</span>
         </div>
         <p className="microcopy">
-          Runs runtime checks for crypto, storage, browser capability support, and responsiveness. Failed or warning checks include remediation hints.
+          {tr("Runs runtime checks for crypto, storage, browser capability support, and responsiveness. Failed or warning checks include remediation hints.")}
         </p>
+        <p className="microcopy">{tr("Self-test checks this browser/runtime only; it does not certify deployed headers, hosting, or cryptographic review.")}</p>
         <div className="controls-row">
           <button className="button" type="button" onClick={runAll}>
             {tr("run all")}
@@ -414,8 +415,9 @@ export function SelfTestView({ onOpenGuide }: SelfTestViewProps) {
           <span className="tag tag-danger">{tr("fail")} {summary.fail}</span>
           <span className="tag">{tr("warn")} {summary.warn}</span>
           <span className="tag tag-accent">{tr("pass")} {summary.pass}</span>
-          <span className="microcopy">{tr("health score")} {summary.healthScore}/100</span>
+          <span className="microcopy">{tr("runtime score")} {summary.healthScore}/100</span>
         </div>
+        <div className="microcopy">{tr("Runtime score is a convenience summary, not a security rating.")}</div>
         <div className="microcopy">{tr("last run:")} {lastRunAt ? formatDateTime(lastRunAt) : tr("never")}</div>
         <ul className="note-list">
           {checks.map((item) => {

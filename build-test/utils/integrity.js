@@ -1,4 +1,5 @@
 import { toBase64Url, utf8ToBytes, fromBase64Url } from "./encoding.js";
+export const HMAC_SHA256_ALGORITHM = "HMAC-SHA-256";
 export function stableStringify(value) {
     if (value === null || typeof value !== "object") {
         return JSON.stringify(value);

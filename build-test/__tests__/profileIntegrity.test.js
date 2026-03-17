@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { PROFILE_SCHEMA_VERSION, collectProfile, importProfileFile } from "../utils/profile.js";
+import { sha256Base64Url } from "../utils/integrity.js";
 class MemoryStorage {
     map = new Map();
     get length() {
@@ -28,6 +29,9 @@ describe("profile integrity", () => {
         Object.defineProperty(globalThis, "localStorage", { value: storage, configurable: true, writable: true });
         storage.setItem("nullid:theme", JSON.stringify("dark"));
         storage.setItem("nullid:pw-settings", JSON.stringify({ length: 22, symbols: true }));
+        storage.setItem("nullid:vault:unlock-rate-limit", JSON.stringify(true));
+        storage.setItem("nullid:vault:notes:note-1", JSON.stringify({ ciphertext: "secret", iv: "0123456789ab" }));
+        storage.setItem("nullid:vault:meta:meta", JSON.stringify({ salt: "vault-salt", iterations: 200_000 }));
         storage.setItem("non-nullid:key", JSON.stringify("ignored"));
         return storage;
     };
@@ -40,11 +44,18 @@ describe("profile integrity", () => {
         storage.clear();
         const file = new File([JSON.stringify(snapshot)], "profile.json", { type: "application/json" });
         const result = await importProfileFile(file, { verificationPassphrase: "profile-sign-secret" });
-        assert.equal(result.applied, 2);
+        assert.equal(result.applied, 3);
         assert.equal(result.signed, true);
         assert.equal(result.verified, true);
         assert.equal(result.legacy, false);
         assert.equal(storage.getItem("nullid:theme"), JSON.stringify("dark"));
+    });
+    it("excludes localStorage fallback vault records from profile snapshots", async () => {
+        setup();
+        const snapshot = await collectProfile();
+        assert.equal("nullid:vault:notes:note-1" in snapshot.entries, false);
+        assert.equal("nullid:vault:meta:meta" in snapshot.entries, false);
+        assert.equal(snapshot.entries["nullid:vault:unlock-rate-limit"], true);
     });
     it("rejects tampered profile payloads", async () => {
         setup();
@@ -74,6 +85,33 @@ describe("profile integrity", () => {
         assert.equal(result.legacy, true);
         assert.equal(result.applied, 1);
     });
+    it("ignores fallback vault records when importing older profile payloads", async () => {
+        const storage = setup();
+        storage.clear();
+        const exportedAt = new Date().toISOString();
+        const entries = {
+            "nullid:theme": "light",
+            "nullid:vault:notes:note-1": { ciphertext: "secret", iv: "0123456789ab" },
+        };
+        const payloadHash = await sha256ForTest({
+            schemaVersion: PROFILE_SCHEMA_VERSION,
+            exportedAt,
+            entries,
+        });
+        const file = new File([
+            JSON.stringify({
+                schemaVersion: PROFILE_SCHEMA_VERSION,
+                exportedAt,
+                kind: "profile",
+                entries,
+                integrity: { entryCount: 2, payloadHash },
+            }),
+        ], "profile.json", { type: "application/json" });
+        const result = await importProfileFile(file);
+        assert.equal(result.applied, 1);
+        assert.equal(storage.getItem("nullid:theme"), JSON.stringify("light"));
+        assert.equal(storage.getItem("nullid:vault:notes:note-1"), null);
+    });
 });
 async function expectRejects(fn, pattern) {
     let rejected = false;
@@ -87,4 +125,7 @@ async function expectRejects(fn, pattern) {
     }
     assert.equal(rejected, true);
     assert.equal(pattern.test(message), true);
+}
+async function sha256ForTest(payload) {
+    return sha256Base64Url(payload);
 }
