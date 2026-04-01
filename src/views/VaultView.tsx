@@ -27,6 +27,7 @@ import {
   type KeyHintProfile,
 } from "../utils/keyHintProfiles";
 import { useI18n } from "../i18n";
+import { buildIncidentTemplateTitle, INCIDENT_TEMPLATE_BODY, INCIDENT_TEMPLATE_TAGS } from "../utils/incidentWorkflow.js";
 import {
   DEFAULT_UNLOCK_POLICY,
   applyUnlockFailure,
@@ -435,9 +436,9 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
         return;
       }
       if (next === "incident") {
-        setTitle(`Incident ${new Date().toISOString().slice(0, 10)}`);
-        setBody("Summary:\nImpact:\nIndicators:\nActions taken:\nNext steps:");
-        setTags("incident,triage");
+        setTitle(buildIncidentTemplateTitle());
+        setBody(INCIDENT_TEMPLATE_BODY);
+        setTags(INCIDENT_TEMPLATE_TAGS);
       } else if (next === "credentials") {
         setTitle("Credential inventory");
         setBody("System:\nAccount:\nRotation date:\nRecovery path:\nNotes:");
@@ -702,7 +703,7 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
         <div className="panel" aria-label={tr("Vault controls")}>
           <div className="panel-heading">
             <span>{tr("Secure Notes")}</span>
-            <span className="panel-subtext">AES-GCM + PBKDF2</span>
+            <span className="panel-subtext">{tr("AES-GCM + PBKDF2")}</span>
           </div>
           <div className="controls-row">
             <input
@@ -722,22 +723,22 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
           </div>
           {unlockHumanCheckEnabled && shouldRequireHumanCheck(unlockThrottle, DEFAULT_UNLOCK_POLICY) && !unlocked ? (
             <div className="controls-row">
-              <span className="section-title">Human check</span>
+              <span className="section-title">{tr("Human check")}</span>
               <span className="tag">{unlockChallenge.prompt}</span>
               <input
                 className="input"
                 value={unlockChallengeInput}
                 onChange={(event) => setUnlockChallengeInput(event.target.value)}
-                placeholder="answer required"
-                aria-label="Unlock human check"
+                placeholder={tr("answer required")}
+                aria-label={tr("Unlock human check")}
               />
             </div>
           ) : null}
           <div className="status-line">
-            <span>unlock hardening</span>
-            <Chip label={unlockRateLimitEnabled ? "rate-limit:on" : "rate-limit:off"} tone={unlockRateLimitEnabled ? "accent" : "muted"} />
-            <Chip label={unlockHumanCheckEnabled ? "human-check:on" : "human-check:off"} tone={unlockHumanCheckEnabled ? "accent" : "muted"} />
-            {unlockBlockRemaining > 0 ? <span className="microcopy">blocked for {formatNumber(unlockBlockRemaining)}s</span> : null}
+            <span>{tr("unlock hardening")}</span>
+            <Chip label={unlockRateLimitEnabled ? tr("rate-limit:on") : tr("rate-limit:off")} tone={unlockRateLimitEnabled ? "accent" : "muted"} />
+            <Chip label={unlockHumanCheckEnabled ? tr("human-check:on") : tr("human-check:off")} tone={unlockHumanCheckEnabled ? "accent" : "muted"} />
+            {unlockBlockRemaining > 0 ? <span className="microcopy">{tr("blocked for")} {formatNumber(unlockBlockRemaining)} {tr("sec")}</span> : null}
           </div>
           <div className="status-line">
             <span>{tr("passphrase strength")}</span>
@@ -755,9 +756,9 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
                     setUnlockThrottle(clearUnlockFailures());
                   }
                 }}
-                aria-label="Enable unlock rate limit"
+                aria-label={tr("Enable unlock rate limit")}
               />
-              rate limit unlock attempts
+              {tr("rate limit unlock attempts")}
             </label>
             <label className="microcopy" style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
               <input
@@ -768,9 +769,9 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
                   setUnlockChallenge(createHumanCheckChallenge());
                   setUnlockChallengeInput("");
                 }}
-                aria-label="Enable unlock human check"
+                aria-label={tr("Enable unlock human check")}
               />
-              require human check after repeated failures
+              {tr("require human check after repeated failures")}
             </label>
             <label className="microcopy" style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
               <input
@@ -783,27 +784,27 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
                     setSessionCookieState(null);
                   }
                 }}
-                aria-label="Enable session cookie"
+                aria-label={tr("Enable session cookie")}
               />
-              set session hint cookie on unlock
+              {tr("set session hint cookie on unlock")}
             </label>
           </div>
           <div className="controls-row">
-            <span className="section-title">MFA</span>
-            <Chip label={mfaCredential ? "enabled" : "disabled"} tone={mfaCredential ? "accent" : "muted"} />
+            <span className="section-title">{tr("MFA")}</span>
+            <Chip label={mfaCredential ? tr("enabled") : tr("disabled")} tone={mfaCredential ? "accent" : "muted"} />
             <input
               className="input"
               value={mfaLabelInput}
               onChange={(event) => setMfaLabelInput(event.target.value)}
-              placeholder="MFA label (optional)"
-              aria-label="MFA label"
+              placeholder={tr("MFA label (optional)")}
+              aria-label={tr("MFA label")}
               disabled={Boolean(mfaCredential) || !unlocked}
             />
             <button className="button" type="button" onClick={() => void handleEnableMfa()} disabled={Boolean(mfaCredential) || !unlocked || mfaBusy}>
-              {mfaBusy ? "working…" : "enable mfa"}
+              {mfaBusy ? tr("working…") : tr("enable mfa")}
             </button>
             <button className="button" type="button" onClick={handleDisableMfa} disabled={!mfaCredential}>
-              disable mfa
+              {tr("disable mfa")}
             </button>
           </div>
           <div className="microcopy">
@@ -1019,7 +1020,7 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
               {tr("export notes report")}
             </button>
             <span className="microcopy">
-              {vaultStats.latestUpdate ? `latest update: ${formatTs(vaultStats.latestUpdate)}` : "no notes yet"}
+              {vaultStats.latestUpdate ? `${tr("latest update")}: ${formatTs(vaultStats.latestUpdate)}` : tr("no notes yet")}
             </span>
           </div>
           {unlocked ? (
@@ -1039,7 +1040,7 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
                       </div>
                     )}
                     <div className="microcopy">
-                      created {formatTs(note.createdAt)} · updated {formatTs(note.updatedAt)}
+                      {tr("created")} {formatTs(note.createdAt)} · {tr("updated")} {formatTs(note.updatedAt)}
                     </div>
                     <div className="controls-row">
                       <button className="button" type="button" onClick={() => handleEdit(note)}>
@@ -1249,9 +1250,9 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
       </ActionDialog>
       <ActionDialog
         open={reportDialogOpen}
-        title="Export notes report"
-        description="Exports plain JSON. Include note bodies only if you are comfortable with plaintext note content in the report."
-        confirmLabel="export report"
+        title={tr("Export notes report")}
+        description={tr("Exports plain JSON. Include note bodies only if you are comfortable with plaintext note content in the report.")}
+        confirmLabel={tr("export report")}
         onCancel={() => setReportDialogOpen(false)}
         onConfirm={() => {
           exportFilteredReport(reportIncludeBodies);
@@ -1259,21 +1260,21 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
         }}
       >
         <label className="action-dialog-field">
-          <span>Include note bodies in report</span>
+          <span>{tr("Include note bodies in report")}</span>
           <input
             type="checkbox"
             checked={reportIncludeBodies}
             onChange={(event) => setReportIncludeBodies(event.target.checked)}
-            aria-label="Include note bodies"
+            aria-label={tr("Include note bodies")}
           />
         </label>
-        <p className="action-dialog-note">If enabled, exported note bodies are written in plaintext JSON.</p>
+        <p className="action-dialog-note">{tr("If enabled, exported note bodies are written in plaintext JSON.")}</p>
       </ActionDialog>
       <ActionDialog
         open={wipeDialogOpen}
-        title="Wipe vault data"
-        description="This removes all vault metadata, canary records, and encrypted notes from local storage."
-        confirmLabel="wipe vault"
+        title={tr("Wipe vault data")}
+        description={tr("This removes all vault metadata, canary records, and encrypted notes from local storage.")}
+        confirmLabel={tr("wipe vault")}
         danger
         onCancel={() => setWipeDialogOpen(false)}
         onConfirm={() => {

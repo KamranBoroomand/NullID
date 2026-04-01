@@ -5,7 +5,7 @@ import type { ModuleKey } from "../components/ModuleList.js";
 
 describe("guide content coverage", () => {
   it("covers every primary tool module exactly once", () => {
-    const expected: ModuleKey[] = ["hash", "redact", "sanitize", "meta", "enc", "pw", "vault", "selftest"];
+    const expected: ModuleKey[] = ["hash", "share", "incident", "redact", "sanitize", "verify", "meta", "enc", "pw", "vault", "selftest"];
     const actual = guideTools.map((item) => item.key).sort();
     assert.deepEqual(actual, [...expected].sort());
   });

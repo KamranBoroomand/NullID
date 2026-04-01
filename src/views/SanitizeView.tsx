@@ -40,11 +40,17 @@ import {
   upsertKeyHintProfile,
   type KeyHintProfile,
 } from "../utils/keyHintProfiles";
+import { createSanitizeSafeShareBundle } from "../utils/workflowPackage.js";
+import {
+  formatPolicyPackTrustState,
+  getPolicyPackExportTrustState,
+  getPolicyPackImportTrustState,
+  policyPackTrustTagClass,
+} from "./sanitizePolicyTrustState";
 
 interface SanitizeViewProps {
   onOpenGuide?: (key?: ModuleKey) => void;
 }
-type TrustState = "unsigned" | "verified" | "mismatch";
 
 const ruleKeys = getRuleKeys();
 const presetKeys = Object.keys(sanitizePresets) as PresetKey[];
@@ -134,17 +140,23 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
     () => keyHintProfiles.find((profile) => profile.id === selectedKeyHintProfileId) ?? null,
     [keyHintProfiles, selectedKeyHintProfileId],
   );
-  const policyExportTrustState: TrustState = !policyExportSigned
-    ? "unsigned"
-    : policyExportPassphrase.trim()
-      ? "verified"
-      : "mismatch";
-  const policyImportTrustState = useMemo<TrustState>(() => {
-    if (!pendingPolicyImport?.descriptor.signed) return "unsigned";
-    if (!policyImportPassphrase.trim()) return "mismatch";
-    if (policyImportError && /verification|signature|mismatch|integrity/i.test(policyImportError)) return "mismatch";
-    return "verified";
-  }, [pendingPolicyImport?.descriptor.signed, policyImportError, policyImportPassphrase]);
+  const policyExportTrustState = useMemo(
+    () =>
+      getPolicyPackExportTrustState({
+        signed: policyExportSigned,
+        hasPassphrase: Boolean(policyExportPassphrase.trim()),
+      }),
+    [policyExportPassphrase, policyExportSigned],
+  );
+  const policyImportTrustState = useMemo(
+    () =>
+      getPolicyPackImportTrustState({
+        signed: Boolean(pendingPolicyImport?.descriptor.signed),
+        hasPassphrase: Boolean(policyImportPassphrase.trim()),
+        error: policyImportError,
+      }),
+    [pendingPolicyImport?.descriptor.signed, policyImportError, policyImportPassphrase],
+  );
 
   useEffect(() => {
     if (keyHintProfiles.length > 0) return;
@@ -158,7 +170,7 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
     setPreset(key);
     setLog(sanitizePresets[key].sample);
     setRulesState(buildRulesState(sanitizePresets[key].rules));
-    push(`preset loaded: ${sanitizePresets[key].label}`, "accent");
+    push(`${tr("preset loaded")}: ${tr(sanitizePresets[key].label)}`, "accent");
   };
 
   const addCustomRule = () => {
@@ -330,7 +342,15 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
       setPolicyPacks((prev) => mergePolicyPacks(prev, imported.packs));
       setSelectedPolicyId(imported.packs[0].id);
       setPolicyName(imported.packs[0].name);
-      const suffix = imported.legacy ? "legacy" : imported.signed ? (imported.verified ? "HMAC+verified" : "HMAC") : "unsigned";
+      const suffix = imported.legacy
+        ? "legacy"
+        : formatPolicyPackTrustState(
+            getPolicyPackImportTrustState({
+              signed: imported.signed,
+              hasPassphrase: Boolean(policyImportPassphrase.trim()),
+              verificationSucceeded: imported.verified,
+            }),
+          );
       push(`imported ${imported.packs.length} policy pack(s) :: ${suffix}`, "accent");
       closePolicyImportDialog();
     } catch (error) {
@@ -456,11 +476,16 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
     setIsExportingBundle(true);
     try {
       const [inputHash, outputHash] = await Promise.all([hashText(log, "SHA-256"), hashText(result.output, "SHA-256")]);
-      const bundle = {
-        schemaVersion: 1,
-        kind: "nullid-safe-share",
-        tool: "sanitize",
-        createdAt: new Date().toISOString(),
+      const buildId = typeof import.meta.env.VITE_BUILD_ID === "string" && import.meta.env.VITE_BUILD_ID.trim()
+        ? import.meta.env.VITE_BUILD_ID.trim()
+        : null;
+      const bundle = createSanitizeSafeShareBundle({
+        producer: {
+          app: "NullID",
+          surface: "web",
+          module: "sanitize",
+          buildId,
+        },
         policy: {
           rulesState,
           jsonAware,
@@ -480,7 +505,9 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
           appliedRules: result.applied,
           report: result.report,
         },
-      };
+        preset,
+        policyPack: selectedPolicy,
+      });
       const json = JSON.stringify(bundle, null, 2);
       if (bundlePassphrase.trim()) {
         const envelope = await encryptText(bundlePassphrase.trim(), json);
@@ -515,14 +542,14 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
             className="textarea"
             value={log}
             onChange={(event) => setLog(event.target.value)}
-            aria-label="Log input"
+            aria-label={tr("Log input")}
           />
           <div className="controls-row">
             <span className="section-title">{tr("Presets")}</span>
             <div className="pill-buttons" role="group" aria-label={tr("Log presets")}>
               {presetKeys.map((key) => (
                 <button key={key} type="button" className={preset === key ? "active" : ""} onClick={() => applyPreset(key)}>
-                  {sanitizePresets[key].label}
+                  {tr(sanitizePresets[key].label)}
                 </button>
               ))}
             </div>
@@ -531,7 +558,7 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
         <div className="panel" aria-label={tr("Sanitized preview")}>
           <div className="panel-heading">
             <span>{tr("Preview")}</span>
-            <span className="panel-subtext">diff</span>
+            <span className="panel-subtext">{tr("diff")}</span>
           </div>
           <div className="log-preview" role="presentation">
             <div className="log-line">
@@ -607,28 +634,28 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
                 type="checkbox"
                 checked={rulesState[ruleKey]}
                 onChange={(event) => setRulesState((prev) => ({ ...prev, [ruleKey]: event.target.checked }))}
-                aria-label={getRuleLabel(ruleKey)}
+                aria-label={tr(getRuleLabel(ruleKey))}
               />
-              <span>{getRuleLabel(ruleKey)}</span>
+              <span>{tr(getRuleLabel(ruleKey))}</span>
             </label>
           ))}
         </div>
         <div className="note-box">
-          <div className="section-title">Report</div>
+          <div className="section-title">{tr("Report")}</div>
           <div className="microcopy">
-            {result.report.length === 0 ? "no replacements yet" : result.report.map((line) => <div key={line}>{line}</div>)}
+            {result.report.length === 0 ? tr("no replacements yet") : result.report.map((line) => <div key={line}>{line}</div>)}
           </div>
         </div>
         <div className="note-box">
-          <div className="section-title">Rule impact ranking</div>
+          <div className="section-title">{tr("Rule impact ranking")}</div>
           {ruleImpact.length === 0 ? (
-            <div className="microcopy">no replacements counted yet</div>
+            <div className="microcopy">{tr("no replacements counted yet")}</div>
           ) : (
             <table className="table">
               <thead>
                 <tr>
-                  <th>rule</th>
-                  <th>count</th>
+                  <th>{tr("rule")}</th>
+                  <th>{tr("count")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -643,47 +670,47 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
           )}
         </div>
         <div className="note-box">
-          <div className="section-title">Custom rules</div>
+          <div className="section-title">{tr("Custom rules")}</div>
           <div className="controls-row" style={{ alignItems: "flex-end" }}>
             <div style={{ flex: 1, minWidth: "180px" }}>
               <label className="microcopy" htmlFor="custom-pattern">
-                Pattern (RegExp)
+                {tr("Pattern (RegExp)")}
               </label>
               <input
                 id="custom-pattern"
                 className="input"
                 value={customRuleDraft.pattern}
                 onChange={(event) => setCustomRuleDraft((prev) => ({ ...prev, pattern: event.target.value }))}
-                placeholder="token=([A-Za-z0-9._-]+)"
+                placeholder={tr("token=([A-Za-z0-9._-]+)")}
               />
             </div>
             <div style={{ minWidth: "140px" }}>
               <label className="microcopy" htmlFor="custom-flags">
-                Flags
+                {tr("Flags")}
               </label>
               <input
                 id="custom-flags"
                 className="input"
                 value={customRuleDraft.flags}
                 onChange={(event) => setCustomRuleDraft((prev) => ({ ...prev, flags: event.target.value }))}
-                placeholder="gi"
+                placeholder={tr("gi")}
               />
             </div>
             <div style={{ flex: 1, minWidth: "160px" }}>
               <label className="microcopy" htmlFor="custom-replacement">
-                Replacement
+                {tr("Replacement")}
               </label>
               <input
                 id="custom-replacement"
                 className="input"
                 value={customRuleDraft.replacement}
                 onChange={(event) => setCustomRuleDraft((prev) => ({ ...prev, replacement: event.target.value }))}
-                placeholder="[redacted]"
+                placeholder={tr("[redacted]")}
               />
             </div>
             <div style={{ minWidth: "150px" }}>
               <label className="microcopy" htmlFor="custom-scope">
-                Scope
+                {tr("Scope")}
               </label>
               <select
                 id="custom-scope"
@@ -693,26 +720,26 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
                   setCustomRuleDraft((prev) => ({ ...prev, scope: event.target.value as CustomRuleScope }))
                 }
               >
-                <option value="both">text + json</option>
-                <option value="text">text only</option>
-                <option value="json">json only</option>
+                <option value="both">{tr("text + json")}</option>
+                <option value="text">{tr("text only")}</option>
+                <option value="json">{tr("json only")}</option>
               </select>
             </div>
             <button className="button" type="button" onClick={addCustomRule}>
-              add rule
+              {tr("add rule")}
             </button>
           </div>
           {customRuleError && <div className="microcopy" style={{ color: "var(--danger)" }}>{customRuleError}</div>}
           {customRules.length === 0 ? (
-            <div className="microcopy">no custom rules</div>
+            <div className="microcopy">{tr("no custom rules")}</div>
           ) : (
             <ul className="note-list">
               {customRules.map((rule) => (
                 <li key={rule.id}>
                   <div className="note-title">/{rule.pattern}/{rule.flags}</div>
-                  <div className="note-body">→ {rule.replacement || "[empty]"} ({rule.scope})</div>
+                  <div className="note-body">→ {rule.replacement || tr("[empty]")} ({tr(rule.scope)})</div>
                   <button className="button" type="button" onClick={() => removeCustomRule(rule.id)}>
-                    remove
+                    {tr("remove")}
                   </button>
                 </li>
               ))}
@@ -721,30 +748,30 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
         </div>
       </div>
 
-      <div className="panel" aria-label="Policy simulation matrix">
+      <div className="panel" aria-label={tr("Policy simulation matrix")}>
         <div className="panel-heading">
           <span>{tr("Policy simulation matrix")}</span>
           <span className="panel-subtext">{tr("compare policy outcomes")}</span>
         </div>
         <p className="microcopy">
-          Runs multiple policy variants against current input so you can compare redaction depth before sharing.
+          {tr("Runs multiple policy variants against current input so you can compare redaction depth before sharing.")}
         </p>
         <table className="table">
           <thead>
             <tr>
-              <th>variant</th>
-              <th>rules applied</th>
-              <th>lines changed</th>
-              <th>output chars</th>
+              <th>{tr("variant")}</th>
+              <th>{tr("rules applied")}</th>
+              <th>{tr("lines changed")}</th>
+              <th>{tr("output chars")}</th>
             </tr>
           </thead>
           <tbody>
-            {simulationRows.map((row) => (
-              <tr key={row.id}>
-                <td>{row.label}</td>
-                <td>{row.appliedRules}</td>
-                <td>{row.linesAffected}</td>
-                <td>{row.outputChars}</td>
+                {simulationRows.map((row) => (
+                  <tr key={row.id}>
+                    <td>{tr(row.label)}</td>
+                    <td>{row.appliedRules}</td>
+                    <td>{row.linesAffected}</td>
+                    <td>{row.outputChars}</td>
               </tr>
             ))}
           </tbody>
@@ -772,7 +799,7 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
           <div className="controls-row">
             <select
               className="select"
-              aria-label="Saved policy packs"
+              aria-label={tr("Saved policy packs")}
               value={selectedPolicyId}
               onChange={(event) => setSelectedPolicyId(event.target.value)}
             >
@@ -830,37 +857,37 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
             />
           </div>
           <div className="microcopy">
-            Packs with HMAC metadata require verification before import. Baseline import accepts `nullid.policy.json` and merges with deterministic rules.
+            {tr("Packs with HMAC metadata require verification before import. Baseline import accepts `nullid.policy.json` and merges with deterministic rules.")}
           </div>
           <div className="note-box">
-            <div className="section-title">Verification key hints</div>
+            <div className="section-title">{tr("Verification key hints")}</div>
             <div className="controls-row">
               <input
                 className="input"
-                placeholder="profile name"
+                placeholder={tr("profile name")}
                 value={keyProfileName}
                 onChange={(event) => setKeyProfileName(event.target.value)}
-                aria-label="Key hint profile name"
+                aria-label={tr("Key hint profile name")}
               />
               <input
                 className="input"
-                placeholder="key hint (public label)"
+                placeholder={tr("key hint (public label)")}
                 value={keyProfileHint}
                 onChange={(event) => setKeyProfileHint(event.target.value)}
-                aria-label="Key hint value"
+                aria-label={tr("Key hint value")}
               />
               <button className="button" type="button" onClick={saveKeyHintProfile}>
-                save hint
+                {tr("save hint")}
               </button>
             </div>
             <div className="controls-row">
               <select
                 className="select"
-                aria-label="Saved key hint profiles"
+                aria-label={tr("Saved key hint profiles")}
                 value={selectedKeyHintProfileId}
                 onChange={(event) => setSelectedKeyHintProfileId(event.target.value)}
               >
-                <option value="">select key hint profile...</option>
+                <option value="">{tr("select key hint profile...")}</option>
                 {keyHintProfiles.map((profile) => (
                   <option key={profile.id} value={profile.id}>
                     {profile.name} · {profile.keyHint}
@@ -868,15 +895,15 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
                 ))}
               </select>
               <button className="button" type="button" onClick={rotateSelectedKeyHintProfile} disabled={!selectedKeyHintProfile}>
-                rotate hint
+                {tr("rotate hint")}
               </button>
               <button className="button" type="button" onClick={deleteSelectedKeyHintProfile} disabled={!selectedKeyHintProfile}>
-                delete hint
+                {tr("delete hint")}
               </button>
             </div>
             <div className="microcopy">
-              Hints are local labels only; HMAC/verification passphrases are never stored.
-              {selectedKeyHintProfile ? ` Active: ${selectedKeyHintProfile.name} (v${selectedKeyHintProfile.version})` : ""}
+              {tr("Hints are local labels only; HMAC/verification passphrases are never stored.")}
+              {selectedKeyHintProfile ? ` ${tr("active")}: ${selectedKeyHintProfile.name} (v${selectedKeyHintProfile.version})` : ""}
             </div>
           </div>
         </div>
@@ -917,9 +944,9 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
             <table className="table">
               <thead>
                 <tr>
-                  <th>file</th>
-                  <th>lines changed</th>
-                  <th>size delta</th>
+                  <th>{tr("file")}</th>
+                  <th>{tr("lines changed")}</th>
+                  <th>{tr("size delta")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -936,13 +963,13 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
         </div>
       </div>
 
-      <div className="panel" aria-label="Safe share bundle">
+      <div className="panel" aria-label={tr("Safe share bundle")}>
         <div className="panel-heading">
           <span>{tr("Safe share bundle")}</span>
           <span className="panel-subtext">{tr("manifest + hash + sanitized output")}</span>
         </div>
         <p className="microcopy">
-          Generates a portable local bundle containing sanitized output, policy snapshot, and SHA-256 integrity hashes.
+          {tr("Generates a portable local bundle containing sanitized output, policy snapshot, and SHA-256 integrity hashes.")}
         </p>
         <div className="controls-row">
           <input
@@ -961,7 +988,7 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
       <ActionDialog
         open={policyExportDialogOpen}
         title={policyExportTarget ? `${tr("Export policy")}: ${policyExportTarget.name}` : tr("Export policy packs")}
-        description={tr("Policy exports can include HMAC metadata and require the same verification passphrase on import.")}
+        description={tr("Policy exports can include HMAC metadata. Entering a passphrase prepares the export; actual verification happens on import.")}
         confirmLabel={policyExportTarget ? tr("export policy") : tr("export policies")}
         onCancel={closePolicyExportDialog}
         onConfirm={() => void confirmPolicyExport()}
@@ -979,8 +1006,8 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
         {policyExportSigned ? (
           <>
             <div className="status-line">
-              <span>{tr("trust state")}</span>
-              <span className={trustTagClass(policyExportTrustState)}>{policyExportTrustState}</span>
+              <span>{tr("verification state")}</span>
+              <span className={policyPackTrustTagClass(policyExportTrustState)}>{tr(formatPolicyPackTrustState(policyExportTrustState))}</span>
               {policyExportKeyHint.trim() ? <span className="microcopy">{tr("hint")}: {policyExportKeyHint.trim()}</span> : null}
             </div>
             <label className="action-dialog-field">
@@ -999,7 +1026,7 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
             </label>
             <div className="action-dialog-row">
               <label className="action-dialog-field">
-                <span>Saved key hint</span>
+                <span>{tr("Saved key hint")}</span>
                 <select
                   className="action-dialog-select"
                   value={selectedKeyHintProfileId}
@@ -1009,9 +1036,9 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
                     const profile = keyHintProfiles.find((entry) => entry.id === nextId);
                     setPolicyExportKeyHint(profile?.keyHint ?? "");
                   }}
-                  aria-label="Policy key hint profile"
+                  aria-label={tr("Policy key hint profile")}
                 >
-                  <option value="">custom key hint</option>
+                  <option value="">{tr("custom key hint")}</option>
                   {keyHintProfiles.map((profile) => (
                     <option key={profile.id} value={profile.id}>
                       {profile.name} · {profile.keyHint}
@@ -1020,19 +1047,19 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
                 </select>
               </label>
               <label className="action-dialog-field">
-                <span>Key hint label</span>
+                <span>{tr("Key hint label")}</span>
                 <input
                   className="action-dialog-input"
                   value={policyExportKeyHint}
                   onChange={(event) => setPolicyExportKeyHint(event.target.value)}
-                  aria-label="Policy key hint"
-                  placeholder="optional verification hint"
+                  aria-label={tr("Policy key hint")}
+                  placeholder={tr("optional verification hint")}
                 />
               </label>
             </div>
             <p className="action-dialog-note">
               {tr("Hints are local labels only; passphrases are never stored.")}
-              {selectedKeyHintProfile ? ` Active: ${selectedKeyHintProfile.name} (v${selectedKeyHintProfile.version})` : ""}
+              {selectedKeyHintProfile ? ` ${tr("active")}: ${selectedKeyHintProfile.name} (v${selectedKeyHintProfile.version})` : ""}
             </p>
           </>
         ) : (
@@ -1045,7 +1072,7 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
         title={tr("Import policy pack")}
         description={
           pendingPolicyImport
-            ? `${pendingPolicyImport.descriptor.packCount} pack(s) · schema ${pendingPolicyImport.descriptor.schemaVersion || "unknown"}`
+            ? `${pendingPolicyImport.descriptor.packCount} ${tr("packs")} · ${tr("schema")} ${pendingPolicyImport.descriptor.schemaVersion || tr("unknown")}`
             : tr("Verify before import")
         }
         confirmLabel={tr("import policy pack")}
@@ -1055,8 +1082,8 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
         {pendingPolicyImport?.descriptor.signed ? (
           <>
             <div className="status-line">
-              <span>{tr("trust state")}</span>
-              <span className={trustTagClass(policyImportTrustState)}>{policyImportTrustState}</span>
+              <span>{tr("verification state")}</span>
+              <span className={policyPackTrustTagClass(policyImportTrustState)}>{tr(formatPolicyPackTrustState(policyImportTrustState))}</span>
               {pendingPolicyImport.descriptor.keyHint ? <span className="microcopy">{tr("hint")}: {pendingPolicyImport.descriptor.keyHint}</span> : null}
             </div>
             <p className="action-dialog-note">
@@ -1081,8 +1108,8 @@ export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
         ) : (
           <>
             <div className="status-line">
-              <span>{tr("trust state")}</span>
-              <span className={trustTagClass(policyImportTrustState)}>{policyImportTrustState}</span>
+              <span>{tr("verification state")}</span>
+              <span className={policyPackTrustTagClass(policyImportTrustState)}>{tr(formatPolicyPackTrustState(policyImportTrustState))}</span>
             </div>
             <p className="action-dialog-note">{tr("Unsigned policy pack. Continue only if you trust the source.")}</p>
           </>
@@ -1106,12 +1133,6 @@ function downloadBlob(blob: Blob, filename: string) {
 function sanitizeFileStem(value: string) {
   const base = value.replace(/\.[^.]+$/, "").trim();
   return (base || "nullid").replace(/[^a-z0-9_-]+/gi, "-").replace(/-+/g, "-");
-}
-
-function trustTagClass(state: TrustState): string {
-  if (state === "verified") return "tag tag-accent";
-  if (state === "mismatch") return "tag tag-danger";
-  return "tag";
 }
 
 function highlightDiff(before: string, after: string) {

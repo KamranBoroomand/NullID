@@ -1,4 +1,5 @@
 import { FormEvent, useRef, useState } from "react";
+import { useI18n } from "../i18n";
 import "./TerminalInput.css";
 
 interface TerminalInputProps {
@@ -6,6 +7,7 @@ interface TerminalInputProps {
 }
 
 export function TerminalInput({ onSubmit }: TerminalInputProps) {
+  const { tr } = useI18n();
   const [value, setValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -19,7 +21,7 @@ export function TerminalInput({ onSubmit }: TerminalInputProps) {
   return (
     <form className="terminal-input" onSubmit={handleSubmit}>
       <label className="terminal-label" htmlFor="command-input">
-        cmd
+        {tr("cmd")}
       </label>
       <div className="terminal-field">
         <span aria-hidden="true">:</span>
@@ -28,14 +30,14 @@ export function TerminalInput({ onSubmit }: TerminalInputProps) {
           ref={inputRef}
           value={value}
           onChange={(event) => setValue(event.target.value)}
-          placeholder="hash | redact | sanitize | meta | enc | pw | vault"
+          placeholder={tr("hash | redact | sanitize | meta | enc | pw | vault")}
           autoComplete="off"
           spellCheck={false}
-          aria-label="Command line"
+          aria-label={tr("Command line")}
         />
       </div>
-      <button type="submit" className="terminal-submit" aria-label="Execute command">
-        return
+      <button type="submit" className="terminal-submit" aria-label={tr("Execute command")}>
+        {tr("return")}
       </button>
     </form>
   );

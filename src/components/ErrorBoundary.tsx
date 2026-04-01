@@ -1,4 +1,5 @@
 import { Component, ReactNode } from "react";
+import { useI18n } from "../i18n";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -26,17 +27,23 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   render() {
     if (this.state.error) {
-      return (
-        <div style={{ padding: "1rem", fontFamily: "var(--font-sans)" }}>
-          <h2>Something went wrong</h2>
-          <p>The UI recovered from an error. Please retry your last action.</p>
-          <pre style={{ whiteSpace: "pre-wrap" }}>{this.state.error.message}</pre>
-          <button type="button" onClick={() => this.setState({ error: null })}>
-            Dismiss
-          </button>
-        </div>
-      );
+      return <ErrorFallback error={this.state.error} onDismiss={() => this.setState({ error: null })} />;
     }
     return this.props.children;
   }
+}
+
+function ErrorFallback({ error, onDismiss }: { error: Error; onDismiss: () => void }) {
+  const { t } = useI18n();
+
+  return (
+    <div style={{ padding: "1rem", fontFamily: "var(--font-sans)" }}>
+      <h2>{t("error.title")}</h2>
+      <p>{t("error.body")}</p>
+      <pre style={{ whiteSpace: "pre-wrap" }}>{error.message}</pre>
+      <button type="button" onClick={onDismiss}>
+        {t("error.dismiss")}
+      </button>
+    </div>
+  );
 }

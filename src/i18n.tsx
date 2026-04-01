@@ -1,7 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { guidePhraseTranslations } from "./content/guidePhraseTranslations";
+import { guidePhraseTranslations } from "./content/guidePhraseTranslations.js";
+import { runtimePhraseTranslations } from "./content/runtimePhraseTranslations.js";
+import { workflowPhraseTranslations } from "./content/workflowPhraseTranslations.js";
 
 export type AppLocale = "en" | "fa" | "ru";
+export const SUPPORTED_LOCALES: AppLocale[] = ["en", "fa", "ru"];
 
 type LocaleMeta = {
   label: string;
@@ -25,13 +28,13 @@ type I18nContextValue = {
 const STORAGE_KEY = "nullid:locale";
 const FALLBACK_LOCALE: AppLocale = "en";
 
-const localeMeta: Record<AppLocale, LocaleMeta> = {
+export const localeMeta: Record<AppLocale, LocaleMeta> = {
   en: { label: "English", direction: "ltr", bcp47: "en-US" },
   fa: { label: "فارسی", direction: "rtl", bcp47: "fa-IR" },
   ru: { label: "Русский", direction: "ltr", bcp47: "ru-RU" },
 };
 
-const messages: Record<AppLocale, Record<string, string>> = {
+export const messages: Record<AppLocale, Record<string, string>> = {
   en: {
     "locale.en": "English",
     "locale.fa": "Persian",
@@ -39,10 +42,16 @@ const messages: Record<AppLocale, Record<string, string>> = {
 
     "module.hash.title": "Hash & Verify",
     "module.hash.subtitle": "digests",
+    "module.share.title": "Safe Share",
+    "module.share.subtitle": "guided export",
+    "module.incident.title": "Incident Workflow",
+    "module.incident.subtitle": "operational package",
     "module.redact.title": "Text Redaction",
     "module.redact.subtitle": "pii scrubbing",
     "module.sanitize.title": "Log Sanitizer",
     "module.sanitize.subtitle": "diff preview",
+    "module.verify.title": "Verify Package",
+    "module.verify.subtitle": "receiver checks",
     "module.meta.title": "Metadata Inspector",
     "module.meta.subtitle": "exif",
     "module.enc.title": "Encrypt / Decrypt",
@@ -185,10 +194,16 @@ const messages: Record<AppLocale, Record<string, string>> = {
 
     "module.hash.title": "هش و اعتبارسنجی",
     "module.hash.subtitle": "هش‌ها",
+    "module.share.title": "اشتراک امن",
+    "module.share.subtitle": "خروجی هدایت‌شده",
+    "module.incident.title": "گردش‌کار رخداد",
+    "module.incident.subtitle": "بسته عملیاتی",
     "module.redact.title": "حذف اطلاعات حساس",
     "module.redact.subtitle": "پاک‌سازی PII",
     "module.sanitize.title": "پاک‌ساز لاگ",
     "module.sanitize.subtitle": "پیش‌نمایش تفاوت",
+    "module.verify.title": "اعتبارسنجی بسته",
+    "module.verify.subtitle": "بررسی دریافت‌کننده",
     "module.meta.title": "بازرس فراداده",
     "module.meta.subtitle": "EXIF",
     "module.enc.title": "رمزگذاری / رمزگشایی",
@@ -331,10 +346,16 @@ const messages: Record<AppLocale, Record<string, string>> = {
 
     "module.hash.title": "Хэш и проверка",
     "module.hash.subtitle": "дайджесты",
+    "module.share.title": "Безопасная передача",
+    "module.share.subtitle": "пошаговый экспорт",
+    "module.incident.title": "Рабочий поток инцидента",
+    "module.incident.subtitle": "операционный пакет",
     "module.redact.title": "Редактирование текста",
     "module.redact.subtitle": "очистка PII",
     "module.sanitize.title": "Санитайзер логов",
     "module.sanitize.subtitle": "предпросмотр diff",
+    "module.verify.title": "Проверить пакет",
+    "module.verify.subtitle": "проверка получателя",
     "module.meta.title": "Инспектор метаданных",
     "module.meta.subtitle": "exif",
     "module.enc.title": "Шифрование / Дешифрование",
@@ -397,7 +418,7 @@ const messages: Record<AppLocale, Record<string, string>> = {
     "feedback.export": "экспорт json",
     "feedback.clear": "очистить черновик",
     "feedback.open": "Открыть обратную связь",
-    "feedback.launcher": "фидбек",
+    "feedback.launcher": "отзыв",
     "feedback.idea": "идея",
     "feedback.bug": "ошибка",
     "feedback.ux": "ux",
@@ -441,13 +462,13 @@ const messages: Record<AppLocale, Record<string, string>> = {
     "app.onboarding.2.body": "Модуль паролей теперь включает расширенный словарь, настройки усиления и аудит секретов.",
     "app.onboarding.2.action": "открыть :pw",
     "app.onboarding.3.title": "Очищайте перед отправкой",
-    "app.onboarding.3.body": "Используйте санитайзер логов для policy packs, diff-предпросмотра и bundle-экспорта при внешней передаче логов.",
+    "app.onboarding.3.body": "Используйте санитайзер логов для пакетов политики, diff-предпросмотра и экспорта пакетов при внешней передаче логов.",
     "app.onboarding.3.action": "открыть :sanitize",
     "app.onboarding.4.title": "Управляйте через команды",
     "app.onboarding.4.body": "Нажмите / или Cmd/Ctrl+K для быстрой навигации, импорта/экспорта профиля и системных действий.",
     "app.onboarding.4.action": "открыть команды",
-    "app.onboarding.5.title": "Сохраняйте фидбек локально",
-    "app.onboarding.5.body": "Используйте кнопку фидбека снизу слева, чтобы хранить идеи и баги локально и экспортировать в JSON.",
+    "app.onboarding.5.title": "Сохраняйте обратную связь локально",
+    "app.onboarding.5.body": "Используйте кнопку обратной связи внизу слева, чтобы локально сохранять идеи и проблемы, а затем экспортировать их в JSON.",
 
     "runtime.theme": "тема :: {{value}}",
     "runtime.module": "модуль :: {{value}}",
@@ -472,7 +493,7 @@ const messages: Record<AppLocale, Record<string, string>> = {
   },
 };
 
-const runtimeExactKeys: Record<string, string> = {
+export const runtimeExactKeys: Record<string, string> = {
   ready: "app.ready",
   guide: "module.guide.title",
   "data wiped": "runtime.dataWiped",
@@ -485,7 +506,7 @@ const runtimeExactKeys: Record<string, string> = {
   "unhandled promise rejection": "runtime.unhandledPromise",
 };
 
-const phraseTranslations: Record<string, { fa: string; ru: string }> = {
+export const phraseTranslations: Record<string, { fa: string; ru: string }> = {
   "loading module...": { fa: "در حال بارگذاری ماژول...", ru: "загрузка модуля..." },
   "Export profile snapshot": { fa: "خروجی تصویر پروفایل", ru: "Экспорт снимка профиля" },
   "Export local nullid:* settings as JSON. Optional HMAC metadata can be verified during import with the same passphrase.": {
@@ -548,7 +569,7 @@ const phraseTranslations: Record<string, { fa: string; ru: string }> = {
     fa: "تصویر پروفایل بدون امضا است. فقط در صورت اعتماد به منبع ادامه دهید.",
     ru: "Снимок профиля без подписи. Продолжайте только если доверяете источнику.",
   },
-  fallback: { fa: "fallback", ru: "fallback" },
+  fallback: { fa: "حالت جایگزین", ru: "резервный режим" },
   "session cookie": { fa: "کوکی نشست", ru: "cookie сессии" },
   "MFA credential active.": { fa: "اعتبار MFA فعال است.", ru: "Учетные данные MFA активны." },
   "This adds a local WebAuthn step on this browser/device, not account recovery.": {
@@ -564,12 +585,12 @@ const phraseTranslations: Record<string, { fa: string; ru: string }> = {
     ru: "WebAuthn недоступен в этом браузере/среде выполнения.",
   },
   "Keep a separate vault backup before relying on MFA; losing the authenticator while locked can strand access.": {
-    fa: "پیش از تکیه بر MFA یک نسخه پشتیبان جداگانه از vault نگه دارید؛ از دست دادن احرازکننده هنگام قفل بودن می‌تواند دسترسی را از بین ببرد.",
-    ru: "Держите отдельную резервную копию vault, прежде чем полагаться на MFA; потеря аутентификатора при блокировке может лишить доступа.",
+    fa: "پیش از تکیه بر MFA یک نسخه پشتیبان جداگانه از گاوصندوق نگه دارید؛ از دست دادن احرازکننده هنگام قفل بودن می‌تواند دسترسی را از بین ببرد.",
+    ru: "Держите отдельную резервную копию сейфа, прежде чем полагаться на MFA; потеря аутентификатора при блокировке может лишить доступа.",
   },
   "Ciphertext stays encrypted, but fallback stores blobs and vault metadata in localStorage.": {
-    fa: "متن رمز شده همچنان رمزگذاری می‌ماند، اما fallback blobها و فراداده vault را در localStorage نگه می‌دارد.",
-    ru: "Шифртекст остается зашифрованным, но fallback хранит blob-данные и метаданные vault в localStorage.",
+    fa: "متن رمز شده همچنان رمزگذاری می‌ماند، اما حالت جایگزین blobها و فرادادهٔ گاوصندوق را در localStorage نگه می‌دارد.",
+    ru: "Шифртекст остается зашифрованным, но резервный режим хранит blob-данные и метаданные сейфа в localStorage.",
   },
   "Browser-visible presence hint only. SameSite=Strict is set, Secure is added on HTTPS, and HttpOnly/server auth must be configured outside the browser.": {
     fa: "فقط یک نشانه حضور قابل‌دیدن برای مرورگر است. SameSite=Strict تنظیم می‌شود، Secure روی HTTPS افزوده می‌شود و HttpOnly/احراز هویت سروری باید بیرون از مرورگر پیکربندی شود.",
@@ -579,8 +600,8 @@ const phraseTranslations: Record<string, { fa: string; ru: string }> = {
     fa: "بررسی‌های زمان اجرا برای رمزنگاری، ذخیره‌سازی، پشتیبانی قابلیت‌های مرورگر و پاسخ‌گویی را اجرا می‌کند. بررسی‌های ناموفق یا هشداردار شامل راهنمای رفع مشکل هستند.",
     ru: "Запускает runtime-проверки для криптографии, хранилища, поддержки возможностей браузера и отзывчивости. Ошибочные и предупреждающие проверки содержат подсказки по исправлению.",
   },
-  "Export encrypted vault snapshot": { fa: "خروجی snapshot رمزگذاری‌شده vault", ru: "Экспорт зашифрованного снимка vault" },
-  "Export vault snapshot": { fa: "خروجی snapshot vault", ru: "Экспорт снимка vault" },
+  "Export encrypted vault snapshot": { fa: "خروجی اسنپ‌شات رمزگذاری‌شدهٔ گاوصندوق", ru: "Экспорт зашифрованного снимка сейфа" },
+  "Export vault snapshot": { fa: "خروجی اسنپ‌شات گاوصندوق", ru: "Экспорт снимка сейфа" },
   "“Signed” in NullID means shared-passphrase HMAC metadata that can be verified during import, not a public-key identity signature.": {
     fa: "«امضاشده» در NullID یعنی فراداده HMAC با عبارت عبور مشترک که هنگام ورود قابل اعتبارسنجی است، نه امضای هویتی با کلید عمومی.",
     ru: "«Подписано» в NullID означает HMAC-метаданные с общей парольной фразой, которые можно проверить при импорте, а не идентификационную подпись открытым ключом.",
@@ -589,17 +610,17 @@ const phraseTranslations: Record<string, { fa: string; ru: string }> = {
     fa: "NullID برای اعتبارسنجی خروجی از فراداده HMAC با عبارت عبور مشترک استفاده می‌کند. این امضای هویتی با کلید عمومی نیست.",
     ru: "NullID использует HMAC-метаданные с общей парольной фразой для проверки экспорта. Это не идентификационная подпись открытым ключом.",
   },
-  "export snapshot": { fa: "خروجی snapshot", ru: "экспорт снимка" },
+  "export snapshot": { fa: "خروجی اسنپ‌شات", ru: "экспорт снимка" },
   "Export passphrase": { fa: "عبارت عبور خروجی", ru: "Фраза экспорта" },
-  "Vault export passphrase": { fa: "عبارت عبور خروجی vault", ru: "Фраза экспорта vault" },
+  "Vault export passphrase": { fa: "عبارت عبور خروجی گاوصندوق", ru: "Фраза экспорта сейфа" },
   "required for encrypted export": { fa: "برای خروجی رمزگذاری‌شده الزامی است", ru: "обязательно для зашифрованного экспорта" },
-  "Vault export HMAC metadata": { fa: "فراداده HMAC خروجی vault", ru: "HMAC-метаданные экспорта vault" },
-  "Sign vault export metadata": { fa: "امضای فراداده خروجی vault", ru: "Подписать метаданные экспорта vault" },
+  "Vault export HMAC metadata": { fa: "فراداده HMAC خروجی گاوصندوق", ru: "HMAC-метаданные экспорта сейфа" },
+  "Sign vault export metadata": { fa: "امضای فراداده خروجی گاوصندوق", ru: "Подписать метаданные экспорта сейфа" },
   "trust state": { fa: "وضعیت اعتماد", ru: "состояние доверия" },
-  "Vault HMAC passphrase": { fa: "عبارت عبور HMAC vault", ru: "Парольная фраза HMAC для vault" },
-  "Vault signing passphrase": { fa: "عبارت امضای vault", ru: "Фраза подписи vault" },
-  "Saved vault key hint profile": { fa: "پروفایل ذخیره‌شده راهنمای کلید vault", ru: "Сохраненный профиль подсказки ключа vault" },
-  "Vault key hint": { fa: "راهنمای کلید vault", ru: "Подсказка ключа vault" },
+  "Vault HMAC passphrase": { fa: "عبارت عبور HMAC گاوصندوق", ru: "Парольная фраза HMAC для сейфа" },
+  "Vault signing passphrase": { fa: "عبارت امضای گاوصندوق", ru: "Фраза подписи сейфа" },
+  "Saved vault key hint profile": { fa: "پروفایل ذخیره‌شدهٔ راهنمای کلید گاوصندوق", ru: "Сохраненный профиль подсказки ключа сейфа" },
+  "Vault key hint": { fa: "راهنمای کلید گاوصندوق", ru: "Подсказка ключа сейфа" },
   "Key hints are local labels only; passphrases are never persisted.": {
     fa: "راهنماهای کلید فقط برچسب‌های محلی هستند؛ عبارت‌های عبور هرگز ذخیره نمی‌شوند.",
     ru: "Подсказки ключа являются только локальными метками; парольные фразы никогда не сохраняются.",
@@ -608,31 +629,31 @@ const phraseTranslations: Record<string, { fa: string; ru: string }> = {
     fa: "خروجی‌های بدون امضا هنگام ورود اعتبارسنجی HMAC را رد می‌کنند.",
     ru: "Экспорты без подписи пропускают HMAC-проверку при импорте.",
   },
-  "Import encrypted vault snapshot": { fa: "ورود snapshot رمزگذاری‌شده vault", ru: "Импорт зашифрованного снимка vault" },
-  "Import vault snapshot": { fa: "ورود snapshot vault", ru: "Импорт снимка vault" },
+  "Import encrypted vault snapshot": { fa: "ورود اسنپ‌شات رمزگذاری‌شدهٔ گاوصندوق", ru: "Импорт зашифрованного снимка сейфа" },
+  "Import vault snapshot": { fa: "ورود اسنپ‌شات گاوصندوق", ru: "Импорт снимка сейфа" },
   "Provide export passphrase and optional verification passphrase.": {
     fa: "عبارت عبور خروجی و در صورت نیاز عبارت عبور اعتبارسنجی را وارد کنید.",
     ru: "Укажите фразу экспорта и, при необходимости, проверочную фразу.",
   },
-  "import snapshot": { fa: "ورود snapshot", ru: "импорт снимка" },
-  "Encrypted vault import passphrase": { fa: "عبارت عبور ورود رمزگذاری‌شده vault", ru: "Фраза импорта зашифрованного vault" },
+  "import snapshot": { fa: "ورود اسنپ‌شات", ru: "импорт снимка" },
+  "Encrypted vault import passphrase": { fa: "عبارت عبور ورود رمزگذاری‌شدهٔ گاوصندوق", ru: "Фраза импорта зашифрованного сейфа" },
   required: { fa: "الزامی", ru: "обязательно" },
-  "Encrypted vault verification passphrase": { fa: "عبارت تایید vault رمزگذاری‌شده", ru: "Проверочная фраза зашифрованного vault" },
-  "required when snapshot metadata is signed": { fa: "وقتی فراداده snapshot امضاشده باشد الزامی است", ru: "обязательно, если метаданные снимка подписаны" },
+  "Encrypted vault verification passphrase": { fa: "عبارت تایید گاوصندوق رمزگذاری‌شده", ru: "Проверочная фраза зашифрованного сейфа" },
+  "required when snapshot metadata is signed": { fa: "وقتی فراداده اسنپ‌شات امضاشده باشد الزامی است", ru: "обязательно, если метаданные снимка подписаны" },
   "HMAC-protected snapshot detected": {
-    fa: "snapshot دارای HMAC شناسایی شد",
+    fa: "اسنپ‌شات دارای HMAC شناسایی شد",
     ru: "Обнаружен снимок с HMAC-защитой",
   },
-  "Signed snapshot detected": { fa: "snapshot امضاشده شناسایی شد", ru: "Обнаружен подписанный снимок" },
+  "Signed snapshot detected": { fa: "اسنپ‌شات امضاشده شناسایی شد", ru: "Обнаружен подписанный снимок" },
   "Verification is required before import.": { fa: "پیش از ورود، اعتبارسنجی الزامی است.", ru: "Перед импортом требуется проверка." },
-  "Vault verification passphrase": { fa: "عبارت تایید vault", ru: "Проверочная фраза vault" },
-  "required for HMAC-verified snapshots": { fa: "برای snapshotهای HMAC-اعتبارسنجی‌شده الزامی است", ru: "обязательно для HMAC-проверенных снимков" },
+  "Vault verification passphrase": { fa: "عبارت تایید گاوصندوق", ru: "Проверочная фраза сейфа" },
+  "required for HMAC-verified snapshots": { fa: "برای اسنپ‌شات‌های دارای اعتبارسنجی HMAC الزامی است", ru: "обязательно для HMAC-проверенных снимков" },
   "Unsigned snapshot. Continue only if you trust this file.": {
-    fa: "snapshot بدون امضا است. فقط اگر به این فایل اعتماد دارید ادامه دهید.",
+    fa: "اسنپ‌شات بدون امضا است. فقط اگر به این فایل اعتماد دارید ادامه دهید.",
     ru: "Снимок без подписи. Продолжайте, только если доверяете этому файлу.",
   },
   "Export policy": { fa: "خروجی policy", ru: "Экспорт policy" },
-  "Export policy packs": { fa: "خروجی policy packها", ru: "Экспорт policy pack" },
+  "Export policy packs": { fa: "خروجی بسته‌های خط‌مشی", ru: "Экспорт пакетов политики" },
   "Policy exports can include HMAC metadata and require the same verification passphrase on import.": {
     fa: "خروجی‌های policy می‌توانند فراداده HMAC داشته باشند و هنگام ورود به همان عبارت عبور تایید نیاز دارند.",
     ru: "Экспорты policy могут включать HMAC-метаданные и при импорте требуют ту же проверочную фразу.",
@@ -654,9 +675,9 @@ const phraseTranslations: Record<string, { fa: string; ru: string }> = {
     fa: "بسته‌های بدون امضا را می‌توان وارد کرد، اما اعتبارسنجی اصالت در دسترس نیست.",
     ru: "Пакеты без подписи можно импортировать, но проверка подлинности недоступна.",
   },
-  "Import policy pack": { fa: "ورود policy pack", ru: "Импорт policy pack" },
+  "Import policy pack": { fa: "ورود بسته خط‌مشی", ru: "Импорт пакета политики" },
   "Verify before import": { fa: "پیش از ورود اعتبارسنجی کنید", ru: "Проверьте перед импортом" },
-  "import policy pack": { fa: "ورود policy pack", ru: "импорт policy pack" },
+  "import policy pack": { fa: "ورود بسته خط‌مشی", ru: "импорт пакета политики" },
   "HMAC-protected pack detected": { fa: "بسته دارای HMAC شناسایی شد", ru: "Обнаружен пакет с HMAC-защитой" },
   "Signed pack detected": { fa: "بسته امضاشده شناسایی شد", ru: "Обнаружен подписанный пакет" },
   "Policy verification passphrase": { fa: "عبارت تایید policy", ru: "Проверочная фраза policy" },
@@ -666,8 +687,8 @@ const phraseTranslations: Record<string, { fa: string; ru: string }> = {
   },
   "required for signed packs": { fa: "برای بسته‌های امضاشده الزامی است", ru: "обязательно для подписанных пакетов" },
   "Unsigned policy pack. Continue only if you trust the source.": {
-    fa: "policy pack بدون امضا است. فقط در صورت اعتماد به منبع ادامه دهید.",
-    ru: "Policy pack без подписи. Продолжайте только если доверяете источнику.",
+    fa: "بسته خط‌مشی بدون امضا است. فقط در صورت اعتماد به منبع ادامه دهید.",
+    ru: "Пакет политики без подписи. Продолжайте только если доверяете источнику.",
   },
   "Hash inputs": { fa: "ورودی‌های هش", ru: "Входы хэша" },
   "Hash input": { fa: "ورودی هش", ru: "Ввод хэша" },
@@ -812,8 +833,8 @@ const phraseTranslations: Record<string, { fa: string; ru: string }> = {
   clean: { fa: "پاک", ru: "чистый" },
   "Compatibility diagnostics": { fa: "عیب‌یابی سازگاری", ru: "Диагностика совместимости" },
   format: { fa: "فرمت", ru: "формат" },
-  decode: { fa: "decode", ru: "декодирование" },
-  encode: { fa: "encode", ru: "кодирование" },
+  decode: { fa: "رمزگشایی", ru: "декодирование" },
+  encode: { fa: "رمزگذاری", ru: "кодирование" },
   "clean export": { fa: "خروجی پاک", ru: "чистый экспорт" },
   "probing browser support...": { fa: "در حال بررسی پشتیبانی مرورگر...", ru: "проверка поддержки браузера..." },
   "Metadata table": { fa: "جدول فراداده", ru: "Таблица метаданных" },
@@ -996,7 +1017,7 @@ const phraseTranslations: Record<string, { fa: string; ru: string }> = {
   "export with HMAC": { fa: "خروجی با HMAC", ru: "экспорт с HMAC" },
   "export all": { fa: "خروجی همه", ru: "экспорт всего" },
   import: { fa: "ورود", ru: "импорт" },
-  "import baseline": { fa: "ورود خط‌مبنا", ru: "импорт baseline" },
+  "import baseline": { fa: "ورود خط‌مشی پایه", ru: "импорт базовой политики" },
   "Batch sanitize": { fa: "پاک‌سازی دسته‌ای", ru: "Пакетная санитизация" },
   "free local processing": { fa: "پردازش رایگان محلی", ru: "бесплатная локальная обработка" },
   "processing...": { fa: "در حال پردازش...", ru: "обработка..." },
@@ -1099,7 +1120,10 @@ const phraseTranslations: Record<string, { fa: string; ru: string }> = {
   "Security posture at a glance": { fa: "وضعیت امنیتی در یک نگاه", ru: "Картина безопасности с первого взгляда" },
   "Operator testimonials": { fa: "گزارش اپراتورها", ru: "Отзывы операторов" },
   "Operator Notes": { fa: "یادداشت اپراتورها", ru: "Заметки операторов" },
-  "Field feedback from common workflows": { fa: "بازخورد میدانی از جریان‌های رایج", ru: "Практический фидбек из типовых сценариев" },
+  "Field feedback from common workflows": {
+    fa: "بازخورد میدانی از گردش‌کارهای رایج",
+    ru: "Практическая обратная связь из типовых рабочих процессов",
+  },
   guidance: { fa: "راهنمایی", ru: "руководство" },
   "Auto-clear clipboard": { fa: "پاک‌سازی خودکار کلیپ‌بورد", ru: "Автоочистка буфера обмена" },
   "Clipboard auto clear": { fa: "پاک‌سازی خودکار کلیپ‌بورد", ru: "Автоочистка буфера обмена" },
@@ -1272,7 +1296,10 @@ const phraseTranslations: Record<string, { fa: string; ru: string }> = {
   "Detected fields": { fa: "فیلدهای تشخیص‌داده‌شده", ru: "Обнаруженные поля" },
   "Workflow notes": { fa: "یادداشت‌های فرایندی", ru: "Заметки по рабочему процессу" },
   "Workflow Notes": { fa: "یادداشت‌های فرایندی", ru: "Заметки по рабочему процессу" },
-  "Operational guidance for common workflows": { fa: "راهنمای عملیاتی برای فرایندهای رایج", ru: "Операционные рекомендации для типовых сценариев" },
+  "Operational guidance for common workflows": {
+    fa: "راهنمای عملیاتی برای گردش‌کارهای رایج",
+    ru: "Операционные рекомендации для типовых сценариев",
+  },
   "Digest tools are for integrity checks. For password storage, use Password Storage Hashing (Argon2id/PBKDF2) in :pw.": {
     fa: "ابزارهای Digest برای بررسی یکپارچگی هستند. برای ذخیره‌سازی گذرواژه از Password Storage Hashing (Argon2id/PBKDF2) در :pw استفاده کنید.",
     ru: "Инструменты digest предназначены для проверки целостности. Для хранения паролей используйте Password Storage Hashing (Argon2id/PBKDF2) в :pw.",
@@ -1282,6 +1309,8 @@ const phraseTranslations: Record<string, { fa: string; ru: string }> = {
   "Common mistakes & limits": { fa: "اشتباهات رایج و محدودیت‌ها", ru: "Типовые ошибки и ограничения" },
   "Privacy notes": { fa: "نکات حریم خصوصی", ru: "Заметки по приватности" },
   guide: { fa: "راهنما", ru: "гайд" },
+  ...runtimePhraseTranslations,
+  ...workflowPhraseTranslations,
   ...guidePhraseTranslations,
 };
 
@@ -1447,7 +1476,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const value = useMemo<I18nContextValue>(
     () => ({
       locale,
-      availableLocales: ["en", "fa", "ru"],
+      availableLocales: SUPPORTED_LOCALES,
       localeMeta,
       setLocale,
       t,

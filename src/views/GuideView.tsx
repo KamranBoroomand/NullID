@@ -26,11 +26,11 @@ const trustSignals = [
 const workflowNotes = [
   {
     role: "Incident workflow",
-    note: "Use :sanitize policy packs before sharing logs, then export the safe-share bundle with hashes.",
+    note: "Use :share for guided package prep, or :sanitize when you need lower-level policy control before sharing logs.",
   },
   {
     role: "Artifact verification",
-    note: "Use :hash manifests and :enc envelopes to exchange integrity-checked artifacts across restricted environments.",
+    note: "Use :verify to inspect received workflow packages locally, and combine :hash or :enc when you need lower-level integrity or envelope steps.",
   },
   {
     role: "Privacy publishing",

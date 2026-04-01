@@ -424,15 +424,14 @@ export function EncView({ onOpenGuide }: EncViewProps) {
         </div>
         <div className="note-box">
           <div className="microcopy">
-            prefix NULLID:ENC:1, AES-GCM, PBKDF2 profile: {kdfProfile} ({kdfConfig.hash.toLowerCase()} / {formatNumber(kdfConfig.iterations)}),
-            AAD bound
+            {tr("prefix NULLID:ENC:1, AES-GCM, PBKDF2 profile:")} {kdfProfile} ({kdfConfig.hash.toLowerCase()} / {formatNumber(kdfConfig.iterations)}), {tr("AAD bound")}
           </div>
           <div className="microcopy">
             {envelopeMeta
-              ? `header: ${envelopeMeta.hash.toLowerCase()} / ${formatNumber(envelopeMeta.iterations)} · ${formatNumber(Math.ceil(envelopeMeta.cipherBytes / 1024))} KB ciphertext${envelopeMeta.name ? ` · ${envelopeMeta.name}` : ""}`
+              ? `${tr("header")}: ${envelopeMeta.hash.toLowerCase()} / ${formatNumber(envelopeMeta.iterations)} · ${formatNumber(Math.ceil(envelopeMeta.cipherBytes / 1024))} KB ${tr("ciphertext")}${envelopeMeta.name ? ` · ${envelopeMeta.name}` : ""}`
               : envelopeMetaError
-                ? `header parse: ${envelopeMetaError}`
-                : "header parse pending"}
+                ? `${tr("header parse")}: ${envelopeMetaError}`
+                : tr("header parse pending")}
           </div>
           <pre className="output">{cipherText || tr("Generate an envelope to view")}</pre>
         </div>
@@ -481,7 +480,7 @@ export function EncView({ onOpenGuide }: EncViewProps) {
           <pre className="output" aria-live="polite">{decrypted || tr("[pending]")}</pre>
           {decFileBlob && (
             <div className="microcopy">
-              file: {decFileName ?? "decrypted.bin"} · type: {decMime} · size: {decFileBlob.byteLength} bytes
+              {tr("file")}: {decFileName ?? "decrypted.bin"} · {tr("type")}: {decMime} · {tr("size")}: {decFileBlob.byteLength} {tr("bytes")}
             </div>
           )}
         </div>

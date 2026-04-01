@@ -25,8 +25,11 @@ import {
 } from "./utils/keyHintProfiles";
 
 const HashView = lazy(() => import("./views/HashView").then((module) => ({ default: module.HashView })));
+const SafeShareView = lazy(() => import("./views/SafeShareView").then((module) => ({ default: module.SafeShareView })));
+const IncidentWorkflowView = lazy(() => import("./views/IncidentWorkflowView").then((module) => ({ default: module.IncidentWorkflowView })));
 const RedactView = lazy(() => import("./views/RedactView").then((module) => ({ default: module.RedactView })));
 const SanitizeView = lazy(() => import("./views/SanitizeView").then((module) => ({ default: module.SanitizeView })));
+const VerifyPackageView = lazy(() => import("./views/VerifyPackageView").then((module) => ({ default: module.VerifyPackageView })));
 const MetaView = lazy(() => import("./views/MetaView").then((module) => ({ default: module.MetaView })));
 const EncView = lazy(() => import("./views/EncView").then((module) => ({ default: module.EncView })));
 const PwView = lazy(() => import("./views/PwView").then((module) => ({ default: module.PwView })));
@@ -49,8 +52,11 @@ function WorkspaceView({ active, onRegisterHashActions, onStatus, onOpenGuide }:
   return (
     <Suspense fallback={<div className="workspace-loading">{tr("loading module...")}</div>}>
       {active === "hash" ? <HashView onRegisterActions={onRegisterHashActions} onStatus={onStatus} onOpenGuide={onOpenGuide} /> : null}
+      {active === "share" ? <SafeShareView onOpenGuide={onOpenGuide} /> : null}
+      {active === "incident" ? <IncidentWorkflowView onOpenGuide={onOpenGuide} /> : null}
       {active === "redact" ? <RedactView onOpenGuide={onOpenGuide} /> : null}
       {active === "sanitize" ? <SanitizeView onOpenGuide={onOpenGuide} /> : null}
+      {active === "verify" ? <VerifyPackageView onOpenGuide={onOpenGuide} /> : null}
       {active === "meta" ? <MetaView onOpenGuide={onOpenGuide} /> : null}
       {active === "enc" ? <EncView onOpenGuide={onOpenGuide} /> : null}
       {active === "pw" ? <PwView onOpenGuide={onOpenGuide} /> : null}
@@ -65,7 +71,7 @@ function AppShell() {
   const { push } = useToast();
   const { locale, setLocale, t, tr } = useI18n();
   const buildId = import.meta.env.VITE_BUILD_ID?.trim();
-  const buildMarker = buildId ? `Version: ${buildId.slice(0, 7)}` : import.meta.env.PROD ? "Version: Release" : "Version: Local";
+  const buildMarker = buildId ? `${tr("Version")}: ${buildId.slice(0, 7)}` : import.meta.env.PROD ? tr("Version: Release") : tr("Version: Local");
   const [activeModule, setActiveModule] = usePersistentState<ModuleKey>("nullid:last-module", "hash");
   const [status, setStatus] = useState({ message: "ready", tone: "neutral" as StatusTone });
   const [theme, setTheme] = usePersistentState<ThemeMode>("nullid:theme", "light");
@@ -97,6 +103,9 @@ function AppShell() {
   const modules = useMemo<ModuleDefinition[]>(
     () => [
       { key: "hash", title: t("module.hash.title"), subtitle: t("module.hash.subtitle") },
+      { key: "share", title: t("module.share.title"), subtitle: t("module.share.subtitle") },
+      { key: "incident", title: t("module.incident.title"), subtitle: t("module.incident.subtitle") },
+      { key: "verify", title: t("module.verify.title"), subtitle: t("module.verify.subtitle") },
       { key: "redact", title: t("module.redact.title"), subtitle: t("module.redact.subtitle") },
       { key: "sanitize", title: t("module.sanitize.title"), subtitle: t("module.sanitize.subtitle") },
       { key: "meta", title: t("module.meta.title"), subtitle: t("module.meta.subtitle") },
@@ -221,7 +230,7 @@ function AppShell() {
   const confirmProfileExport = useCallback(async () => {
     try {
       if (profileExportSign && !profileExportPassphrase.trim()) {
-        setProfileExportError("HMAC passphrase required");
+        setProfileExportError(tr("HMAC passphrase required"));
         return;
       }
       const keyHint = profileExportSign ? sanitizeKeyHint(profileExportKeyHint) || undefined : undefined;
@@ -280,7 +289,7 @@ function AppShell() {
   const confirmProfileImport = useCallback(async () => {
     if (!pendingProfileImportFile || !profileImportDescriptor) return;
     if (profileImportDescriptor.signed && !profileImportPassphrase.trim()) {
-      setProfileImportError("verification passphrase required for HMAC-protected profiles");
+      setProfileImportError(tr("verification passphrase required for HMAC-protected profiles"));
       return;
     }
     try {
@@ -315,7 +324,7 @@ function AppShell() {
 
   const confirmWipe = useCallback(async () => {
     if (wipeConfirmText.trim().toUpperCase() !== "WIPE") {
-      setWipeError("type WIPE to confirm");
+      setWipeError(tr("type WIPE to confirm"));
       return;
     }
     setWipeBusy(true);
@@ -726,9 +735,9 @@ function AppShell() {
         {profileExportSign ? (
           <>
             <div className="status-line">
-              <span>trust state</span>
+              <span>{tr("trust state")}</span>
               <span className={trustTagClass(profileExportTrustState)}>{profileExportTrustState}</span>
-              {profileExportKeyHint.trim() ? <span className="microcopy">hint: {profileExportKeyHint.trim()}</span> : null}
+              {profileExportKeyHint.trim() ? <span className="microcopy">{tr("hint")}: {profileExportKeyHint.trim()}</span> : null}
             </div>
             <label className="action-dialog-field">
               <span>{tr("HMAC passphrase")}</span>
@@ -785,7 +794,7 @@ function AppShell() {
                   value={keyHintProfileName}
                   onChange={(event) => setKeyHintProfileName(event.target.value)}
                   aria-label={tr("Key hint profile name")}
-                  placeholder="team-signing-key"
+                  placeholder={tr("for example team-signing-key")}
                 />
               </label>
               <button type="button" className="button" onClick={saveProfileHint} disabled={!profileExportKeyHint.trim()}>
@@ -807,7 +816,7 @@ function AppShell() {
         title={tr("Import profile snapshot")}
         description={
           profileImportDescriptor
-            ? `${profileImportDescriptor.entryCount} entries · ${profileImportDescriptor.legacy ? "legacy" : `schema ${profileImportDescriptor.schemaVersion}`}`
+            ? `${profileImportDescriptor.entryCount} ${tr("entries")} · ${profileImportDescriptor.legacy ? tr("legacy") : `${tr("schema")} ${profileImportDescriptor.schemaVersion}`}`
             : tr("Select import settings")
         }
         confirmLabel={tr("import profile")}
@@ -817,7 +826,7 @@ function AppShell() {
         {profileImportDescriptor?.signed ? (
           <>
             <div className="status-line">
-              <span>trust state</span>
+              <span>{tr("trust state")}</span>
               <span className={trustTagClass(profileImportTrustState)}>{profileImportTrustState}</span>
               {profileImportDescriptor.keyHint ? <span className="microcopy">{tr("hint")}: {profileImportDescriptor.keyHint}</span> : null}
             </div>
@@ -842,7 +851,7 @@ function AppShell() {
         ) : (
           <>
             <div className="status-line">
-              <span>trust state</span>
+              <span>{tr("trust state")}</span>
               <span className={trustTagClass(profileImportTrustState)}>{profileImportTrustState}</span>
             </div>
             <p className="action-dialog-note">{tr("Unsigned profile snapshot. Continue only if you trust the source.")}</p>

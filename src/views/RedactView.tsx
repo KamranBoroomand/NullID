@@ -333,7 +333,7 @@ export function RedactView({ onOpenGuide }: RedactViewProps) {
             <span className="panel-subtext">{tr("preview + apply")}</span>
           </div>
           <div className="redact-preview" aria-label={tr("Highlight view")}>
-            {highlight(input, findings.matches)}
+            {highlight(input, findings.matches, tr("No findings yet."))}
           </div>
           <textarea className="textarea" readOnly value={output || redacted} aria-label={tr("Redacted output")} />
           <div className="controls-row">
@@ -585,8 +585,8 @@ function isValidIpv4(value: string) {
   });
 }
 
-function highlight(text: string, matches: Match[]) {
-  if (!matches.length) return <span className="muted">No findings yet.</span>;
+function highlight(text: string, matches: Match[], emptyLabel: string) {
+  if (!matches.length) return <span className="muted">{emptyLabel}</span>;
   const sorted = [...matches].sort((a, b) => a.start - b.start);
   const parts: ReactNode[] = [];
   let cursor = 0;

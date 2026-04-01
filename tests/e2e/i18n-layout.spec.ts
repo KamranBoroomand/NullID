@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
-type AppLocale = "ru" | "fa";
-type ModuleKey = "hash" | "redact" | "sanitize" | "meta" | "enc" | "pw" | "vault" | "selftest" | "guide";
+type AppLocale = "en" | "ru" | "fa";
+type ModuleKey = "hash" | "share" | "incident" | "verify" | "redact" | "sanitize" | "meta" | "enc" | "pw" | "vault" | "selftest" | "guide";
 
 interface ViewportScenario {
   label: string;
@@ -20,8 +20,8 @@ interface LayoutMetrics {
   frameShellOverflowY: string;
 }
 
-const locales: AppLocale[] = ["ru", "fa"];
-const moduleKeys: ModuleKey[] = ["hash", "redact", "sanitize", "meta", "enc", "pw", "vault", "selftest", "guide"];
+const locales: AppLocale[] = ["en", "ru", "fa"];
+const moduleKeys: ModuleKey[] = ["hash", "share", "incident", "verify", "redact", "sanitize", "meta", "enc", "pw", "vault", "selftest", "guide"];
 const viewports: ViewportScenario[] = [
   { label: "desktop", width: 1280, height: 900 },
   { label: "mobile", width: 390, height: 844 },
@@ -66,6 +66,8 @@ async function openLocalizedModule(page: Page, locale: AppLocale, moduleKey: Mod
   await page.goto("/");
   await expect(page.locator(".frame-shell")).toBeVisible();
   await expect(page.locator(".global-header")).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("lang", locale === "en" ? "en-US" : locale === "ru" ? "ru-RU" : "fa-IR");
+  await expect(page.locator("html")).toHaveAttribute("dir", locale === "fa" ? "rtl" : "ltr");
   await page.evaluate(async () => {
     if (!("fonts" in document)) return;
     try {

@@ -8,6 +8,7 @@ declare module "node:assert/strict" {
     equal: (actual: unknown, expected: unknown) => void;
     deepEqual: (actual: unknown, expected: unknown) => void;
     match: (actual: string, expected: RegExp) => void;
+    throws: (fn: () => unknown, expected?: RegExp) => void;
     rejects: (fn: () => unknown | Promise<unknown>) => Promise<void>;
   };
   export = assert;
@@ -15,6 +16,13 @@ declare module "node:assert/strict" {
 
 declare module "node:fs" {
   export function readFileSync(path: string, encoding: string): string;
+  export function writeFileSync(path: string, data: string, encoding: string): void;
+  export function mkdtempSync(prefix: string): string;
+  export function rmSync(path: string, options?: { recursive?: boolean; force?: boolean }): void;
+}
+
+declare module "node:os" {
+  export function tmpdir(): string;
 }
 
 declare module "node:child_process" {

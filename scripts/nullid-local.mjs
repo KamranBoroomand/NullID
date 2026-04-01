@@ -8,6 +8,8 @@ import os from "node:os";
 const ENVELOPE_PREFIX = "NULLID:ENC:1";
 const ENVELOPE_AAD = Buffer.from("nullid:enc:v1", "utf8");
 const sanitizeFormats = new Set(["auto", "text", "json", "ndjson", "csv", "xml", "yaml"]);
+const MAX_CUSTOM_PATTERN_LENGTH = 240;
+const MAX_CUSTOM_REPLACEMENT_LENGTH = 2000;
 const sensitiveKeys = new Set([
   "token",
   "authorization",
@@ -54,6 +56,43 @@ const PASSWORD_HASH_B64_SEGMENT = passwordHashSpec.record.base64Segment;
 const PASSWORD_HASH_B64_SEGMENT_RE = new RegExp(`^${PASSWORD_HASH_B64_SEGMENT}$`, "u");
 const PASSWORD_HASH_WARNINGS = passwordHashSpec.warnings;
 const PASSWORD_HASH_ERRORS = passwordHashSpec.errors;
+const NULLID_APP_NAME = "NullID";
+const NULLID_VERSION = readNullIdVersion();
+const WORKFLOW_PACKAGE_SCHEMA_VERSION = 1;
+const WORKFLOW_PACKAGE_KIND = "nullid-workflow-package";
+const SAFE_SHARE_BUNDLE_SCHEMA_VERSION = 2;
+const SAFE_SHARE_BUNDLE_KIND = "nullid-safe-share";
+const LEGACY_SAFE_SHARE_BUNDLE_SCHEMA_VERSION = 1;
+const WORKFLOW_UNSIGNED_NOTES = [
+  "Unsigned package. Sender identity is not asserted.",
+  "SHA-256 manifest entries help detect changes to listed artifacts, but they are not a signature.",
+];
+const SAFE_SHARE_WORKFLOW_PRESETS = {
+  "general-safe-share": {
+    label: "General safe share",
+    description: "Balanced disclosure reduction for routine sharing of text snippets and locally cleanable files.",
+  },
+  "support-ticket": {
+    label: "Support ticket / bug report",
+    description: "Removes obvious secrets while keeping enough operational context for debugging.",
+  },
+  "external-minimum": {
+    label: "External share / minimum disclosure",
+    description: "Aggressively reduces context and avoids packaging original references by default.",
+  },
+  "internal-investigation": {
+    label: "Internal investigation package",
+    description: "Preserves responder context for internal analysis while still scrubbing obvious secrets and tokens.",
+  },
+  "incident-handoff": {
+    label: "Incident artifact handoff",
+    description: "Preserves enough context for another responder while still scrubbing obvious secrets.",
+  },
+  "evidence-archive": {
+    label: "Evidence archive / preserve context",
+    description: "Preserves context more conservatively and allows original file packaging when needed.",
+  },
+};
 
 const command = process.argv[2];
 const args = process.argv.slice(3);
@@ -77,6 +116,9 @@ async function main() {
       return;
     case "bundle":
       runBundle(args);
+      return;
+    case "package-inspect":
+      runPackageInspect(args);
       return;
     case "redact":
       runRedact(args);
@@ -248,43 +290,163 @@ function runBundle(argv) {
   const outputPath = argv[1];
   if (!inputPath || !outputPath) {
     throw new Error(
-      "Usage: bundle <input-file> <output-json> [--preset nginx|apache|auth|json] [--policy <policy-json>] [--baseline <nullid.policy.json>] [--merge-mode strict-override|prefer-stricter] [--json-aware true|false] [--format auto|text|json|ndjson|csv|xml|yaml]",
+      "Usage: bundle <input-file> <output-json> [--preset nginx|apache|auth|json] [--workflow general-safe-share|support-ticket|external-minimum|internal-investigation|incident-handoff|evidence-archive] [--title <incident-title>] [--purpose <text>] [--case-ref <id>] [--recipient <scope>] [--policy <policy-json>] [--baseline <nullid.policy.json>] [--merge-mode strict-override|prefer-stricter] [--json-aware true|false] [--format auto|text|json|ndjson|csv|xml|yaml]",
     );
   }
   const input = fs.readFileSync(path.resolve(inputPath), "utf8");
   const options = parseSanitizeOptions(argv);
-  const result = sanitizeWithOptions(input, options);
-  const bundle = {
-    schemaVersion: 1,
-    kind: "nullid-safe-share",
-    createdAt: new Date().toISOString(),
-    tool: "sanitize",
-    sourceFile: inputPath,
-    detectedFormat: result.detectedFormat,
-    policy: options.policy,
-    input: {
-      bytes: Buffer.byteLength(input, "utf8"),
-      sha256: sha256Hex(input),
-    },
-    output: {
-      bytes: Buffer.byteLength(result.output, "utf8"),
-      sha256: sha256Hex(result.output),
-      text: result.output,
-    },
-    summary: {
-      linesAffected: result.linesAffected,
-      appliedRules: result.applied,
-      report: result.report,
-    },
+  const workflowPreset = resolveSafeShareWorkflowPresetCli(getOption(argv, "--workflow"));
+  const incidentMeta = {
+    title: getOption(argv, "--title") || "",
+    purpose: getOption(argv, "--purpose") || "",
+    caseReference: getOption(argv, "--case-ref") || "",
+    recipientScope: getOption(argv, "--recipient") || "",
   };
+  const result = sanitizeWithOptions(input, options);
+  const bundle = createSanitizeSafeShareBundleCli({
+    inputPath,
+    options,
+    workflowPreset,
+    incidentMeta,
+    result,
+    input,
+  });
   fs.writeFileSync(path.resolve(outputPath), `${JSON.stringify(bundle, null, 2)}\n`, "utf8");
   console.log(
     JSON.stringify(
       {
         output: outputPath,
+        schemaVersion: bundle.schemaVersion,
+        workflowType: bundle.workflowPackage.workflowType,
+        workflowPreset: bundle.workflowPackage.workflowPreset?.id || null,
         detectedFormat: result.detectedFormat,
         sha256: bundle.output.sha256,
         linesAffected: result.linesAffected,
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+function runPackageInspect(argv) {
+  const inputPath = argv[0];
+  if (!inputPath) {
+    throw new Error("Usage: package-inspect <input-file> [--pass <passphrase>|--pass-env <VAR>] [--verify-pass <passphrase>|--verify-pass-env <VAR>]");
+  }
+
+  const file = path.resolve(inputPath);
+  const raw = fs.readFileSync(file, "utf8");
+  const normalized = raw.trim().replace(/\s+/g, "");
+  let payloadText = raw;
+  let envelope = null;
+  let decrypted = false;
+
+  if (normalized.startsWith(`${ENVELOPE_PREFIX}.`)) {
+    const envelopeInspect = inspectEnvelopeBlob(raw);
+    envelope = {
+      prefix: ENVELOPE_PREFIX,
+      mime: envelopeInspect.header.mime || null,
+      name: envelopeInspect.header.name || null,
+      ciphertextBytes: envelopeInspect.ciphertextBytes,
+      kdf: {
+        name: envelopeInspect.header.kdf.name,
+        iterations: envelopeInspect.header.kdf.iterations,
+        hash: envelopeInspect.header.kdf.hash,
+      },
+    };
+
+    const passphrase = resolveOptionalPassphrase(argv);
+    if (!passphrase) {
+      console.log(
+        JSON.stringify(
+          {
+            file: inputPath,
+            artifactType: "envelope",
+            artifactKindLabel: "Encrypted envelope",
+            title: envelope.name ? `Encrypted envelope (${envelope.name})` : "Encrypted envelope",
+            verificationState: "verification-required",
+            verificationLabel: "Passphrase required",
+            envelope,
+            trustBasis: [
+              "Envelope header is inspectable locally.",
+              "The inner payload and AES-GCM integrity cannot be checked without the passphrase.",
+            ],
+            verifiedChecks: ["Envelope header parsed successfully."],
+            unverifiedChecks: ["Inner payload type is unknown until the envelope is decrypted."],
+            warnings: [],
+            limitations: ["Provide the envelope passphrase to inspect the inner payload."],
+            facts: [],
+            artifacts: [],
+            transforms: [],
+            policySummary: [],
+            failure: "Passphrase required to inspect inner payload",
+          },
+          null,
+          2,
+        ),
+      );
+      return;
+    }
+
+    const decryptedEnvelope = decryptEnvelopeBlob(passphrase, raw);
+    payloadText = decryptedEnvelope.plaintext.toString("utf8");
+    decrypted = true;
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(payloadText);
+  } catch {
+    console.log(
+      JSON.stringify(
+        {
+          file: inputPath,
+          artifactType: decrypted ? "unsupported" : "malformed",
+          artifactKindLabel: decrypted ? "Unsupported decrypted payload" : "Malformed artifact",
+          title: decrypted ? "Unsupported decrypted payload" : "Malformed artifact",
+          verificationState: decrypted ? "unsupported" : "malformed",
+          verificationLabel: decrypted ? "Unsupported" : "Malformed",
+          envelope,
+          trustBasis: decrypted ? ["Envelope decryption succeeded locally."] : [],
+          verifiedChecks: decrypted ? ["Envelope decrypted successfully."] : [],
+          unverifiedChecks: [
+            decrypted
+              ? "The decrypted payload is not one of the supported JSON artifact types in this verifier."
+              : "The content is not valid JSON and is not a NULLID:ENC:1 envelope.",
+          ],
+          warnings: [],
+          limitations: [],
+          facts: [],
+          artifacts: [],
+          transforms: [],
+          policySummary: [],
+          failure: decrypted ? "Unsupported decrypted payload" : "Malformed JSON or unsupported artifact encoding",
+        },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+
+  const inspected = inspectParsedArtifactCli(parsed, {
+    verificationPassphrase: resolveOptionalVerificationPassphrase(argv),
+  });
+  const trustBasis = decrypted
+    ? ["NULLID:ENC:1 envelope decrypted locally.", ...inspected.trustBasis]
+    : inspected.trustBasis;
+  const verifiedChecks = decrypted
+    ? ["Envelope decrypted successfully.", ...inspected.verifiedChecks]
+    : inspected.verifiedChecks;
+  console.log(
+    JSON.stringify(
+      {
+        file: inputPath,
+        envelope,
+        ...inspected,
+        trustBasis,
+        verifiedChecks,
       },
       null,
       2,
@@ -408,50 +570,8 @@ function runDecrypt(argv) {
   }
 
   const passphrase = resolvePassphrase(argv);
-  const blob = fs.readFileSync(path.resolve(inputPath), "utf8").trim();
-  const normalized = blob.replace(/\s+/g, "");
-  if (!normalized.startsWith(`${ENVELOPE_PREFIX}.`)) {
-    throw new Error("Unsupported envelope prefix");
-  }
-
-  const encoded = normalized.slice(`${ENVELOPE_PREFIX}.`.length);
-  const envelopePayload = fromBase64Url(encoded);
-  let envelope;
-  try {
-    envelope = JSON.parse(envelopePayload.toString("utf8"));
-  } catch {
-    throw new Error("Invalid envelope format");
-  }
-
-  if (!envelope?.header || envelope.header.version !== 1 || envelope.header.algo !== "AES-GCM") {
-    throw new Error("Unsupported envelope version");
-  }
-  if (!envelope.header.kdf || envelope.header.kdf.name !== "PBKDF2") {
-    throw new Error("Unsupported envelope kdf");
-  }
-
-  const nodeHash = normalizeKdfHash(envelope.header.kdf.hash).nodeHash;
-  const iterations = normalizeIterations(envelope.header.kdf.iterations);
-  const salt = fromBase64Url(envelope.header.kdf.salt);
-  const iv = fromBase64Url(envelope.header.iv);
-  const ciphertextWithTag = fromBase64Url(envelope.ciphertext);
-  if (ciphertextWithTag.length < 17) {
-    throw new Error("Invalid envelope ciphertext");
-  }
-  const ciphertext = ciphertextWithTag.subarray(0, ciphertextWithTag.length - 16);
-  const authTag = ciphertextWithTag.subarray(ciphertextWithTag.length - 16);
-
-  const key = crypto.pbkdf2Sync(Buffer.from(passphrase, "utf8"), salt, iterations, 32, nodeHash);
-  const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
-  decipher.setAAD(ENVELOPE_AAD);
-  decipher.setAuthTag(authTag);
-
-  let plaintext;
-  try {
-    plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-  } catch {
-    throw new Error("Decrypt failed: bad passphrase or envelope integrity failure");
-  }
+  const blob = fs.readFileSync(path.resolve(inputPath), "utf8");
+  const { plaintext, header } = decryptEnvelopeBlob(passphrase, blob);
 
   fs.writeFileSync(path.resolve(outputPath), plaintext);
   console.log(
@@ -460,8 +580,8 @@ function runDecrypt(argv) {
         input: inputPath,
         output: outputPath,
         bytes: plaintext.length,
-        mime: envelope.header.mime || "application/octet-stream",
-        name: envelope.header.name || path.basename(outputPath),
+        mime: header.mime || "application/octet-stream",
+        name: header.name || path.basename(outputPath),
       },
       null,
       2,
@@ -996,6 +1116,1428 @@ function runPrecommit(argv) {
   }
 }
 
+function createSanitizeSafeShareBundleCli({ inputPath, options, workflowPreset, incidentMeta, result, input }) {
+  const createdAt = new Date().toISOString();
+  const producer = {
+    app: NULLID_APP_NAME,
+    surface: "cli",
+    module: "sanitize",
+    version: NULLID_VERSION,
+    buildId: null,
+  };
+  const workflowPackage = createSanitizeWorkflowPackageCli({
+    createdAt,
+    producer,
+    sourceFile: inputPath,
+    detectedFormat: result.detectedFormat,
+    policy: options.policy,
+    preset: options.preset,
+    baselinePath: options.baselinePath || null,
+    workflowPreset,
+    incidentMeta,
+    inputText: input,
+    outputText: result.output,
+    summary: {
+      linesAffected: result.linesAffected,
+      appliedRules: result.applied,
+      report: result.report,
+    },
+  });
+
+  return {
+    schemaVersion: SAFE_SHARE_BUNDLE_SCHEMA_VERSION,
+    kind: SAFE_SHARE_BUNDLE_KIND,
+    createdAt,
+    tool: "sanitize",
+    producer,
+    sourceFile: inputPath,
+    detectedFormat: result.detectedFormat,
+    policy: cloneJson(options.policy),
+    input: {
+      bytes: Buffer.byteLength(input, "utf8"),
+      sha256: sha256Hex(input),
+    },
+    output: {
+      bytes: Buffer.byteLength(result.output, "utf8"),
+      sha256: sha256Hex(result.output),
+      text: result.output,
+    },
+    summary: {
+      linesAffected: result.linesAffected,
+      appliedRules: result.applied,
+      report: result.report,
+    },
+    warnings: [...workflowPackage.warnings],
+    limitations: [...workflowPackage.limitations],
+    workflowPackage,
+  };
+}
+
+function createSanitizeWorkflowPackageCli({
+  createdAt,
+  producer,
+  sourceFile,
+  detectedFormat,
+  policy,
+  preset,
+  baselinePath,
+  workflowPreset,
+  incidentMeta,
+  inputText,
+  outputText,
+  summary,
+}) {
+  if (workflowPreset) {
+    const classification = classifyTextForSafeShareCli(inputText);
+    const sourceHash = sha256Hex(inputText);
+    const outputHash = sha256Hex(outputText);
+    const policyJson = JSON.stringify(policy);
+    const resolvedTitle = sanitizeInlineCli(incidentMeta?.title) || `${workflowPreset.label} package`;
+    const resolvedPurpose = sanitizeInlineCli(incidentMeta?.purpose) || `Prepare text content for ${workflowPreset.label.toLowerCase()}.`;
+    const resolvedCaseReference = sanitizeInlineCli(incidentMeta?.caseReference);
+    const resolvedRecipientScope = sanitizeInlineCli(incidentMeta?.recipientScope);
+    const assistantReport = {
+      mode: "text",
+      workflowPreset: workflowPreset.id,
+      classification,
+      findings: Array.isArray(summary.report)
+        ? summary.report
+            .map((line) => {
+              const match = String(line).match(/^(.*?):\s*(\d+)$/);
+              if (!match) return null;
+              return { label: match[1], count: Number(match[2]) };
+            })
+            .filter(Boolean)
+        : [],
+      linesAffected: summary.linesAffected,
+      appliedRules: Array.isArray(summary.appliedRules) ? [...summary.appliedRules] : [],
+      protectAtExport: false,
+    };
+    const assistantReportJson = JSON.stringify(assistantReport);
+    const warnings = [
+      ...(Array.isArray(summary.appliedRules) && summary.appliedRules.length === 0
+        ? ["No sanitize rules triggered; review the output manually before sharing."]
+        : []),
+      ...WORKFLOW_UNSIGNED_NOTES,
+    ];
+    const limitations = [
+      "Review sanitized output before sharing outside the intended trust boundary.",
+      "Without an outer NULLID:ENC:1 envelope, the exported package remains readable JSON on disk.",
+    ];
+    const includedLabels = [
+      ...(sourceFile ? [`Original input reference (${sourceFile})`] : []),
+      "Shared output",
+      "Sanitize policy snapshot",
+      "Safe Share report",
+    ];
+
+    return {
+      schemaVersion: WORKFLOW_PACKAGE_SCHEMA_VERSION,
+      kind: WORKFLOW_PACKAGE_KIND,
+      packageType: "bundle",
+      workflowType: "safe-share-assistant",
+      producedAt: createdAt,
+      producer: cloneJson(producer),
+      workflowPreset: {
+        id: workflowPreset.id,
+        label: workflowPreset.label,
+        summary: workflowPreset.description,
+      },
+      summary: {
+        title: resolvedTitle,
+        description: "Safe Share Assistant export for text-based content.",
+        highlights: [
+          `Share class: ${formatSafeShareClassCli(classification)}`,
+          `Applied rules: ${Array.isArray(summary.appliedRules) ? summary.appliedRules.length : 0}`,
+          ...(resolvedCaseReference ? [`Case reference: ${resolvedCaseReference}`] : []),
+          "Protection: none",
+        ],
+      },
+      report: {
+        purpose: resolvedPurpose,
+        audience: resolvedRecipientScope,
+        includedArtifacts: includedLabels,
+        transformedArtifacts: ["Safe Share review", "Sanitize transformation"],
+        preservedArtifacts: sourceFile ? ["Original input reference only"] : [],
+        receiverCanVerify: [
+          "Workflow package structure and schema version.",
+          "SHA-256 manifest entries for included inline artifacts and references.",
+        ],
+        receiverCannotVerify: [
+          "Sender identity or authorship.",
+          "Whether omitted context outside the included artifacts was complete.",
+        ],
+      },
+      trust: {
+        identity: "not-asserted",
+        packageSignature: {
+          method: "none",
+        },
+        artifactManifest: {
+          algorithm: "sha256",
+          entryCount: sourceFile ? 4 : 3,
+        },
+        encryptedPayload: {
+          method: "none",
+        },
+        notes: [...WORKFLOW_UNSIGNED_NOTES],
+      },
+      artifacts: [
+        {
+          id: "source-input",
+          role: "input",
+          label: sourceFile ? `Original input (${sourceFile})` : "Original input",
+          kind: "reference",
+          mediaType: "text/plain",
+          included: false,
+          bytes: Buffer.byteLength(inputText, "utf8"),
+          sha256: sourceHash,
+          filename: sourceFile || undefined,
+        },
+        {
+          id: "shared-output",
+          role: "output",
+          label: "Shared output",
+          kind: "text",
+          mediaType: "text/plain;charset=utf-8",
+          included: true,
+          bytes: Buffer.byteLength(outputText, "utf8"),
+          sha256: outputHash,
+          text: outputText,
+        },
+        {
+          id: "sanitize-policy",
+          role: "policy",
+          label: "Sanitize policy snapshot",
+          kind: "json",
+          mediaType: "application/json",
+          included: true,
+          bytes: Buffer.byteLength(policyJson, "utf8"),
+          sha256: sha256Hex(policyJson),
+          json: cloneJson(policy),
+        },
+        {
+          id: "safe-share-report",
+          role: "report",
+          label: "Safe Share report",
+          kind: "json",
+          mediaType: "application/json",
+          included: true,
+          bytes: Buffer.byteLength(assistantReportJson, "utf8"),
+          sha256: sha256Hex(assistantReportJson),
+          json: assistantReport,
+        },
+      ],
+      policy: {
+        type: "sanitize",
+        config: cloneJson(policy),
+        preset: preset || undefined,
+        baseline: baselinePath,
+      },
+      transforms: [
+        {
+          id: "safe-share-review",
+          type: "safe-share",
+          label: "Safe Share review",
+          summary: `${workflowPreset.label} preset prepared a text safe-share package.`,
+          report: [
+            `classification:${classification}`,
+            `findings:${assistantReport.findings.length}`,
+            `source-reference:${sourceFile ? "included" : "omitted"}`,
+          ],
+          metadata: {
+            workflowPreset: workflowPreset.id,
+          },
+        },
+        {
+          id: "sanitize-transform",
+          type: "sanitize",
+          label: "Sanitize transformation",
+          summary: `Sanitized output ready (${summary.linesAffected} line${summary.linesAffected === 1 ? "" : "s"} changed).`,
+          applied: Array.isArray(summary.appliedRules) ? [...summary.appliedRules] : [],
+          report: Array.isArray(summary.report) ? [...summary.report] : [],
+          metadata: {
+            classification,
+            detectedFormat: detectedFormat || "text",
+          },
+        },
+      ],
+      warnings,
+      limitations,
+    };
+  }
+
+  return {
+    schemaVersion: WORKFLOW_PACKAGE_SCHEMA_VERSION,
+    kind: WORKFLOW_PACKAGE_KIND,
+    packageType: "bundle",
+    workflowType: "sanitize-safe-share",
+    producedAt: createdAt,
+    producer: cloneJson(producer),
+    summary: {
+      title: "Sanitized safe-share package",
+      description: "Portable local package containing sanitized output, policy snapshot, and SHA-256 manifest entries.",
+      highlights: [
+        `Detected format: ${detectedFormat || "text"}`,
+        `Lines affected: ${summary.linesAffected}`,
+        `Applied rules: ${Array.isArray(summary.appliedRules) ? summary.appliedRules.length : 0}`,
+      ],
+    },
+    report: {
+      purpose: "Prepare sanitized text for local safe sharing.",
+      includedArtifacts: [
+        "Original input reference",
+        "Sanitized output",
+        "Sanitize policy snapshot",
+      ],
+      transformedArtifacts: ["Sanitize transformation"],
+      preservedArtifacts: ["Original input reference only"],
+      receiverCanVerify: [
+        "Workflow package structure and schema version.",
+        "SHA-256 manifest entries for the original input reference and sanitized output.",
+      ],
+      receiverCannotVerify: [
+        "Sender identity or authorship.",
+        "Whether omitted source context outside the included artifacts was complete.",
+      ],
+    },
+    trust: {
+      identity: "not-asserted",
+      packageSignature: {
+        method: "none",
+      },
+      artifactManifest: {
+        algorithm: "sha256",
+        entryCount: 2,
+      },
+      encryptedPayload: {
+        method: "none",
+      },
+      notes: [...WORKFLOW_UNSIGNED_NOTES],
+    },
+    artifacts: [
+      {
+        id: "source-input",
+        role: "input",
+        label: sourceFile ? `Original input (${sourceFile})` : "Original input",
+        kind: "reference",
+        mediaType: "text/plain",
+        included: false,
+        bytes: Buffer.byteLength(inputText, "utf8"),
+        sha256: sha256Hex(inputText),
+        filename: sourceFile || undefined,
+      },
+      {
+        id: "sanitized-output",
+        role: "output",
+        label: "Sanitized output",
+        kind: "text",
+        mediaType: "text/plain;charset=utf-8",
+        included: true,
+        bytes: Buffer.byteLength(outputText, "utf8"),
+        sha256: sha256Hex(outputText),
+        text: outputText,
+      },
+      {
+        id: "sanitize-policy",
+        role: "policy",
+        label: "Sanitize policy snapshot",
+        kind: "json",
+        mediaType: "application/json",
+        included: true,
+        bytes: Buffer.byteLength(JSON.stringify(policy), "utf8"),
+        json: cloneJson(policy),
+      },
+    ],
+    policy: {
+      type: "sanitize",
+      config: cloneJson(policy),
+      preset: preset || undefined,
+      baseline: baselinePath,
+    },
+    transforms: [
+      {
+        id: "sanitize-transform",
+        type: "sanitize",
+        label: "Sanitize transformation",
+        summary: `Sanitized output ready (${summary.linesAffected} line${summary.linesAffected === 1 ? "" : "s"} changed).`,
+        applied: Array.isArray(summary.appliedRules) ? [...summary.appliedRules] : [],
+        report: Array.isArray(summary.report) ? [...summary.report] : [],
+        metadata: {
+          detectedFormat: detectedFormat || "text",
+        },
+      },
+    ],
+    warnings: [...WORKFLOW_UNSIGNED_NOTES],
+    limitations: [
+      "Sanitized output should still be reviewed before sharing outside the intended trust boundary.",
+      "Policy metadata is included for reproducibility; NullID does not claim public-key identity for this package.",
+    ],
+  };
+}
+
+function inspectParsedArtifactCli(payload, options = {}) {
+  if (looksLikeWorkflowArtifactCli(payload)) {
+    try {
+      return verifyWorkflowPayloadCli(payload);
+    } catch (error) {
+      return invalidWorkflowPayloadResultCli(payload, error);
+    }
+  }
+  if (looksLikePolicyPackCli(payload)) {
+    return verifyPolicyPackPayloadCli(payload, options);
+  }
+  if (looksLikeProfileCli(payload)) {
+    return verifyProfilePayloadCli(payload, options);
+  }
+  if (looksLikeVaultCli(payload)) {
+    return verifyVaultPayloadCli(payload, options);
+  }
+  return {
+    artifactType: "unsupported",
+    artifactKindLabel: "Unsupported artifact",
+    title: "Unsupported artifact",
+    verificationState: "unsupported",
+    verificationLabel: "Unsupported",
+    trustBasis: [],
+    verifiedChecks: [],
+    unverifiedChecks: ["This JSON payload is not a supported NullID artifact type in this verifier."],
+    warnings: [],
+    limitations: ["Supported types in this step: workflow packages, safe-share bundles, sanitize policy packs, profile snapshots, vault snapshots, and NULLID envelopes."],
+    facts: [],
+    artifacts: [],
+    transforms: [],
+    policySummary: [],
+  };
+}
+
+function invalidWorkflowPayloadResultCli(payload, error) {
+  const sourceKind = payload && typeof payload === "object" && payload.kind === SAFE_SHARE_BUNDLE_KIND ? "safe-share" : "workflow-package";
+  const schemaVersion = payload && typeof payload === "object" && typeof payload.schemaVersion === "number" ? payload.schemaVersion : 0;
+  const failure = error instanceof Error ? error.message : "Invalid workflow package payload";
+  return {
+    artifactType: sourceKind === "safe-share" ? "safe-share-bundle" : "workflow-package",
+    artifactKindLabel: sourceKind === "safe-share" ? "Safe-share bundle" : "Workflow package",
+    title: "Invalid workflow package",
+    verificationState: "invalid",
+    verificationLabel: "Invalid",
+    trustBasis: ["NullID recognized the workflow artifact type, but the payload could not be validated safely."],
+    verifiedChecks: [],
+    unverifiedChecks: ["No workflow-package integrity or authenticity guarantees could be established."],
+    warnings: [failure],
+    limitations: ["Workflow-package verification currently checks schema structure, manifest self-consistency, and honest trust metadata only."],
+    facts: [
+      { label: "Schema", value: String(schemaVersion) },
+      { label: "Source", value: sourceKind },
+    ],
+    artifacts: [],
+    transforms: [],
+    policySummary: [],
+    failure,
+  };
+}
+
+function verifyWorkflowPayloadCli(payload) {
+  const match = resolveWorkflowPayloadCli(payload);
+  const workflowPackage = match.workflowPackage;
+  const artifactChecks = Array.isArray(workflowPackage.artifacts) ? workflowPackage.artifacts.map((artifact) => verifyWorkflowArtifactCli(artifact)) : [];
+  const manifestEntryCount = Array.isArray(workflowPackage.artifacts)
+    ? workflowPackage.artifacts.filter((artifact) => typeof artifact.sha256 === "string").length
+    : 0;
+  const manifestCountMatches =
+    workflowPackage.trust &&
+    workflowPackage.trust.artifactManifest &&
+    Number(workflowPackage.trust.artifactManifest.entryCount) === manifestEntryCount;
+  const mismatchArtifacts = artifactChecks.filter((artifact) => artifact.status === "mismatch");
+  const verifiedArtifacts = artifactChecks.filter((artifact) => artifact.status === "verified");
+  const referenceArtifacts = artifactChecks.filter((artifact) => artifact.status === "reference");
+  const unverifiableArtifacts = artifactChecks.filter((artifact) => artifact.status === "unverified");
+  const signatureMethod =
+    workflowPackage.trust &&
+    workflowPackage.trust.packageSignature &&
+    workflowPackage.trust.packageSignature.method === "shared-secret-hmac"
+      ? "shared-secret-hmac"
+      : "none";
+  let verificationState = "unsigned";
+  let verificationLabel = "Unsigned";
+  let failure;
+
+  if (signatureMethod !== "none") {
+    verificationState = "invalid";
+    verificationLabel = "Invalid";
+    failure = "Package declares shared-secret verification, but no verifiable package signature is available in the current workflow package contract.";
+  } else if (!manifestCountMatches || mismatchArtifacts.length > 0) {
+    verificationState = "mismatch";
+    verificationLabel = "Mismatch";
+    failure = mismatchArtifacts.length > 0
+      ? `${mismatchArtifacts.length} artifact hash mismatch(es) detected.`
+      : "Manifest entry count mismatch.";
+  } else if (verifiedArtifacts.length > 0 || manifestCountMatches) {
+    verificationState = "integrity-checked";
+    verificationLabel = "Integrity checked";
+  }
+
+  return {
+    artifactType: match.sourceKind === "safe-share" ? "safe-share-bundle" : "workflow-package",
+    artifactKindLabel: match.sourceKind === "safe-share" ? "Safe-share bundle" : "Workflow package",
+    title:
+      workflowPackage.summary && typeof workflowPackage.summary.title === "string" && workflowPackage.summary.title
+        ? workflowPackage.summary.title
+        : "Workflow package",
+    verificationState,
+    verificationLabel,
+    trustBasis: [
+      signatureMethod === "none" ? "Unsigned workflow package." : `Declared trust basis: ${signatureMethod}.`,
+      manifestCountMatches
+        ? `SHA-256 manifest entry count matches (${manifestEntryCount}).`
+        : `SHA-256 manifest entry count mismatch (${workflowPackage.trust?.artifactManifest?.entryCount ?? "unknown"} declared vs ${manifestEntryCount} present).`,
+    ],
+    verifiedChecks: [
+      `Workflow package schema ${Number(workflowPackage.schemaVersion) || 0} parsed successfully.`,
+      ...(verifiedArtifacts.length > 0 ? [`Verified SHA-256 for ${verifiedArtifacts.length} included artifact(s).`] : []),
+    ],
+    unverifiedChecks: [
+      "Sender identity is not asserted by this package format.",
+      ...(referenceArtifacts.length > 0
+        ? [`${referenceArtifacts.length} referenced artifact(s) were listed but not included, so their bytes could not be verified locally.`]
+        : []),
+      ...(unverifiableArtifacts.length > 0
+        ? [`${unverifiableArtifacts.length} included artifact(s) lacked inline content needed for local hash verification.`]
+        : []),
+    ],
+    warnings: [
+      ...(Array.isArray(workflowPackage.warnings) ? workflowPackage.warnings : []),
+      ...(!manifestCountMatches ? ["Manifest metadata does not match the number of hashed artifact entries."] : []),
+      ...(signatureMethod !== "none"
+        ? ["Package declares shared-secret HMAC trust, but the current workflow package contract does not carry a verifiable package signature."]
+        : []),
+    ],
+    limitations: Array.isArray(workflowPackage.limitations) ? workflowPackage.limitations : [],
+    facts: [
+      { label: "Workflow", value: typeof workflowPackage.workflowType === "string" ? workflowPackage.workflowType : "unknown" },
+      { label: "Package type", value: typeof workflowPackage.packageType === "string" ? workflowPackage.packageType : "unknown" },
+      { label: "Schema", value: String(Number(workflowPackage.schemaVersion) || 0) },
+      { label: "Source", value: match.sourceKind },
+      ...(workflowPackage.workflowPreset && typeof workflowPackage.workflowPreset === "object" && typeof workflowPackage.workflowPreset.label === "string"
+        ? [{ label: "Workflow preset", value: workflowPackage.workflowPreset.label }]
+        : []),
+      ...(typeof workflowPackage.producedAt === "string" ? [{ label: "Produced at", value: workflowPackage.producedAt }] : []),
+      ...(workflowPackage.producer && typeof workflowPackage.producer === "object"
+        ? [{ label: "Producer", value: `${workflowPackage.producer.app || NULLID_APP_NAME} / ${workflowPackage.producer.surface || "unknown"}` }]
+        : []),
+    ],
+    artifacts: artifactChecks,
+    transforms: Array.isArray(workflowPackage.transforms)
+      ? workflowPackage.transforms.map((transform) => ({ label: transform.label, value: transform.summary }))
+      : [],
+    policySummary: summarizeWorkflowPolicyCli(workflowPackage.policy),
+    workflowReport: summarizeWorkflowReportCli(workflowPackage.report),
+    failure,
+  };
+}
+
+function verifyWorkflowArtifactCli(artifact) {
+  const base = {
+    id: artifact.id,
+    role: artifact.role,
+    label: artifact.label,
+    detail: "No local verification performed.",
+    status: "unverified",
+    included: Boolean(artifact.included),
+    kind: artifact.kind,
+    mediaType: artifact.mediaType,
+    bytes: artifact.bytes,
+    sha256: artifact.sha256,
+  };
+
+  if (!artifact.sha256) {
+    return {
+      ...base,
+      detail: "No SHA-256 manifest entry recorded for this artifact.",
+    };
+  }
+  if (!artifact.included) {
+    return {
+      ...base,
+      status: "reference",
+      detail: "Artifact was referenced but not included, so local byte verification was not possible.",
+    };
+  }
+  if (artifact.kind === "text" && typeof artifact.text === "string") {
+    const computed = sha256Hex(artifact.text);
+    return {
+      ...base,
+      status: computed === artifact.sha256 ? "verified" : "mismatch",
+      detail: computed === artifact.sha256 ? "SHA-256 matches the included text payload." : "SHA-256 does not match the included text payload.",
+    };
+  }
+  if (artifact.kind === "json" && artifact.json !== undefined) {
+    const computed = sha256Hex(JSON.stringify(artifact.json));
+    return {
+      ...base,
+      status: computed === artifact.sha256 ? "verified" : "mismatch",
+      detail: computed === artifact.sha256 ? "SHA-256 matches the included JSON payload." : "SHA-256 does not match the included JSON payload.",
+    };
+  }
+  if (artifact.kind === "binary" && typeof artifact.base64 === "string") {
+    const computed = sha256Hex(decodeBase64StrictCli(artifact.base64, "Invalid binary artifact base64 payload"));
+    return {
+      ...base,
+      status: computed === artifact.sha256 ? "verified" : "mismatch",
+      detail: computed === artifact.sha256 ? "SHA-256 matches the included binary payload." : "SHA-256 does not match the included binary payload.",
+    };
+  }
+  return {
+    ...base,
+    detail: "Artifact includes a manifest hash, but no inline payload was available for local verification.",
+  };
+}
+
+function resolveWorkflowPayloadCli(payload) {
+  if (isWorkflowPackageLike(payload)) {
+    return {
+      workflowPackage: payload,
+      legacy: false,
+      sourceKind: "workflow-package",
+    };
+  }
+
+  if (payload && typeof payload === "object" && payload.kind === SAFE_SHARE_BUNDLE_KIND) {
+    if (isWorkflowPackageLike(payload.workflowPackage)) {
+      return {
+        workflowPackage: payload.workflowPackage,
+        legacy: false,
+        sourceKind: "safe-share",
+      };
+    }
+
+    const legacy = mapLegacySafeShareBundleCli(payload);
+    if (legacy) {
+      return {
+        workflowPackage: legacy,
+        legacy: true,
+        sourceKind: "safe-share",
+      };
+    }
+  }
+
+  throw new Error(describeWorkflowPayloadFailureCli(payload));
+}
+
+function isWorkflowPackageLike(value) {
+  return Boolean(value) && typeof value === "object" && value.kind === WORKFLOW_PACKAGE_KIND && Number(value.schemaVersion) === WORKFLOW_PACKAGE_SCHEMA_VERSION;
+}
+
+function mapLegacySafeShareBundleCli(payload) {
+  if (!payload || typeof payload !== "object" || payload.kind !== SAFE_SHARE_BUNDLE_KIND) {
+    return null;
+  }
+  if (Number(payload.schemaVersion) !== LEGACY_SAFE_SHARE_BUNDLE_SCHEMA_VERSION && Number(payload.schemaVersion) !== SAFE_SHARE_BUNDLE_SCHEMA_VERSION) {
+    return null;
+  }
+  if (!payload.input || !payload.output || typeof payload.output.text !== "string") {
+    return null;
+  }
+
+  const policy = normalizePolicyConfig(payload.policy) || undefined;
+  const summary = payload.summary && typeof payload.summary === "object" ? payload.summary : {};
+  const producer =
+    payload.producer && typeof payload.producer === "object"
+      ? {
+          app: NULLID_APP_NAME,
+          surface: payload.producer.surface === "web" || payload.producer.surface === "cli" ? payload.producer.surface : "unknown",
+          module: typeof payload.producer.module === "string" ? payload.producer.module : "sanitize",
+          version: typeof payload.producer.version === "string" ? payload.producer.version : null,
+          buildId: typeof payload.producer.buildId === "string" ? payload.producer.buildId : null,
+        }
+      : {
+          app: NULLID_APP_NAME,
+          surface: "unknown",
+          module: "sanitize",
+          version: null,
+          buildId: null,
+        };
+
+  return {
+    schemaVersion: WORKFLOW_PACKAGE_SCHEMA_VERSION,
+    kind: WORKFLOW_PACKAGE_KIND,
+    packageType: "bundle",
+    workflowType: "sanitize-safe-share",
+    producedAt: typeof payload.createdAt === "string" ? payload.createdAt : new Date(0).toISOString(),
+    producer,
+    summary: {
+      title: "Sanitized safe-share package",
+      description: "Compatibility-mapped safe-share bundle.",
+      highlights: [
+        `Lines affected: ${typeof summary.linesAffected === "number" ? summary.linesAffected : 0}`,
+        `Applied rules: ${Array.isArray(summary.appliedRules) ? summary.appliedRules.length : 0}`,
+      ],
+    },
+    trust: {
+      identity: "not-asserted",
+      packageSignature: {
+        method: "none",
+      },
+      artifactManifest: {
+        algorithm: "sha256",
+        entryCount: 2,
+      },
+      encryptedPayload: {
+        method: "none",
+      },
+      notes: [...WORKFLOW_UNSIGNED_NOTES],
+    },
+    artifacts: [
+      {
+        id: "source-input",
+        role: "input",
+        label: typeof payload.sourceFile === "string" ? `Original input (${payload.sourceFile})` : "Original input",
+        kind: "reference",
+        mediaType: "text/plain",
+        included: false,
+        bytes: typeof payload.input.bytes === "number" ? payload.input.bytes : undefined,
+        sha256: typeof payload.input.sha256 === "string" ? payload.input.sha256 : undefined,
+        filename: typeof payload.sourceFile === "string" ? payload.sourceFile : undefined,
+      },
+      {
+        id: "sanitized-output",
+        role: "output",
+        label: "Sanitized output",
+        kind: "text",
+        mediaType: "text/plain;charset=utf-8",
+        included: true,
+        bytes: typeof payload.output.bytes === "number" ? payload.output.bytes : undefined,
+        sha256: typeof payload.output.sha256 === "string" ? payload.output.sha256 : undefined,
+        text: payload.output.text,
+      },
+      {
+        id: "sanitize-policy",
+        role: "policy",
+        label: "Sanitize policy snapshot",
+        kind: "json",
+        mediaType: "application/json",
+        included: true,
+        bytes: policy ? Buffer.byteLength(JSON.stringify(policy), "utf8") : undefined,
+        json: policy,
+      },
+    ],
+    policy: policy
+      ? {
+          type: "sanitize",
+          config: policy,
+        }
+      : undefined,
+    transforms: [
+      {
+        id: "sanitize-transform",
+        type: "sanitize",
+        label: "Sanitize transformation",
+        summary: "Compatibility-mapped sanitize report.",
+        applied: Array.isArray(summary.appliedRules) ? [...summary.appliedRules] : [],
+        report: Array.isArray(summary.report) ? [...summary.report] : [],
+        metadata: {
+          detectedFormat: typeof payload.detectedFormat === "string" ? payload.detectedFormat : "text",
+        },
+      },
+    ],
+    warnings: [...WORKFLOW_UNSIGNED_NOTES],
+    limitations: Array.isArray(payload.limitations) ? [...payload.limitations] : [],
+  };
+}
+
+function describeWorkflowPayloadFailureCli(payload) {
+  if (!payload || typeof payload !== "object") {
+    return "Unsupported workflow package payload";
+  }
+  if (payload.kind === WORKFLOW_PACKAGE_KIND) {
+    if (Number(payload.schemaVersion) !== WORKFLOW_PACKAGE_SCHEMA_VERSION) {
+      return `Unsupported workflow package schema: ${String(payload.schemaVersion ?? "unknown")}`;
+    }
+    return "Invalid workflow package payload";
+  }
+  if (payload.kind === SAFE_SHARE_BUNDLE_KIND) {
+    const schemaVersion = Number(payload.schemaVersion);
+    if (schemaVersion !== LEGACY_SAFE_SHARE_BUNDLE_SCHEMA_VERSION && schemaVersion !== SAFE_SHARE_BUNDLE_SCHEMA_VERSION) {
+      return `Unsupported safe-share bundle schema: ${String(payload.schemaVersion ?? "unknown")}`;
+    }
+    if (payload.workflowPackage && typeof payload.workflowPackage === "object" && payload.workflowPackage.kind === WORKFLOW_PACKAGE_KIND) {
+      if (Number(payload.workflowPackage.schemaVersion) !== WORKFLOW_PACKAGE_SCHEMA_VERSION) {
+        return `Unsupported embedded workflow package schema: ${String(payload.workflowPackage.schemaVersion ?? "unknown")}`;
+      }
+      return "Invalid embedded workflow package payload";
+    }
+    return "Invalid safe-share bundle payload";
+  }
+  return "Unsupported workflow package payload";
+}
+
+function looksLikeWorkflowArtifactCli(value) {
+  return Boolean(value) && typeof value === "object" && (value.kind === WORKFLOW_PACKAGE_KIND || value.kind === SAFE_SHARE_BUNDLE_KIND);
+}
+
+function looksLikePolicyPackCli(value) {
+  return Boolean(value) && typeof value === "object" && value.kind === "sanitize-policy-pack";
+}
+
+function looksLikeProfileCli(value) {
+  return Boolean(value) && typeof value === "object" && (value.kind === "profile" || (value.entries && value.schemaVersion !== undefined));
+}
+
+function looksLikeVaultCli(value) {
+  return Boolean(value) && typeof value === "object" && (value.kind === "vault" || value.vault || value.notes || value.meta);
+}
+
+function summarizeWorkflowPolicyCli(policy) {
+  if (!policy || typeof policy !== "object") return [];
+  const facts = [];
+  if (policy.type) facts.push({ label: "Policy type", value: String(policy.type) });
+  if (policy.preset) facts.push({ label: "Preset", value: String(policy.preset) });
+  if (policy.packName) facts.push({ label: "Pack", value: String(policy.packName) });
+  if (policy.baseline) facts.push({ label: "Baseline", value: String(policy.baseline) });
+  if (policy.config && typeof policy.config === "object" && policy.config.rulesState && typeof policy.config.rulesState === "object") {
+    const enabledRules = Object.values(policy.config.rulesState).filter(Boolean).length;
+    facts.push({ label: "Enabled rules", value: String(enabledRules) });
+    facts.push({ label: "JSON aware", value: policy.config.jsonAware ? "yes" : "no" });
+    facts.push({ label: "Custom rules", value: String(Array.isArray(policy.config.customRules) ? policy.config.customRules.length : 0) });
+  }
+  return facts;
+}
+
+function summarizeWorkflowReportCli(report) {
+  if (!report || typeof report !== "object") return null;
+  return {
+    purpose: typeof report.purpose === "string" ? report.purpose : undefined,
+    audience: typeof report.audience === "string" ? report.audience : undefined,
+    includedArtifacts: Array.isArray(report.includedArtifacts) ? report.includedArtifacts.map(String) : [],
+    transformedArtifacts: Array.isArray(report.transformedArtifacts) ? report.transformedArtifacts.map(String) : [],
+    preservedArtifacts: Array.isArray(report.preservedArtifacts) ? report.preservedArtifacts.map(String) : [],
+    receiverCanVerify: Array.isArray(report.receiverCanVerify) ? report.receiverCanVerify.map(String) : [],
+    receiverCannotVerify: Array.isArray(report.receiverCannotVerify) ? report.receiverCannotVerify.map(String) : [],
+  };
+}
+
+function verifyPolicyPackPayloadCli(payload, options = {}) {
+  const descriptor = {
+    schemaVersion: typeof payload.schemaVersion === "number" ? payload.schemaVersion : 0,
+    packCount: Array.isArray(payload.packs) ? payload.packs.length : payload.pack ? 1 : 0,
+    keyHint: payload.signature && typeof payload.signature === "object" && typeof payload.signature.keyHint === "string" ? payload.signature.keyHint : undefined,
+  };
+  if (payload.kind !== "sanitize-policy-pack") {
+    return invalidSnapshotResultCli("policy-pack", "Sanitize policy pack", descriptor, "Invalid policy payload kind");
+  }
+
+  if (Number(payload.schemaVersion) === 1) {
+    const source = Array.isArray(payload.packs) ? payload.packs : payload.pack ? [payload.pack] : [];
+    const packNames = source
+      .filter((entry) => entry && typeof entry === "object" && typeof entry.name === "string")
+      .map((entry) => entry.name.trim())
+      .filter(Boolean);
+    return {
+      artifactType: "policy-pack",
+      artifactKindLabel: "Sanitize policy pack",
+      title: "Sanitize policy pack",
+      verificationState: "unsigned",
+      verificationLabel: "Unsigned",
+      trustBasis: ["Legacy policy pack with no integrity metadata."],
+      verifiedChecks: [`Parsed ${packNames.length} policy pack(s) from the legacy payload.`],
+      unverifiedChecks: ["Legacy policy packs do not include payload hashing or HMAC verification metadata."],
+      warnings: [],
+      limitations: ["Policy pack verification checks payload integrity and optional shared-secret HMAC metadata only."],
+      facts: [
+        { label: "Schema", value: String(descriptor.schemaVersion) },
+        { label: "Pack count", value: String(packNames.length) },
+        ...(typeof payload.exportedAt === "string" ? [{ label: "Exported at", value: payload.exportedAt }] : []),
+      ],
+      artifacts: packNames.map((name) => ({ id: name, role: "pack", label: name, detail: "Policy pack entry", status: "unverified" })),
+    };
+  }
+
+  if (Number(payload.schemaVersion) !== 2) {
+    return invalidSnapshotResultCli("policy-pack", "Sanitize policy pack", descriptor, `Unsupported policy schema: ${String(payload.schemaVersion ?? "unknown")}`);
+  }
+
+  const packs = (Array.isArray(payload.packs) ? payload.packs : [])
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const name = typeof entry.name === "string" ? entry.name.trim() : "";
+      const config = normalizePolicyConfig(entry.config);
+      if (!name || !config) return null;
+      return {
+        name,
+        createdAt: typeof entry.createdAt === "string" ? entry.createdAt : new Date(0).toISOString(),
+        config,
+      };
+    })
+    .filter(Boolean);
+  try {
+    const verification = verifySnapshotIntegrityCli({
+      subject: "Policy pack",
+      countKey: "packCount",
+      actualCount: packs.length,
+      payload: {
+        schemaVersion: 2,
+        kind: "sanitize-policy-pack",
+        exportedAt: payload.exportedAt,
+        packs: packs.map((entry) => ({ name: entry.name, createdAt: entry.createdAt, config: entry.config })),
+      },
+      integrity: payload.integrity,
+      signature: payload.signature,
+      verificationPassphrase: options.verificationPassphrase,
+      missingIntegrityMessage: "Policy integrity metadata missing",
+      invalidIntegrityMessage: "Invalid policy integrity metadata",
+      countMismatchMessage: "Policy integrity mismatch (count)",
+      hashMismatchMessage: "Policy integrity mismatch (hash)",
+      invalidSignatureMessage: "Invalid policy signature metadata",
+      verificationRequiredMessage: "Policy pack is signed; verification passphrase required",
+      verificationFailedMessage: "Policy signature verification failed",
+    });
+    const signed = verification.signed;
+    const verificationState = signed ? "verified" : "integrity-checked";
+    return {
+      artifactType: "policy-pack",
+      artifactKindLabel: "Sanitize policy pack",
+      title: "Sanitize policy pack",
+      verificationState,
+      verificationLabel: signed ? "HMAC verified" : "Integrity checked",
+      trustBasis: signed
+        ? ["Shared-secret HMAC verification succeeded.", "Payload hash and pack count matched the signed metadata."]
+        : ["Payload hash and pack count matched the embedded integrity metadata.", "No sender identity is asserted."],
+      verifiedChecks: [`Policy pack count matched (${packs.length}).`, "Payload hash matched the embedded integrity metadata."],
+      unverifiedChecks: signed ? ["Shared-secret verification proves tamper detection for holders of the same secret, not public-key identity."] : [],
+      warnings: [],
+      limitations: ["Policy pack verification checks payload integrity and optional shared-secret HMAC metadata only."],
+      facts: [
+        { label: "Schema", value: String(descriptor.schemaVersion) },
+        { label: "Pack count", value: String(packs.length) },
+        ...(typeof payload.exportedAt === "string" ? [{ label: "Exported at", value: payload.exportedAt }] : []),
+        ...(descriptor.keyHint ? [{ label: "Key hint", value: descriptor.keyHint }] : []),
+      ],
+      artifacts: packs.map((entry) => ({
+        id: entry.name,
+        role: "pack",
+        label: entry.name,
+        detail: "Policy pack entry",
+        status: snapshotArtifactStatusCli(verificationState),
+      })),
+    };
+  } catch (error) {
+    return snapshotErrorResultCli(
+      "policy-pack",
+      "Sanitize policy pack",
+      descriptor,
+      error,
+      packs.map((entry) => entry.name),
+      payload.exportedAt,
+      { role: "pack", detail: "Policy pack entry" },
+    );
+  }
+}
+
+function verifyProfilePayloadCli(payload, options = {}) {
+  const descriptor = {
+    schemaVersion: typeof payload.schemaVersion === "number" ? payload.schemaVersion : 0,
+    entryCount: payload.entries && typeof payload.entries === "object" ? Object.keys(payload.entries).length : 0,
+    keyHint: payload.signature && typeof payload.signature === "object" && typeof payload.signature.keyHint === "string" ? payload.signature.keyHint : undefined,
+    legacy: Number(payload.schemaVersion) === 1,
+  };
+  if (Number(payload.schemaVersion) === 1) {
+    if (!payload.entries || typeof payload.entries !== "object" || Array.isArray(payload.entries)) {
+      return invalidSnapshotResultCli("profile", "Profile snapshot", descriptor, "Invalid legacy profile payload");
+    }
+    if (!Object.values(payload.entries).every(isSupportedProfileValueCli)) {
+      return invalidSnapshotResultCli("profile", "Profile snapshot", descriptor, "Legacy profile contains unsupported value types");
+    }
+    const sampleKeys = sampleEntryKeysCli(payload.entries);
+    return {
+      artifactType: "profile",
+      artifactKindLabel: "Profile snapshot",
+      title: "Profile snapshot",
+      verificationState: "unsigned",
+      verificationLabel: "Unsigned",
+      trustBasis: ["Legacy profile payload with no integrity metadata."],
+      verifiedChecks: [`Parsed ${Object.keys(payload.entries).length} profile entr${Object.keys(payload.entries).length === 1 ? "y" : "ies"}.`],
+      unverifiedChecks: ["Legacy profile payloads do not carry payload hashing or HMAC verification metadata."],
+      warnings: [],
+      limitations: ["Profile verification checks payload integrity and optional shared-secret HMAC metadata only."],
+      facts: [
+        { label: "Schema", value: String(descriptor.schemaVersion) },
+        { label: "Entry count", value: String(Object.keys(payload.entries).length) },
+        ...(typeof payload.exportedAt === "string" ? [{ label: "Exported at", value: payload.exportedAt }] : []),
+      ],
+      artifacts: sampleKeys.map((key) => ({ id: key, role: "entry", label: key, detail: "Profile entry key", status: "unverified" })),
+    };
+  }
+  if (Number(payload.schemaVersion) !== 2) {
+    return invalidSnapshotResultCli("profile", "Profile snapshot", descriptor, `Unsupported profile schema: ${String(payload.schemaVersion ?? "unknown")}`);
+  }
+  if (payload.kind && payload.kind !== "profile") {
+    return invalidSnapshotResultCli("profile", "Profile snapshot", descriptor, "Invalid profile payload kind");
+  }
+  if (!payload.entries || typeof payload.entries !== "object" || Array.isArray(payload.entries)) {
+    return invalidSnapshotResultCli("profile", "Profile snapshot", descriptor, "Invalid profile payload");
+  }
+  if (!Object.values(payload.entries).every(isSupportedProfileValueCli)) {
+    return invalidSnapshotResultCli("profile", "Profile snapshot", descriptor, "Profile payload contains unsupported value types");
+  }
+  try {
+    const verification = verifySnapshotIntegrityCli({
+      subject: "Profile",
+      countKey: "entryCount",
+      actualCount: Object.keys(payload.entries).length,
+      payload: {
+        schemaVersion: 2,
+        exportedAt: payload.exportedAt,
+        entries: payload.entries,
+      },
+      integrity: payload.integrity,
+      signature: payload.signature,
+      verificationPassphrase: options.verificationPassphrase,
+      missingIntegrityMessage: "Profile integrity metadata missing",
+      invalidIntegrityMessage: "Invalid profile integrity metadata",
+      countMismatchMessage: "Profile integrity mismatch (entry count)",
+      hashMismatchMessage: "Profile integrity mismatch (hash)",
+      invalidSignatureMessage: "Invalid profile signature metadata",
+      verificationRequiredMessage: "Profile is signed; verification passphrase required",
+      verificationFailedMessage: "Profile signature verification failed",
+    });
+    const signed = verification.signed;
+    const sampleKeys = sampleEntryKeysCli(payload.entries);
+    const verificationState = signed ? "verified" : "integrity-checked";
+    return {
+      artifactType: "profile",
+      artifactKindLabel: "Profile snapshot",
+      title: "Profile snapshot",
+      verificationState,
+      verificationLabel: signed ? "HMAC verified" : "Integrity checked",
+      trustBasis: signed
+        ? ["Shared-secret HMAC verification succeeded.", "Payload hash and entry count matched the embedded metadata."]
+        : ["Payload hash and entry count matched the embedded integrity metadata.", "No sender identity is asserted."],
+      verifiedChecks: [`Profile entry count matched (${Object.keys(payload.entries).length}).`, "Payload hash matched the embedded integrity metadata."],
+      unverifiedChecks: signed ? ["Shared-secret verification proves tamper detection for holders of the same secret, not public-key identity."] : [],
+      warnings: [],
+      limitations: ["Profile verification checks payload integrity and optional shared-secret HMAC metadata only."],
+      facts: [
+        { label: "Schema", value: String(descriptor.schemaVersion) },
+        { label: "Entry count", value: String(Object.keys(payload.entries).length) },
+        ...(typeof payload.exportedAt === "string" ? [{ label: "Exported at", value: payload.exportedAt }] : []),
+        ...(descriptor.keyHint ? [{ label: "Key hint", value: descriptor.keyHint }] : []),
+      ],
+      artifacts: sampleKeys.map((key) => ({
+        id: key,
+        role: "entry",
+        label: key,
+        detail: "Profile entry key",
+        status: snapshotArtifactStatusCli(verificationState),
+      })),
+    };
+  } catch (error) {
+    return snapshotErrorResultCli(
+      "profile",
+      "Profile snapshot",
+      descriptor,
+      error,
+      sampleEntryKeysCli(payload.entries),
+      payload.exportedAt,
+      { role: "entry", detail: "Profile entry key" },
+    );
+  }
+}
+
+function verifyVaultPayloadCli(payload, options = {}) {
+  const descriptor = {
+    schemaVersion: typeof payload.schemaVersion === "number" ? payload.schemaVersion : 0,
+    noteCount:
+      payload.integrity && typeof payload.integrity === "object" && typeof payload.integrity.noteCount === "number"
+        ? payload.integrity.noteCount
+        : Array.isArray(payload.notes)
+          ? payload.notes.length
+          : payload.vault && Array.isArray(payload.vault.notes)
+            ? payload.vault.notes.length
+            : 0,
+    keyHint: payload.signature && typeof payload.signature === "object" && typeof payload.signature.keyHint === "string" ? payload.signature.keyHint : undefined,
+    legacy: Number(payload.schemaVersion) !== 2,
+  };
+
+  const snapshotContainer = payload.vault && typeof payload.vault === "object" ? payload.vault : payload;
+  let snapshot;
+  try {
+    snapshot = normalizeVaultSnapshotCli(snapshotContainer);
+  } catch (error) {
+    return invalidSnapshotResultCli("vault", "Vault snapshot", descriptor, error instanceof Error ? error.message : "Invalid vault snapshot payload");
+  }
+
+  if (Number(payload.schemaVersion) !== 2) {
+    return {
+      artifactType: "vault",
+      artifactKindLabel: "Vault snapshot",
+      title: "Vault snapshot",
+      verificationState: "unsigned",
+      verificationLabel: "Unsigned",
+      trustBasis: ["Legacy vault snapshot with no integrity metadata."],
+      verifiedChecks: [`Parsed ${snapshot.notes.length} vault note entr${snapshot.notes.length === 1 ? "y" : "ies"}.`],
+      unverifiedChecks: ["Legacy vault snapshots do not carry payload hashing or HMAC verification metadata."],
+      warnings: [],
+      limitations: ["Vault verification checks payload integrity and optional shared-secret HMAC metadata only."],
+      facts: [
+        { label: "Schema", value: String(descriptor.schemaVersion) },
+        { label: "Note count", value: String(snapshot.notes.length) },
+        ...(typeof payload.exportedAt === "string" ? [{ label: "Exported at", value: payload.exportedAt }] : []),
+        { label: "Legacy", value: "yes" },
+      ],
+      artifacts: snapshot.notes.slice(0, 6).map((note) => ({ id: note.id, role: "note", label: note.id, detail: "Vault note id", status: "unverified" })),
+    };
+  }
+
+  if (payload.kind && payload.kind !== "vault") {
+    return invalidSnapshotResultCli("vault", "Vault snapshot", descriptor, "Invalid vault snapshot kind");
+  }
+  try {
+    const verification = verifySnapshotIntegrityCli({
+      subject: "Vault snapshot",
+      countKey: "noteCount",
+      actualCount: snapshot.notes.length,
+      payload: {
+        schemaVersion: 2,
+        exportedAt: payload.exportedAt,
+        vault: snapshot,
+      },
+      integrity: payload.integrity,
+      signature: payload.signature,
+      verificationPassphrase: options.verificationPassphrase,
+      missingIntegrityMessage: "Vault integrity metadata missing",
+      invalidIntegrityMessage: "Invalid vault integrity metadata",
+      countMismatchMessage: "Vault integrity mismatch (note count)",
+      hashMismatchMessage: "Vault integrity mismatch (hash)",
+      invalidSignatureMessage: "Invalid vault signature metadata",
+      verificationRequiredMessage: "Vault snapshot is signed; verification passphrase required",
+      verificationFailedMessage: "Vault signature verification failed",
+    });
+    const signed = verification.signed;
+    const verificationState = signed ? "verified" : "integrity-checked";
+    return {
+      artifactType: "vault",
+      artifactKindLabel: "Vault snapshot",
+      title: "Vault snapshot",
+      verificationState,
+      verificationLabel: signed ? "HMAC verified" : "Integrity checked",
+      trustBasis: signed
+        ? ["Shared-secret HMAC verification succeeded.", "Payload hash and note count matched the embedded metadata."]
+        : ["Payload hash and note count matched the embedded integrity metadata.", "No sender identity is asserted."],
+      verifiedChecks: [`Vault note count matched (${snapshot.notes.length}).`, "Payload hash matched the embedded integrity metadata."],
+      unverifiedChecks: signed ? ["Shared-secret verification proves tamper detection for holders of the same secret, not public-key identity."] : [],
+      warnings: [],
+      limitations: ["Vault verification checks payload integrity and optional shared-secret HMAC metadata only."],
+      facts: [
+        { label: "Schema", value: String(descriptor.schemaVersion) },
+        { label: "Note count", value: String(snapshot.notes.length) },
+        ...(typeof payload.exportedAt === "string" ? [{ label: "Exported at", value: payload.exportedAt }] : []),
+        ...(descriptor.keyHint ? [{ label: "Key hint", value: descriptor.keyHint }] : []),
+      ],
+      artifacts: snapshot.notes.slice(0, 6).map((note) => ({
+        id: note.id,
+        role: "note",
+        label: note.id,
+        detail: "Vault note id",
+        status: snapshotArtifactStatusCli(verificationState),
+      })),
+    };
+  } catch (error) {
+    return snapshotErrorResultCli(
+      "vault",
+      "Vault snapshot",
+      descriptor,
+      error,
+      snapshot.notes.slice(0, 6).map((note) => note.id),
+      payload.exportedAt,
+      { role: "note", detail: "Vault note id" },
+    );
+  }
+}
+
+class PackageInspectVerificationError extends Error {
+  constructor(code, message) {
+    super(message);
+    this.code = code;
+  }
+}
+
+function verifySnapshotIntegrityCli(options) {
+  if (!options.integrity || typeof options.integrity !== "object") {
+    throw new PackageInspectVerificationError("integrity-missing", options.missingIntegrityMessage);
+  }
+  const countValue = options.integrity[options.countKey];
+  const payloadHash = options.integrity.payloadHash;
+  if (typeof countValue !== "number" || !Number.isInteger(countValue) || countValue < 0 || typeof payloadHash !== "string" || payloadHash.length < 16) {
+    throw new PackageInspectVerificationError("integrity-invalid", options.invalidIntegrityMessage);
+  }
+  if (countValue !== options.actualCount) {
+    throw new PackageInspectVerificationError("integrity-count-mismatch", options.countMismatchMessage);
+  }
+  const computedHash = sha256Base64UrlCli(options.payload);
+  if (computedHash !== payloadHash) {
+    throw new PackageInspectVerificationError("integrity-hash-mismatch", options.hashMismatchMessage);
+  }
+  if (options.signature !== undefined) {
+    if (
+      !options.signature ||
+      typeof options.signature !== "object" ||
+      options.signature.algorithm !== "HMAC-SHA-256" ||
+      typeof options.signature.value !== "string" ||
+      (options.signature.keyHint !== undefined && typeof options.signature.keyHint !== "string")
+    ) {
+      throw new PackageInspectVerificationError("signature-invalid", options.invalidSignatureMessage);
+    }
+    if (!options.verificationPassphrase) {
+      throw new PackageInspectVerificationError("verification-required", options.verificationRequiredMessage);
+    }
+    if (!verifyHashSignatureCli(payloadHash, options.signature.value, options.verificationPassphrase)) {
+      throw new PackageInspectVerificationError("verification-failed", options.verificationFailedMessage);
+    }
+    return { signed: true, verified: true, keyHint: options.signature.keyHint };
+  }
+  return { signed: false, verified: false };
+}
+
+function invalidSnapshotResultCli(artifactType, artifactKindLabel, descriptor, failure) {
+  return {
+    artifactType,
+    artifactKindLabel,
+    title: artifactKindLabel,
+    verificationState: "invalid",
+    verificationLabel: "Invalid",
+    trustBasis: [`NullID could not validate the structure of this ${artifactKindLabel.toLowerCase()} payload.`],
+    verifiedChecks: [],
+    unverifiedChecks: ["No integrity or authenticity guarantees could be established."],
+    warnings: [failure],
+    limitations: [],
+    facts: [
+      ...(descriptor.schemaVersion !== undefined ? [{ label: "Schema", value: String(descriptor.schemaVersion) }] : []),
+      ...(descriptor.entryCount !== undefined ? [{ label: "Entry count", value: String(descriptor.entryCount) }] : []),
+      ...(descriptor.packCount !== undefined ? [{ label: "Pack count", value: String(descriptor.packCount) }] : []),
+      ...(descriptor.noteCount !== undefined ? [{ label: "Note count", value: String(descriptor.noteCount) }] : []),
+    ],
+    artifacts: [],
+    failure,
+  };
+}
+
+function snapshotErrorResultCli(artifactType, artifactKindLabel, descriptor, error, artifactLabels = [], exportedAt, artifactMeta = { role: "entry", detail: "Logical entry" }) {
+  const failure = error instanceof Error ? error.message : `${artifactKindLabel} verification failed`;
+  const base = {
+    artifactType,
+    artifactKindLabel,
+    title: artifactKindLabel,
+    facts: [
+      ...(descriptor.schemaVersion !== undefined ? [{ label: "Schema", value: String(descriptor.schemaVersion) }] : []),
+      ...(descriptor.entryCount !== undefined ? [{ label: "Entry count", value: String(descriptor.entryCount) }] : []),
+      ...(descriptor.packCount !== undefined ? [{ label: "Pack count", value: String(descriptor.packCount) }] : []),
+      ...(descriptor.noteCount !== undefined ? [{ label: "Note count", value: String(descriptor.noteCount) }] : []),
+      ...(exportedAt ? [{ label: "Exported at", value: exportedAt }] : []),
+      ...(descriptor.keyHint ? [{ label: "Key hint", value: descriptor.keyHint }] : []),
+    ],
+    artifacts: artifactLabels.map((label) => ({
+      id: label,
+      role: artifactMeta.role,
+      label,
+      detail: artifactMeta.detail,
+      status: snapshotArtifactStatusCli("verification-required"),
+    })),
+  };
+
+  if (error instanceof PackageInspectVerificationError) {
+    if (error.code === "verification-required") {
+      return {
+        ...base,
+        verificationState: "verification-required",
+        verificationLabel: "Verification required",
+        trustBasis: ["Shared-secret HMAC metadata is present."],
+        verifiedChecks: [],
+        unverifiedChecks: ["A verification passphrase is required before authenticity can be checked."],
+        warnings: descriptor.keyHint ? [`Expected key hint: ${descriptor.keyHint}`] : [],
+        limitations: [],
+        failure,
+      };
+    }
+    if (error.code === "verification-failed" || error.code === "integrity-count-mismatch" || error.code === "integrity-hash-mismatch") {
+      return {
+        ...base,
+        verificationState: "mismatch",
+        verificationLabel: "Mismatch",
+        trustBasis: [`${artifactKindLabel} integrity metadata was present, but verification did not succeed.`],
+        verifiedChecks: [],
+        unverifiedChecks: ["The payload may be tampered, incomplete, or paired with the wrong shared secret."],
+        warnings: [failure],
+        limitations: [],
+        artifacts: artifactLabels.map((label) => ({
+          id: label,
+          role: artifactMeta.role,
+          label,
+          detail: artifactMeta.detail,
+          status: snapshotArtifactStatusCli("mismatch"),
+        })),
+        failure,
+      };
+    }
+  }
+  return {
+    ...base,
+    verificationState: "invalid",
+    verificationLabel: "Invalid",
+    trustBasis: [`NullID could not validate the structure of this ${artifactKindLabel.toLowerCase()} payload.`],
+    verifiedChecks: [],
+    unverifiedChecks: ["No integrity or authenticity guarantees could be established."],
+    warnings: [failure],
+    limitations: [],
+    failure,
+  };
+}
+
+function snapshotArtifactStatusCli(state) {
+  if (state === "verified" || state === "integrity-checked") return "verified";
+  if (state === "mismatch") return "mismatch";
+  return "unverified";
+}
+
+function stableStringifyCli(value) {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => stableStringifyCli(entry)).join(",")}]`;
+  }
+  const entries = Object.entries(value).sort(([a], [b]) => a.localeCompare(b));
+  return `{${entries.map(([key, child]) => `${JSON.stringify(key)}:${stableStringifyCli(child)}`).join(",")}}`;
+}
+
+function sha256Base64UrlCli(value) {
+  const payload = typeof value === "string" ? value : stableStringifyCli(value);
+  return toBase64Url(crypto.createHash("sha256").update(payload).digest());
+}
+
+function verifyHashSignatureCli(hashBase64Url, signatureBase64Url, secret) {
+  const expected = toBase64Url(crypto.createHmac("sha256", Buffer.from(secret, "utf8")).update(hashBase64Url).digest());
+  const expectedBytes = Buffer.from(expected, "utf8");
+  const actualBytes = Buffer.from(String(signatureBase64Url), "utf8");
+  if (expectedBytes.length !== actualBytes.length) return false;
+  return crypto.timingSafeEqual(expectedBytes, actualBytes);
+}
+
+function sampleEntryKeysCli(entries) {
+  return Object.keys(entries).sort().slice(0, 6);
+}
+
+function isSupportedProfileValueCli(value) {
+  if (value === null) return true;
+  const valueType = typeof value;
+  if (valueType === "string" || valueType === "number" || valueType === "boolean") return true;
+  if (Array.isArray(value)) return value.every(isSupportedProfileValueCli);
+  if (valueType === "object") return Object.values(value).every(isSupportedProfileValueCli);
+  return false;
+}
+
+function normalizeVaultSnapshotCli(value) {
+  if (!value || typeof value !== "object") {
+    throw new Error("Invalid vault snapshot payload");
+  }
+  const notes = Array.isArray(value.notes)
+    ? value.notes.map((note, index) => {
+        if (!note || typeof note !== "object") throw new Error(`Invalid vault note at index ${index}`);
+        if (typeof note.id !== "string" || !note.id.trim()) throw new Error(`Invalid vault note id at index ${index}`);
+        if (typeof note.ciphertext !== "string") throw new Error(`Invalid vault note ciphertext at index ${index}`);
+        if (typeof note.iv !== "string") throw new Error(`Invalid vault note iv at index ${index}`);
+        if (typeof note.updatedAt !== "number" || !Number.isFinite(note.updatedAt) || note.updatedAt <= 0) {
+          throw new Error(`Invalid vault note timestamp at index ${index}`);
+        }
+        if (fromBase64Url(note.iv).length !== 12) throw new Error(`Invalid vault note iv at index ${index}`);
+        if (fromBase64Url(note.ciphertext).length < 16) throw new Error(`Invalid vault note ciphertext at index ${index}`);
+        return {
+          id: note.id,
+          ciphertext: note.ciphertext,
+          iv: note.iv,
+          updatedAt: note.updatedAt,
+        };
+      })
+    : [];
+  const meta = value.meta == null
+    ? null
+    : (() => {
+        if (!value.meta || typeof value.meta !== "object") throw new Error("Invalid vault meta payload");
+        if (typeof value.meta.salt !== "string") throw new Error("Invalid vault meta salt");
+        if (typeof value.meta.iterations !== "number" || !Number.isInteger(value.meta.iterations) || value.meta.iterations < 10_000 || value.meta.iterations > 2_000_000) {
+          throw new Error("Invalid vault meta iterations");
+        }
+        if (fromBase64Url(value.meta.salt).length < 8) throw new Error("Invalid vault meta salt");
+        return {
+          salt: value.meta.salt,
+          iterations: value.meta.iterations,
+          version: typeof value.meta.version === "number" ? value.meta.version : undefined,
+          lockedAt: typeof value.meta.lockedAt === "number" ? value.meta.lockedAt : undefined,
+        };
+      })();
+  const canary = value.canary == null
+    ? null
+    : (() => {
+        if (!value.canary || typeof value.canary !== "object" || typeof value.canary.ciphertext !== "string" || typeof value.canary.iv !== "string") {
+          throw new Error("Invalid vault canary payload");
+        }
+        if (fromBase64Url(value.canary.iv).length !== 12 || fromBase64Url(value.canary.ciphertext).length < 16) {
+          throw new Error("Invalid vault canary payload");
+        }
+        return {
+          ciphertext: value.canary.ciphertext,
+          iv: value.canary.iv,
+        };
+      })();
+  return { meta, notes, canary };
+}
+
+function cloneJson(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function sanitizeInlineCli(value) {
+  if (typeof value !== "string") return "";
+  return value.trim();
+}
+
+function resolveSafeShareWorkflowPresetCli(value) {
+  if (!value) return null;
+  const normalized = String(value).trim();
+  if (!normalized) return null;
+  const preset = SAFE_SHARE_WORKFLOW_PRESETS[normalized];
+  if (!preset) {
+    throw new Error(`Unsupported safe-share workflow preset: ${normalized}`);
+  }
+  return {
+    id: normalized,
+    ...preset,
+  };
+}
+
+function classifyTextForSafeShareCli(input) {
+  const trimmed = String(input || "").trim();
+  if (!trimmed) return "freeform-text";
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    try {
+      JSON.parse(trimmed);
+      return "json-text";
+    } catch {
+      // Fall through to log-ish heuristics.
+    }
+  }
+  if (/(?:\b\d{1,3}(?:\.\d{1,3}){3}\b|\buser=|\bcookie=|\btoken=|\[[0-9]{1,2}\/[A-Za-z]{3}\/[0-9]{4})/i.test(trimmed)) {
+    return "structured-log";
+  }
+  return "freeform-text";
+}
+
+function formatSafeShareClassCli(value) {
+  if (value === "structured-log") return "structured log";
+  if (value === "json-text") return "JSON text";
+  if (value === "freeform-text") return "freeform text";
+  return String(value || "unknown");
+}
+
 function printUsage() {
   console.log(
     `
@@ -1005,7 +2547,8 @@ Commands:
   hash <input-file> [--algo sha256|sha512|sha1]
   sanitize <input-file> <output-file> [--preset nginx|apache|auth|json] [--policy <policy-json>] [--baseline <nullid.policy.json>] [--merge-mode strict-override|prefer-stricter] [--json-aware true|false] [--format auto|text|json|ndjson|csv|xml|yaml]
   sanitize-dir <input-dir> <output-dir> [--preset ...|--policy ...|--baseline ...] [--format auto|text|json|ndjson|csv|xml|yaml] [--ext .log,.txt,.json] [--report <json-file>]
-  bundle <input-file> <output-json> [--preset ...|--policy ...|--baseline ...] [--format auto|text|json|ndjson|csv|xml|yaml]
+  bundle <input-file> <output-json> [--preset ...|--workflow general-safe-share|support-ticket|external-minimum|internal-investigation|incident-handoff|evidence-archive] [--title ...] [--purpose ...] [--case-ref ...] [--recipient ...] [--policy ...|--baseline ...] [--format auto|text|json|ndjson|csv|xml|yaml]
+  package-inspect <input-file> [--pass <passphrase>|--pass-env <VAR>] [--verify-pass <passphrase>|--verify-pass-env <VAR>]
   redact <input-file> <output-file> [--mode full|partial] [--detectors email,phone,token,ip,id,iban,card,ipv6,awskey,awssecret,github,slack,privatekey]
   enc <input-file> <output-envelope-file> [--pass <passphrase>|--pass-env <VAR>] [--profile compat|strong|paranoid] [--iterations <n>] [--kdf-hash sha256|sha512]
   dec <input-envelope-file> <output-file> [--pass <passphrase>|--pass-env <VAR>]
@@ -1023,6 +2566,10 @@ Examples:
   node scripts/nullid-local.mjs hash ./server.log --algo sha512
   node scripts/nullid-local.mjs sanitize ./raw.ndjson ./clean.ndjson --format ndjson --preset json
   node scripts/nullid-local.mjs sanitize-dir ./logs ./logs-clean --ext .log,.json --report ./sanitize-report.json
+  node scripts/nullid-local.mjs bundle ./raw.log ./nullid-safe-share-bundle.json --preset nginx
+  node scripts/nullid-local.mjs bundle ./raw.log ./nullid-safe-share-bundle.json --preset nginx --workflow support-ticket
+  node scripts/nullid-local.mjs package-inspect ./nullid-safe-share-bundle.json
+  node scripts/nullid-local.mjs package-inspect ./signed-policy.json --verify-pass-env NULLID_VERIFY_PASSPHRASE
   node scripts/nullid-local.mjs redact ./incident.txt ./incident.redacted.txt --mode partial
   node scripts/nullid-local.mjs pdf-clean ./report.pdf ./report.clean.pdf
   node scripts/nullid-local.mjs office-clean ./incident.docx ./incident.clean.docx
@@ -1119,6 +2666,8 @@ const allRuleKeys = [
   "maskIp",
   "maskIpv6",
   "maskEmail",
+  "maskIranNationalId",
+  "maskPhoneIntl",
   "scrubJwt",
   "maskBearer",
   "maskCard",
@@ -1172,6 +2721,10 @@ function loadBaselineConfig(baselinePath) {
 function parsePolicyConfigPayload(input) {
   const parsed = input && typeof input === "object" ? input : null;
   if (!parsed) return null;
+
+  if (parsed.kind === "sanitize-policy-pack" && Array.isArray(parsed.packs) && parsed.packs.length > 1) {
+    throw new Error("Policy file contains multiple packs; CLI sanitize requires a single-pack export or a direct policy config");
+  }
 
   const packEntry = Array.isArray(parsed.packs) ? parsed.packs[0] : parsed.pack;
   if (packEntry && typeof packEntry === "object") {
@@ -1240,26 +2793,36 @@ function normalizeRulesState(input) {
 
 function normalizeCustomRules(input) {
   if (!Array.isArray(input)) return [];
-  return input
-    .map((rule) => {
-      if (!rule || typeof rule !== "object") return null;
-      if (typeof rule.pattern !== "string" || !rule.pattern.trim()) return null;
-      const flags = typeof rule.flags === "string" ? rule.flags : "gi";
-      try {
-        // eslint-disable-next-line no-new
-        new RegExp(rule.pattern, flags);
-      } catch {
-        return null;
-      }
-      return {
-        id: typeof rule.id === "string" ? rule.id : crypto.randomUUID(),
-        pattern: rule.pattern,
-        replacement: typeof rule.replacement === "string" ? rule.replacement : "",
-        flags,
-        scope: rule.scope === "text" || rule.scope === "json" || rule.scope === "both" ? rule.scope : "both",
-      };
-    })
-    .filter(Boolean);
+  return input.map((rule) => normalizeCustomRule(rule)).filter(Boolean);
+}
+
+// Keep CLI custom-rule safety aligned with src/utils/sanitizeEngine.ts.
+function normalizeCustomRule(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const id = typeof value.id === "string" && value.id.trim() ? value.id : crypto.randomUUID();
+  const pattern = typeof value.pattern === "string" ? value.pattern : "";
+  const replacement = typeof value.replacement === "string" ? value.replacement.slice(0, MAX_CUSTOM_REPLACEMENT_LENGTH) : "";
+  const flags = typeof value.flags === "string" ? value.flags : "gi";
+  const scope = value.scope === "text" || value.scope === "json" || value.scope === "both" ? value.scope : "both";
+  if (!pattern.trim()) return null;
+  if (pattern.length > MAX_CUSTOM_PATTERN_LENGTH) return null;
+  if (isUnsafeCustomRegexPattern(pattern)) return null;
+  try {
+    // eslint-disable-next-line no-new
+    new RegExp(pattern, flags);
+  } catch {
+    return null;
+  }
+  return { id, pattern, replacement, flags, scope };
+}
+
+function isUnsafeCustomRegexPattern(pattern) {
+  const cleaned = pattern.replace(/\\./g, "_");
+  if (cleaned.length > MAX_CUSTOM_PATTERN_LENGTH) return true;
+  if (/(^|[^\\])\\[1-9]/.test(pattern)) return true;
+  if (/\((?:\?:)?[^()]{0,120}(?:\+|\*|\{[0-9,\s]+\})[^()]{0,120}\)\s*(?:\+|\*)/.test(cleaned)) return true;
+  if (/(?:\.\*|\.\+)\s*(?:\+|\*)/.test(cleaned)) return true;
+  return false;
 }
 
 function applySanitize(input, options) {
@@ -1287,6 +2850,8 @@ function applySanitize(input, options) {
   applyRule(policy.rulesState.maskIp, "maskIp", (value) => replaceWithCount(value, /\b(\d{1,3}\.){3}\d{1,3}\b/g, "[ip]"));
   applyRule(policy.rulesState.maskIpv6, "maskIpv6", (value) => replaceWithCount(value, /\b(?:[A-F0-9]{1,4}:){2,7}[A-F0-9]{1,4}\b/gi, "[ipv6]"));
   applyRule(policy.rulesState.maskEmail, "maskEmail", (value) => replaceWithCount(value, /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]"));
+  applyRule(policy.rulesState.maskIranNationalId, "maskIranNationalId", replaceIranNationalIds);
+  applyRule(policy.rulesState.maskPhoneIntl, "maskPhoneIntl", replaceInternationalPhoneNumbers);
   applyRule(policy.rulesState.scrubJwt, "scrubJwt", (value) =>
     replaceWithCount(value, /(?:bearer\s+)?[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/gi, "[jwt]"),
   );
@@ -1556,6 +3121,33 @@ function replaceWithCount(input, regex, replacement) {
   return { output, count };
 }
 
+function replaceInternationalPhoneNumbers(input) {
+  const regex = /(?:\+|00)?[0-9\u06F0-\u06F9\u0660-\u0669][0-9\u06F0-\u06F9\u0660-\u0669().\-\s]{7,18}[0-9\u06F0-\u06F9\u0660-\u0669]/g;
+  let count = 0;
+  const output = input.replace(regex, (match) => {
+    const digits = toAsciiDigits(match).replace(/[^0-9]/g, "");
+    if (digits.length >= 10 && digits.length <= 15) {
+      count += 1;
+      return "[phone]";
+    }
+    return match;
+  });
+  return { output, count };
+}
+
+function replaceIranNationalIds(input) {
+  const regex = /(^|[^0-9\u06F0-\u06F9\u0660-\u0669])([0-9\u06F0-\u06F9\u0660-\u0669]{10})(?=$|[^0-9\u06F0-\u06F9\u0660-\u0669])/g;
+  let count = 0;
+  const output = input.replace(regex, (match, prefix, candidate) => {
+    if (isValidIranNationalId(candidate)) {
+      count += 1;
+      return `${prefix}[iran-id]`;
+    }
+    return match;
+  });
+  return { output, count };
+}
+
 function replaceCardNumbers(input) {
   const regex = /\b(?:\d[ -]?){12,19}\b/g;
   let count = 0;
@@ -1580,6 +3172,19 @@ function replaceIban(input) {
     return match;
   });
   return { output, count };
+}
+
+function isValidIranNationalId(value) {
+  const digits = toAsciiDigits(value).replace(/[^0-9]/g, "");
+  if (!/^\d{10}$/.test(digits)) return false;
+  if (/^(\d)\1{9}$/.test(digits)) return false;
+  const check = Number(digits[9]);
+  const sum = digits
+    .slice(0, 9)
+    .split("")
+    .reduce((acc, ch, index) => acc + Number(ch) * (10 - index), 0);
+  const remainder = sum % 11;
+  return (remainder < 2 && check === remainder) || (remainder >= 2 && check === 11 - remainder);
 }
 
 function passesLuhn(value) {
@@ -1609,6 +3214,12 @@ function isValidIban(value) {
     remainder = (remainder * 10 + Number(converted[i])) % 97;
   }
   return remainder === 1;
+}
+
+function toAsciiDigits(value) {
+  return value
+    .replace(/[۰-۹]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 1728))
+    .replace(/[٠-٩]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 1584));
 }
 
 function buildRedactDetectors() {
@@ -1815,6 +3426,12 @@ function normalizeIterations(value) {
 }
 
 function resolvePassphrase(argv) {
+  const resolved = resolveOptionalPassphrase(argv);
+  if (resolved) return resolved;
+  throw new Error("Passphrase required: use --pass, --pass-env, or NULLID_PASSPHRASE");
+}
+
+function resolveOptionalPassphrase(argv) {
   const direct = getOption(argv, "--pass");
   if (direct) return direct;
 
@@ -1831,7 +3448,27 @@ function resolvePassphrase(argv) {
     return process.env.NULLID_PASSPHRASE;
   }
 
-  throw new Error("Passphrase required: use --pass, --pass-env, or NULLID_PASSPHRASE");
+  return null;
+}
+
+function resolveOptionalVerificationPassphrase(argv) {
+  const direct = getOption(argv, "--verify-pass");
+  if (direct) return direct;
+
+  const passEnv = getOption(argv, "--verify-pass-env");
+  if (passEnv) {
+    const value = process.env[passEnv];
+    if (!value) {
+      throw new Error(`Verification passphrase env variable not found: ${passEnv}`);
+    }
+    return value;
+  }
+
+  if (process.env.NULLID_VERIFY_PASSPHRASE) {
+    return process.env.NULLID_VERIFY_PASSPHRASE;
+  }
+
+  return null;
 }
 
 function resolvePasswordSecret(argv) {
@@ -2564,6 +4201,75 @@ function looksBinary(buffer) {
   return false;
 }
 
+function readNullIdVersion() {
+  try {
+    const raw = fs.readFileSync(new URL("../package.json", import.meta.url), "utf8");
+    const parsed = JSON.parse(raw);
+    return typeof parsed.version === "string" ? parsed.version : null;
+  } catch {
+    return null;
+  }
+}
+
+function inspectEnvelopeBlob(blob) {
+  const envelope = parseEnvelopeBlob(blob);
+  return {
+    header: envelope.header,
+    ciphertextBytes: fromBase64Url(envelope.ciphertext).length,
+  };
+}
+
+function decryptEnvelopeBlob(passphrase, blob) {
+  const envelope = parseEnvelopeBlob(blob);
+  const nodeHash = normalizeKdfHash(envelope.header.kdf.hash).nodeHash;
+  const iterations = normalizeIterations(envelope.header.kdf.iterations);
+  const salt = fromBase64Url(envelope.header.kdf.salt);
+  const iv = fromBase64Url(envelope.header.iv);
+  const ciphertextWithTag = fromBase64Url(envelope.ciphertext);
+  if (ciphertextWithTag.length < 17) {
+    throw new Error("Invalid envelope ciphertext");
+  }
+  const ciphertext = ciphertextWithTag.subarray(0, ciphertextWithTag.length - 16);
+  const authTag = ciphertextWithTag.subarray(ciphertextWithTag.length - 16);
+  const key = crypto.pbkdf2Sync(Buffer.from(passphrase, "utf8"), salt, iterations, 32, nodeHash);
+  const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+  decipher.setAAD(ENVELOPE_AAD);
+  decipher.setAuthTag(authTag);
+
+  try {
+    return {
+      plaintext: Buffer.concat([decipher.update(ciphertext), decipher.final()]),
+      header: envelope.header,
+    };
+  } catch {
+    throw new Error("Decrypt failed: bad passphrase or envelope integrity failure");
+  }
+}
+
+function parseEnvelopeBlob(blob) {
+  const normalized = String(blob || "").trim().replace(/\s+/g, "");
+  if (!normalized.startsWith(`${ENVELOPE_PREFIX}.`)) {
+    throw new Error("Unsupported envelope prefix");
+  }
+
+  const encoded = normalized.slice(`${ENVELOPE_PREFIX}.`.length);
+  const envelopePayload = fromBase64Url(encoded);
+  let envelope;
+  try {
+    envelope = JSON.parse(envelopePayload.toString("utf8"));
+  } catch {
+    throw new Error("Invalid envelope format");
+  }
+
+  if (!envelope?.header || envelope.header.version !== 1 || envelope.header.algo !== "AES-GCM") {
+    throw new Error("Unsupported envelope version");
+  }
+  if (!envelope.header.kdf || envelope.header.kdf.name !== "PBKDF2") {
+    throw new Error("Unsupported envelope kdf");
+  }
+  return envelope;
+}
+
 function sha256Hex(input) {
   return crypto.createHash("sha256").update(input).digest("hex");
 }
@@ -2581,6 +4287,20 @@ function fromBase64Url(value) {
   const normalized = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
   const padLength = (4 - (normalized.length % 4)) % 4;
   return Buffer.from(normalized + "=".repeat(padLength), "base64");
+}
+
+function decodeBase64StrictCli(value, errorMessage) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed || !/^[A-Za-z0-9+/]+=*$/u.test(trimmed)) {
+    throw new Error(errorMessage);
+  }
+  const buffer = Buffer.from(trimmed, "base64");
+  const normalized = buffer.toString("base64");
+  const expected = trimmed.padEnd(trimmed.length + ((4 - (trimmed.length % 4)) % 4), "=");
+  if (normalized !== expected) {
+    throw new Error(errorMessage);
+  }
+  return buffer;
 }
 
 main().catch((error) => {

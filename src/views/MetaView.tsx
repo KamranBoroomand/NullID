@@ -375,7 +375,7 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
               tabIndex={-1}
             />
             <div className="section-title">{tr("drag image")}</div>
-            <div className="microcopy">jpeg / png / webp / avif / gif / bmp / tiff</div>
+            <div className="microcopy">{tr("jpeg / png / webp / avif / gif / bmp / tiff")}</div>
           </div>
           <div className="status-line">
             <span>{tr("file")}</span>
@@ -389,7 +389,7 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
             <span className="panel-subtext">{tr("strip EXIF")}</span>
           </div>
           <p className="microcopy">
-            Images are re-encoded via canvas to drop metadata. Compatibility diagnostics below show decode and export readiness by format.
+            {tr("Images are re-encoded via canvas to drop metadata. Compatibility diagnostics below show decode and export readiness by format.")}
           </p>
           <div className="controls-row">
             <label className="section-title" htmlFor="resize-percent">
@@ -400,7 +400,7 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
               className="select"
               value={resizePercent}
               onChange={(event) => setResizePercent(Number(event.target.value))}
-              aria-label="Resize percent"
+              aria-label={tr("Resize percent")}
             >
               <option value={100}>100%</option>
               <option value={75}>75%</option>
@@ -414,13 +414,13 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
               className="select"
               value={outputChoice}
               onChange={(event) => setOutputChoice(event.target.value as OutputChoice)}
-              aria-label="Output format"
+              aria-label={tr("Output format")}
             >
-              <option value="auto">auto</option>
-              <option value="image/png">png</option>
-              <option value="image/jpeg">jpeg</option>
-              <option value="image/webp">webp</option>
-              <option value="image/avif">avif</option>
+              <option value="auto">{tr("auto")}</option>
+              <option value="image/png">{tr("png")}</option>
+              <option value="image/jpeg">{tr("jpeg")}</option>
+              <option value="image/webp">{tr("webp")}</option>
+              <option value="image/avif">{tr("avif")}</option>
             </select>
             <label className="section-title" htmlFor="meta-quality">
               {tr("Quality")}
@@ -479,11 +479,11 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
                   <tr key={row.key}>
                     <td>
                       {row.label}
-                      {row.note ? <div className="microcopy">{row.note}</div> : null}
+                      {row.note ? <div className="microcopy">{tr(row.note)}</div> : null}
                     </td>
-                    <td>{row.decode}</td>
-                    <td>{row.encode}</td>
-                    <td>{row.cleanExport}</td>
+                    <td>{tr(row.decode)}</td>
+                    <td>{tr(row.encode)}</td>
+                    <td>{tr(row.cleanExport)}</td>
                   </tr>
                 ))
               )}
@@ -523,7 +523,7 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
             tabIndex={-1}
           />
           <div className="section-title">{tr("drag any file")}</div>
-          <div className="microcopy">image / pdf / office / video / archive</div>
+          <div className="microcopy">{tr("image / pdf / office / video / archive")}</div>
         </div>
         <div className="status-line">
           <span>{tr("file")}</span>
@@ -541,11 +541,11 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
             onChange={(event) => setAdvancedMode(event.target.value as AdvancedMode)}
             aria-label={tr("Advanced sanitize mode")}
           >
-            <option value="auto">auto</option>
-            <option value="browser-image">browser image clean</option>
-            <option value="browser-pdf">browser pdf clean</option>
-            <option value="mat2">mat2 / external clean</option>
-            <option value="manual">analysis only</option>
+            <option value="auto">{tr("auto")}</option>
+            <option value="browser-image">{tr("browser image clean")}</option>
+            <option value="browser-pdf">{tr("browser pdf clean")}</option>
+            <option value="mat2">{tr("mat2 / external clean")}</option>
+            <option value="manual">{tr("analysis only")}</option>
           </select>
           <button className="button" type="button" onClick={saveAdvancedClean} disabled={!advancedCleanBlob}>
             {tr("download advanced clean")}
@@ -589,7 +589,7 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
             <div className="section-title">{tr("Guidance")}</div>
             <ul className="note-list">
               {advancedAnalysis.guidance.map((item) => (
-                <li key={item}>{item}</li>
+                <li key={item}>{tr(item)}</li>
               ))}
             </ul>
           </div>
@@ -613,9 +613,9 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
             ) : (
               advancedAnalysis.signals.map((signal) => (
                 <tr key={signal.id}>
-                  <td>{signal.label}</td>
-                  <td>{signal.severity}</td>
-                  <td>{signal.detail}</td>
+                  <td>{tr(signal.label)}</td>
+                  <td>{tr(signal.severity)}</td>
+                  <td>{tr(signal.detail)}</td>
                 </tr>
               ))
             )}
@@ -671,7 +671,7 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
               <div className="note-box">
                 <div className="microcopy">{tr("Before")}</div>
                 {beforePreview ? (
-                  <img src={beforePreview} alt="Before preview" className="image-preview" />
+                  <img src={beforePreview} alt={tr("Before preview")} className="image-preview" />
                 ) : (
                   <div className="microcopy">{tr("no file")}</div>
                 )}
@@ -679,7 +679,7 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
               <div className="note-box">
                 <div className="microcopy">{tr("After (cleaned)")}</div>
                 {afterPreview ? (
-                  <img src={afterPreview} alt="After preview" className="image-preview" />
+                  <img src={afterPreview} alt={tr("After preview")} className="image-preview" />
                 ) : (
                   <div className="microcopy">{tr("not generated")}</div>
                 )}

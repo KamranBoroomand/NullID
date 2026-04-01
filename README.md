@@ -27,10 +27,19 @@ NullID is a Vite + React + TypeScript single-page app designed as a local securi
 Current release line:
 - `0.1.x` (release-candidate baseline)
 
+Shared workflow artifact contract:
+- `nullid-workflow-package` is the versioned local JSON contract for inspectable workflow bundles and reports with artifact-manifest integrity metadata.
+- The app `Safe Share Assistant` now exports this contract directly, and sanitize safe-share bundles still embed it for compatibility.
+- Both the app `Verify Package` surface and CLI `package-inspect` can inspect it.
+- Trust remains explicit: workflow packages are currently unsigned, top-level workflow metadata is package-declared unless separately hashed, and shared-passphrase HMAC applies to profile/policy/vault flows rather than workflow package signatures.
+
 Focused modules in the app:
 - Hash and Verify
+- Safe Share Assistant
+- Incident Workflow
 - Text Redaction
 - Log Sanitizer
+- Verify Package
 - Metadata Inspector
 - Encrypt and Decrypt
 - Password and Passphrase Generator
@@ -43,6 +52,7 @@ CLI commands include:
 - `sanitize`
 - `sanitize-dir`
 - `bundle`
+- `package-inspect`
 - `redact`
 - `enc`
 - `dec`
@@ -64,8 +74,12 @@ CLI commands include:
 
 ## Core Capabilities
 - Hash and verify: SHA-256, SHA-512, and SHA-1 (legacy) for text/files with digest comparison.
+- Safe Share Assistant: guided local producer flow for preparing text snippets or files to share safely with workflow presets, findings review, optional metadata cleanup, optional `NULLID:ENC:1` wrapping, and receiver-friendly package export.
+- Incident Workflow: guided local incident producer flow for case context, responder notes, prepared artifacts, metadata review, transform logging, and receiver-friendly incident package export.
 - Text redaction: detector-based masking for common secrets/PII (including GitHub/Slack tokens and private key blocks) with overlap-safe conflict handling.
 - Log sanitization: presets and custom policies, structured-format support (`text/json/ndjson/csv/xml/yaml`), safe-share bundle export, and token/key-block stripping controls.
+- Workflow packaging: versioned `nullid-workflow-package` metadata for Safe Share Assistant exports, Incident Workflow exports, and sanitize safe-share bundles, with SHA-256 artifact manifests plus shared report vocabulary for package scope and limits.
+- Receiver verification: local inspection of workflow packages, safe-share bundles, policy packs, profile snapshots, vault snapshots, and `NULLID:ENC:1` envelopes with honest trust labels that separate integrity-checked artifacts from package-declared metadata.
 - Metadata inspection/cleanup: image metadata parsing with local clean re-encode flows; CLI support for PDF and Office cleanup.
 - Encryption and vault workflows: versioned `NULLID:ENC:1` envelopes with authenticated encryption, configurable KDF profiles, and encrypted local vault storage.
 - Password storage hashing lab: local salted one-way record generation/verification with `Argon2id` (recommended when available), `PBKDF2-SHA256` (compat), and legacy SHA options kept only for migrations.
@@ -130,6 +144,17 @@ Sanitize an entire directory with a baseline policy:
 npm run cli -- sanitize-dir ./logs ./logs-clean --baseline ./nullid.policy.json --ext .log,.json --report ./sanitize-report.json
 ```
 
+Create and inspect a safe-share workflow package:
+
+```bash
+npm run cli -- bundle ./raw.log ./nullid-safe-share-bundle.json --preset nginx
+npm run cli -- bundle ./raw.log ./nullid-safe-share-bundle.json --preset nginx --workflow support-ticket
+npm run cli -- bundle ./raw.log ./nullid-safe-share-bundle.json --preset nginx --workflow internal-investigation --title "Incident 2026-03-18" --purpose "Prepare an internal responder package." --case-ref CASE-142 --recipient "internal responders"
+npm run cli -- package-inspect ./nullid-safe-share-bundle.json
+npm run cli -- package-inspect ./nullid-safe-share-bundle.nullid --pass-env NULLID_PASSPHRASE
+npm run cli -- package-inspect ./signed-policy.json --verify-pass-env NULLID_VERIFY_PASSPHRASE
+```
+
 Encrypt and decrypt a file:
 
 ```bash
@@ -156,6 +181,8 @@ Environment variables:
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `VITE_BASE` | `/` | Base path for Vite build output (set when hosting under a subpath). |
+| `NULLID_E2E_HOST` | `127.0.0.1` | Override the Playwright dev-server host for local validation if needed. |
+| `NULLID_E2E_PORT` | `4173` | Override the Playwright dev-server port for local validation if the default port is already in use. |
 | `PW_REUSE_SERVER` | unset | If set to `1`, Playwright reuses an existing local dev server. |
 
 Local state behavior:
@@ -181,6 +208,11 @@ Local state behavior:
 - Imported records are validated conservatively: malformed base64, unsupported salt/digest lengths, and out-of-range cost parameters are rejected instead of being guessed through.
 - Interoperability note: Argon2id output is PHC-like, but NullID does not promise drop-in compatibility with every external verifier. PBKDF2 and legacy SHA records are NullID-defined formats.
 - Detailed notes and CLI examples live in [`docs/password-storage-hashing.md`](./docs/password-storage-hashing.md).
+- Safe Share Assistant workflow details live in [`docs/safe-share-assistant.md`](./docs/safe-share-assistant.md).
+- Incident Workflow details live in [`docs/incident-workflow.md`](./docs/incident-workflow.md).
+- Workflow package/report contract notes live in [`docs/workflow-package-contract.md`](./docs/workflow-package-contract.md).
+- Receiver verification guidance and trust-label definitions live in [`docs/verify-package.md`](./docs/verify-package.md).
+- Workflow release notes and manual QA checklist live in [`docs/workflow-system-release.md`](./docs/workflow-system-release.md).
 
 ### Vault Storage Behavior
 
@@ -272,6 +304,10 @@ Reproducibility notes:
 ## Security Model and Limits
 - Offline-first by design: no runtime API client; lint checks scan for disallowed network primitives in `src/`.
 - Encryption envelope format is explicit and versioned (`NULLID:ENC:1`) with authenticated encryption (AES-GCM + AAD).
+- Workflow packages currently rely on SHA-256 artifact manifests, not package-level workflow signatures.
+- Top-level workflow metadata such as summary/report/policy/preset/warnings/limitations is package-declared unless the same content is also carried inside hashed artifacts.
+- Schema-2 `nullid-safe-share` inspection is based on the embedded workflow package; duplicated outer wrapper fields are compatibility metadata and are not currently cross-checked.
+- Inner workflow JSON is not encrypted. `NULLID:ENC:1` only protects the optional outer exported file envelope.
 - KDF settings are profile-driven (`compat`, `strong`, `paranoid`) with optional UI/CLI overrides and explicit weak-choice warnings.
 - Vault operations use passphrase-derived keys and canary verification.
 - Vault unlock can enforce local rate limiting, optional human checks, and optional local WebAuthn MFA.

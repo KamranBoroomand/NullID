@@ -224,6 +224,13 @@ export function PwView({ onOpenGuide }: PwViewProps) {
       (message, tone) => push(message, tone === "danger" ? "danger" : tone === "accent" ? "accent" : "neutral"),
       successMessage,
     );
+  const localizedGradeLabel = (grade: SecretGrade) => tr(gradeLabel(grade));
+  const toggleKeyLabel: Record<(typeof passwordToggleKeys)[number], string> = {
+    upper: tr("upper"),
+    lower: tr("lower"),
+    digits: tr("digits"),
+    symbols: tr("symbols"),
+  };
 
   const handlePasswordHash = async () => {
     if (!hashInput.trim()) {
@@ -306,7 +313,7 @@ export function PwView({ onOpenGuide }: PwViewProps) {
             <button className="button" type="button" onClick={() => setPassword(generatePassword(passwordSettings))}>
               {tr("regenerate")}
             </button>
-            <button className="button" type="button" onClick={() => copySecret(password, "password copied")}>
+            <button className="button" type="button" onClick={() => copySecret(password, tr("password copied"))}>
               {tr("copy")}
             </button>
           </div>
@@ -341,9 +348,9 @@ export function PwView({ onOpenGuide }: PwViewProps) {
                       [key]: !prev[key],
                     }))
                   }
-                  aria-label={`Toggle ${key} characters`}
+                  aria-label={`${tr("Toggle character set")} ${toggleKeyLabel[key]}`}
                 >
-                  {key}
+                  {toggleKeyLabel[key]}
                 </button>
               ))}
             </div>
@@ -425,17 +432,17 @@ export function PwView({ onOpenGuide }: PwViewProps) {
           <div className="status-line">
             <span>{tr("length")} {formatNumber(passwordSettings.length)}</span>
             <span className="tag tag-accent">{tr("entropy")} ≈ {formatNumber(passwordEntropy)} {tr("bits")}</span>
-            <span className={gradeTagClass(passwordAssessment.grade)}>{gradeLabel(passwordAssessment.grade)}</span>
+            <span className={gradeTagClass(passwordAssessment.grade)}>{localizedGradeLabel(passwordAssessment.grade)}</span>
           </div>
           <div className="note-box">
             <div className="microcopy">
-              {tr("effective entropy")} ≈ {formatNumber(passwordAssessment.effectiveEntropyBits)} {tr("bits")} · {tr("online crack")} (rate-limited median):{" "}
+              {tr("effective entropy")} ≈ {formatNumber(passwordAssessment.effectiveEntropyBits)} {tr("bits")} · {tr("online crack")} {tr("(rate-limited median):")}{" "}
               {passwordAssessment.crackTime.online}
             </div>
             {passwordAssessment.warnings.length > 0 ? (
               <ul className="note-list">
                 {passwordAssessment.warnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
+                  <li key={warning}>{tr(warning)}</li>
                 ))}
               </ul>
             ) : (
@@ -457,7 +464,7 @@ export function PwView({ onOpenGuide }: PwViewProps) {
             >
               {tr("regenerate")}
             </button>
-            <button className="button" type="button" onClick={() => copySecret(phrase, "passphrase copied")}>
+            <button className="button" type="button" onClick={() => copySecret(phrase, tr("passphrase copied"))}>
               {tr("copy")}
             </button>
           </div>
@@ -598,17 +605,17 @@ export function PwView({ onOpenGuide }: PwViewProps) {
             <span>{tr("words")} {formatNumber(passphraseSettings.words)}</span>
             <span className="tag">{formatNumber(dictionary.size)} {tr("words")}</span>
             <span className="tag tag-accent">{tr("entropy")} ≈ {formatNumber(passphraseEntropy)} {tr("bits")}</span>
-            <span className={gradeTagClass(passphraseAssessment.grade)}>{gradeLabel(passphraseAssessment.grade)}</span>
+            <span className={gradeTagClass(passphraseAssessment.grade)}>{localizedGradeLabel(passphraseAssessment.grade)}</span>
           </div>
           <div className="note-box">
             <div className="microcopy">
-              {tr("bits/word")} ≈ {dictionary.bitsPerWord.toFixed(2)} · {tr("offline crack")} (slow-KDF median):{" "}
+              {tr("bits/word")} ≈ {dictionary.bitsPerWord.toFixed(2)} · {tr("offline crack")} {tr("(slow-KDF median):")}{" "}
               {passphraseAssessment.crackTime.offline}
             </div>
             {passphraseAssessment.warnings.length > 0 ? (
               <ul className="note-list">
                 {passphraseAssessment.warnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
+                  <li key={warning}>{tr(warning)}</li>
                 ))}
               </ul>
             ) : (
@@ -633,33 +640,33 @@ export function PwView({ onOpenGuide }: PwViewProps) {
           <div className="status-line">
             <span>{tr("entropy")} ≈ {formatNumber(labAssessment.entropyBits)} {tr("bits")}</span>
             <span className="tag">{tr("effective")} ≈ {formatNumber(labAssessment.effectiveEntropyBits)} {tr("bits")}</span>
-            <span className={gradeTagClass(labAssessment.grade)}>{gradeLabel(labAssessment.grade)}</span>
+            <span className={gradeTagClass(labAssessment.grade)}>{localizedGradeLabel(labAssessment.grade)}</span>
           </div>
           <div className="note-box">
             <div className="microcopy">
-              {tr("online")} (rate-limited median): {labAssessment.crackTime.online} · {tr("offline")} (slow-KDF median):{" "}
+              {tr("online")} {tr("(rate-limited median):")} {labAssessment.crackTime.online} · {tr("offline")} {tr("(slow-KDF median):")}{" "}
               {labAssessment.crackTime.offline}
             </div>
             <ul className="note-list">
               {labAssessment.crackTime.scenarios.map((scenario) => (
                 <li key={scenario.key}>
-                  {scenario.label}: median {scenario.median}, worst-case {scenario.worstCase} @ {formatGuessRate(scenario.guessesPerSecond)}
+                  {tr(scenario.label)}: {tr("median")} {scenario.median}, {tr("worst-case")} {scenario.worstCase} @ {formatGuessRate(scenario.guessesPerSecond)}
                 </li>
               ))}
             </ul>
             <ul className="note-list">
               {labAssessment.crackTime.assumptions.map((assumption) => (
-                <li key={assumption}>{assumption}</li>
+                <li key={assumption}>{tr(assumption)}</li>
               ))}
             </ul>
             <ul className="note-list">
               {labAssessment.warnings.length > 0 ? (
-                labAssessment.warnings.map((warning) => <li key={warning}>{warning}</li>)
+                labAssessment.warnings.map((warning) => <li key={warning}>{tr(warning)}</li>)
               ) : (
                 <li>{tr("no direct warning patterns detected")}</li>
               )}
               {labAssessment.strengths.map((strength) => (
-                <li key={strength}>{strength}</li>
+                <li key={strength}>{tr(strength)}</li>
               ))}
             </ul>
           </div>
@@ -722,18 +729,18 @@ export function PwView({ onOpenGuide }: PwViewProps) {
               {batchRows.map((row, index) => (
                 <tr key={`${row.value}-${index}`}>
                   <td className="microcopy">{row.value}</td>
-                  <td>{row.entropyBits}b</td>
+                  <td>{row.entropyBits} {tr("bits")}</td>
                   <td>
-                    <span className={gradeTagClass(row.assessment.grade)}>{gradeLabel(row.assessment.grade)}</span>
+                    <span className={gradeTagClass(row.assessment.grade)}>{localizedGradeLabel(row.assessment.grade)}</span>
                   </td>
                   <td>
                     <button
                       className="button"
                       type="button"
-                      onClick={() => copySecret(row.value, `${batchMode} copied`)}
-                      aria-label={`Copy candidate ${index + 1}`}
+                      onClick={() => copySecret(row.value, tr(batchMode === "password" ? "password copied" : "passphrase copied"))}
+                      aria-label={`${tr("Copy candidate")} ${index + 1}`}
                     >
-                      copy
+                      {tr("copy")}
                     </button>
                   </td>
                 </tr>
@@ -761,10 +768,10 @@ export function PwView({ onOpenGuide }: PwViewProps) {
             }}
             aria-label={tr("Password hash algorithm")}
           >
-            <option value="argon2id">Argon2id (recommended)</option>
-            <option value="pbkdf2-sha256">PBKDF2-SHA256 (compat)</option>
-            <option value="sha512">SHA-512 (legacy)</option>
-            <option value="sha256">SHA-256 (legacy)</option>
+            <option value="argon2id">{tr("Argon2id (recommended)")}</option>
+            <option value="pbkdf2-sha256">{tr("PBKDF2-SHA256 (compat)")}</option>
+            <option value="sha512">{tr("SHA-512 (legacy)")}</option>
+            <option value="sha256">{tr("SHA-256 (legacy)")}</option>
           </select>
           <label className="section-title" htmlFor="pw-hash-salt">
             {tr("Salt bytes")}
@@ -988,9 +995,9 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function formatGuessRate(rate: number): string {
-  if (rate >= 1_000_000_000) return `${(rate / 1_000_000_000).toFixed(1)}B guesses/s`;
-  if (rate >= 1_000_000) return `${(rate / 1_000_000).toFixed(1)}M guesses/s`;
-  if (rate >= 1_000) return `${(rate / 1_000).toFixed(1)}K guesses/s`;
-  if (rate >= 1) return `${Math.round(rate)} guesses/s`;
-  return `${rate.toFixed(2)} guesses/s`;
+  if (rate >= 1_000_000_000) return `${(rate / 1_000_000_000).toFixed(1)}B/s`;
+  if (rate >= 1_000_000) return `${(rate / 1_000_000).toFixed(1)}M/s`;
+  if (rate >= 1_000) return `${(rate / 1_000).toFixed(1)}K/s`;
+  if (rate >= 1) return `${Math.round(rate)}/s`;
+  return `${rate.toFixed(2)}/s`;
 }

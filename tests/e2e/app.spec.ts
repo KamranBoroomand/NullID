@@ -120,13 +120,114 @@ test("metadata module flags HEIC inputs as unsupported with remediation text", a
   await expect(page.getByLabel("unsupported")).toBeVisible();
 });
 
-test("sanitize module exports local safe-share bundle", async ({ page }) => {
+test("sanitize module exports local safe-share bundle with shared workflow package metadata", async ({ page }) => {
   await openApp(page);
   await page.getByRole("button", { name: /Log Sanitizer/i }).click();
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: /^export bundle$/i }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toContain("nullid-safe-share-bundle");
+  const filePath = await download.path();
+  expect(filePath).not.toBeNull();
+  const payload = JSON.parse(fs.readFileSync(filePath!, "utf8")) as Record<string, unknown>;
+  const workflowPackage = payload.workflowPackage as Record<string, unknown>;
+  const trust = workflowPackage.trust as Record<string, unknown>;
+  const packageSignature = trust.packageSignature as Record<string, unknown>;
+  expect(payload.schemaVersion).toBe(2);
+  expect(payload.kind).toBe("nullid-safe-share");
+  expect(workflowPackage.kind).toBe("nullid-workflow-package");
+  expect(workflowPackage.workflowType).toBe("sanitize-safe-share");
+  expect(trust.identity).toBe("not-asserted");
+  expect(packageSignature.method).toBe("none");
+});
+
+test("verify package surface inspects a received safe-share bundle honestly", async ({ page }) => {
+  await openApp(page);
+  await page.getByRole("button", { name: /Log Sanitizer/i }).click();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: /^export bundle$/i }).click();
+  const download = await downloadPromise;
+  const filePath = await download.path();
+  expect(filePath).not.toBeNull();
+  const payload = fs.readFileSync(filePath!, "utf8");
+
+  await page.getByRole("button", { name: /Verify Package/i }).click();
+  await page.getByLabel("Verification input").fill(payload);
+  await page.getByRole("button", { name: /inspect artifact/i }).click();
+
+  await expect(page.getByLabel("Safe-share bundle").first()).toBeVisible();
+  await expect(page.getByLabel("Integrity checked").first()).toBeVisible();
+  await expect(page.getByText("Sender identity is not asserted by this package format.")).toBeVisible();
+  await expect(page.getByLabel("Reported transforms").getByText("Sanitize transformation")).toBeVisible();
+});
+
+test("safe share assistant exports a receiver-friendly workflow package", async ({ page }) => {
+  await openApp(page);
+  await page.getByRole("button", { name: /Safe Share/i }).click();
+  await page.getByLabel("Safe share input text").fill("token=abcdefghijklmnopqrstuvwxyz12345 alice@example.com");
+  await page.getByRole("button", { name: /Support ticket \/ bug report/i }).click();
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: /^export package$/i }).click();
+  const download = await downloadPromise;
+  const filePath = await download.path();
+  expect(filePath).not.toBeNull();
+
+  const payload = JSON.parse(fs.readFileSync(filePath!, "utf8")) as Record<string, unknown>;
+  const trust = payload.trust as Record<string, unknown>;
+  const packageSignature = trust.packageSignature as Record<string, unknown>;
+  const workflowPreset = payload.workflowPreset as Record<string, unknown>;
+  expect(payload.kind).toBe("nullid-workflow-package");
+  expect(payload.workflowType).toBe("safe-share-assistant");
+  expect(workflowPreset.id).toBe("support-ticket");
+  expect(packageSignature.method).toBe("none");
+
+  await page.getByRole("button", { name: /Verify Package/i }).click();
+  await page.getByLabel("Verification input").fill(fs.readFileSync(filePath!, "utf8"));
+  await page.getByRole("button", { name: /inspect artifact/i }).click();
+
+  await expect(page.getByLabel("Workflow package").first()).toBeVisible();
+  await expect(page.getByLabel("Integrity checked").first()).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Support ticket / bug report", exact: true })).toBeVisible();
+});
+
+test("incident workflow exports a receiver-friendly incident package", async ({ page }) => {
+  await openApp(page);
+  await page.getByRole("button", { name: /Incident Workflow/i }).click();
+  await page.getByLabel("Incident title").fill("Incident playwright handoff");
+  await page.getByLabel("Incident purpose").fill("Prepare a local responder handoff package.");
+  await page.getByLabel("Incident summary").fill("Suspicious token and account activity were observed.");
+  await page.getByLabel("Incident notes").fill("Summary: suspicious token seen in auth logs\nImpact: limited\nIndicators: alice@example.com");
+  await page.getByLabel("Incident text artifact label").fill("auth-snippet.txt");
+  await page.getByLabel("Incident text artifact input").fill("token=abcdefghijklmnopqrstuvwxyz12345 alice@example.com");
+  await page.getByRole("button", { name: /^add text artifact$/i }).click();
+
+  await expect(page.getByText(/Incident Workflow export with case context, prepared artifacts, and receiver-facing reporting\./i)).toBeVisible();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: /^export package$/i }).click();
+  const download = await downloadPromise;
+  const filePath = await download.path();
+  expect(filePath).not.toBeNull();
+
+  const payload = JSON.parse(fs.readFileSync(filePath!, "utf8")) as Record<string, unknown>;
+  const workflowPreset = payload.workflowPreset as Record<string, unknown>;
+  const trust = payload.trust as Record<string, unknown>;
+  const packageSignature = trust.packageSignature as Record<string, unknown>;
+  const report = payload.report as Record<string, unknown>;
+  expect(payload.kind).toBe("nullid-workflow-package");
+  expect(payload.workflowType).toBe("incident-workflow");
+  expect(workflowPreset.id).toBe("incident-handoff");
+  expect(packageSignature.method).toBe("none");
+  expect(report.purpose).toBe("Prepare a local responder handoff package.");
+
+  await page.getByRole("button", { name: /Verify Package/i }).click();
+  await page.getByLabel("Verification input").fill(fs.readFileSync(filePath!, "utf8"));
+  await page.getByRole("button", { name: /inspect artifact/i }).click();
+
+  await expect(page.getByLabel("Workflow package").first()).toBeVisible();
+  await expect(page.getByLabel("Integrity checked").first()).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Incident handoff", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Reported transforms").getByText("Incident workflow assembly")).toBeVisible();
 });
 
 test("sanitize module batch-processes local files", async ({ page }) => {

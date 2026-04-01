@@ -103,6 +103,20 @@ export async function hashText(text: string, algorithm: HashAlgorithm, options?:
   return finalizeHash(hasher, started, options?.onProgress);
 }
 
+export async function hashBytes(bytes: Uint8Array, algorithm: HashAlgorithm, options?: HashOptions): Promise<HashResult> {
+  if (!(bytes instanceof Uint8Array)) {
+    throw new TypeError("Expected bytes to be a Uint8Array");
+  }
+  const factory = hashers[algorithm];
+  if (!factory) {
+    throw new Error(`Unsupported hash algorithm: ${algorithm}`);
+  }
+  const hasher = factory.create();
+  const started = performance.now();
+  hasher.update(bytes);
+  return finalizeHash(hasher, started, options?.onProgress);
+}
+
 export async function hashFile(file: File, algorithm: HashAlgorithm, options?: HashOptions): Promise<HashResult> {
   if (!(file instanceof File)) {
     throw new TypeError("Expected a File to hash");

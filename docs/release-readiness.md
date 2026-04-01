@@ -1,6 +1,6 @@
 # NullID Release Readiness
 
-Last updated: 2026-02-28
+Last updated: 2026-04-01
 
 This document tracks what is already at release-candidate quality and what is still missing before a production GA cut.
 
@@ -18,9 +18,11 @@ This document tracks what is already at release-candidate quality and what is st
   - Added `SECURITY.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `CODE_OF_CONDUCT.md`, `SUPPORT.md`.
   - Added GitHub issue templates and PR template.
   - README updated for current scripts, release references, and governance links.
+  - Workflow/safe-share verification docs now explicitly distinguish artifact/hash verification from package-declared workflow metadata and outer wrapper compatibility fields.
 - Internationalization:
   - Added missing FA/RU strings for new and high-impact UI text.
-  - Added `npm run i18n:check` and integrated it into CI/workflows.
+  - Added strict `npm run i18n:check` phrase coverage enforcement and integrated it into the default validation path.
+  - Added locale-switching e2e coverage to the default release validation path.
 - Security and release checks:
   - Replaced regex-only offline-policy lint with AST-based source scanning.
   - Hardened security-header audit to strict directive/value checks.
@@ -28,13 +30,13 @@ This document tracks what is already at release-candidate quality and what is st
 
 ## Quality Gate Status
 
-Latest local validation run (`npm run validate`) passed end-to-end on 2026-02-28:
+Latest local validation run (`npm run validate`) passed end-to-end on 2026-04-01:
 
 - `typecheck` passed
 - `i18n:check` passed
 - `lint` passed
-- `test` passed (62/62)
-- `e2e` passed (18/18)
+- `test` passed (141/141)
+- `e2e` passed (29/29)
 - `build` passed
 - `verify:build` passed
 
@@ -44,12 +46,17 @@ These are the highest-value missing items that should still be completed for ful
 
 ### P0 (Release-Blocking)
 
+- Workflow trust-surface limits:
+  - Current workflow packages remain unsigned and do not carry a verifiable package-level signature.
+  - Top-level workflow metadata is still package-declared unless separately hashed inside an artifact.
+  - Schema-2 safe-share wrapper fields are not cross-checked against the embedded workflow package.
+  - GA should keep these limits explicit in product/docs, or redesign the contract before claiming stronger workflow trust guarantees.
 - Final host validation:
   - Verify real deployed headers/CSP on the production domain, not only local/static config checks.
 - Release key operations runbook:
   - Document exact signing-key custody, rotation, revocation, and emergency replacement procedures.
 - Disaster recovery drill:
-  - Execute and document at least one full restore drill for signed profile/policy/vault export flows.
+  - Execute and document at least one full restore drill for shared-passphrase HMAC-protected profile/policy/vault export flows.
 
 ### P1 (Should Complete Before Wide Adoption)
 
@@ -78,4 +85,3 @@ These are the highest-value missing items that should still be completed for ful
 - Guides and information: Good baseline, needs production ops runbooks and support policy detail.
 - README: Release-ready baseline with script and governance alignment.
 - Options and features: Broad and coherent; next priority is operational hardening rather than feature breadth.
-
