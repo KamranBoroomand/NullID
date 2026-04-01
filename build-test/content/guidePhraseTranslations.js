@@ -152,16 +152,16 @@ export const guidePhraseTranslations = {
         ru: "Оценки энтропии модельные; воспринимайте их как ориентир, а не формальную гарантию.",
     },
     "Export a safe-share bundle (optionally encrypted) with policy + SHA-256 hashes.": {
-        fa: "یک بسته safe-share (در صورت نیاز رمزگذاری‌شده) با سیاست + هش‌های SHA-256 خروجی بگیرید.",
-        ru: "Экспортируйте пакет safe-share (при необходимости зашифрованный) с политикой и хэшами SHA-256.",
+        fa: "یک بستهٔ اشتراک امن را، در صورت نیاز به‌صورت رمزگذاری‌شده، همراه با خط‌مشی و هش‌های SHA-256 خروجی بگیرید.",
+        ru: "Экспортируйте пакет безопасной передачи, при необходимости зашифрованный, вместе с политикой и SHA-256-хэшами.",
     },
     "Export/import (plain or encrypted) for offline backup; optional signed metadata verification is available.": {
         fa: "برای پشتیبان آفلاین، خروجی/ورودی (ساده یا رمزگذاری‌شده) بگیرید؛ اعتبارسنجی اختیاری فرادادهٔ امضاشده هم موجود است.",
         ru: "Используйте экспорт/импорт (обычный или шифрованный) для офлайн-бэкапа; доступна опциональная проверка подписанных метаданных.",
     },
     "Rule-based scrubbing for logs with diff preview, reusable local policy packs, optional shared-passphrase HMAC metadata, simulation matrix comparisons, rule-impact ranking, batch file sanitization, baseline policy merge, and safe-share bundle export (including GitHub/Slack token and private-key block stripping).": {
-        fa: "پاک‌سازی قانون‌محور لاگ با پیش‌نمایش diff، بسته‌های سیاست محلی قابل‌استفاده‌مجدد، فراداده اختیاری HMAC با عبارت عبور مشترک، مقایسه ماتریس شبیه‌سازی، رتبه‌بندی اثر قوانین، پاک‌سازی دسته‌ای فایل، ادغام baseline سیاست و خروجی بسته safe-share (همراه با حذف توکن‌های GitHub/Slack و بلوک‌های کلید خصوصی).",
-        ru: "Правиловая очистка логов с предпросмотром diff, переиспользуемыми локальными policy packs, опциональными HMAC-метаданными по общей парольной фразе, сравнением симуляционных матриц, ранжированием влияния правил, пакетной санитизацией файлов, слиянием baseline-политики и экспортом safe-share пакета (включая удаление GitHub/Slack токенов и блоков приватных ключей).",
+        fa: "پاک‌سازی قانون‌محور لاگ با پیش‌نمایش diff، بسته‌های خط‌مشی محلیِ قابل‌استفاده‌مجدد، فراداده اختیاری HMAC با عبارت عبور مشترک، مقایسه ماتریس شبیه‌سازی، رتبه‌بندی اثر قوانین، پاک‌سازی دسته‌ای فایل، ادغام خط‌مشی پایه و خروجی بستهٔ اشتراک امن؛ همراه با حذف توکن‌های GitHub/Slack و بلوک‌های کلید خصوصی.",
+        ru: "Правиловая очистка логов с diff-предпросмотром, переиспользуемыми локальными пакетами политики, опциональными HMAC-метаданными по общей парольной фразе, сравнением матриц моделирования, ранжированием влияния правил, пакетной санитизацией файлов, слиянием базовой политики и экспортом пакета безопасной передачи, включая удаление токенов GitHub/Slack и блоков закрытых ключей.",
     },
     "Generate a batch shortlist, then copy the candidate that fits your policy.": {
         fa: "یک فهرست کوتاه دسته‌ای بسازید و گزینه‌ای که با سیاست شما سازگار است را کپی کنید.",
@@ -320,8 +320,8 @@ export const guidePhraseTranslations = {
         ru: "Профили (экспорт / импорт)",
     },
     "Profiles, policy packs, and vault snapshots support optional signature verification.": {
-        fa: "پروفایل‌ها، بسته‌های سیاست و snapshotهای vault از اعتبارسنجی اختیاری امضا پشتیبانی می‌کنند.",
-        ru: "Профили, policy packs и снимки vault поддерживают опциональную проверку подписи.",
+        fa: "پروفایل‌ها، بسته‌های خط‌مشی و اسنپ‌شات‌های گاوصندوق از اعتبارسنجی اختیاری امضا پشتیبانی می‌کنند.",
+        ru: "Профили, пакеты политики и снимки сейфа поддерживают опциональную проверку подписи.",
     },
     "Quickly encrypt a snippet without installing tools": {
         fa: "بدون نصب ابزار، یک قطعه متن را سریع رمزگذاری کنید",
@@ -352,8 +352,8 @@ export const guidePhraseTranslations = {
         ru: "Проверьте diff до/после; включите перенос строк для узких экранов.",
     },
     "Rule-based scrubbing for logs with diff preview, signed local policy packs, simulation matrix comparisons, rule-impact ranking, batch file sanitization, baseline policy merge, and safe-share bundle export (including GitHub/Slack token and private-key block stripping).": {
-        fa: "پاک‌سازی قانون‌محور لاگ با پیش‌نمایش diff، بسته‌های سیاست محلی امضاشده، مقایسه ماتریس شبیه‌سازی، رتبه‌بندی اثر قوانین، پاک‌سازی دسته‌ای فایل، ادغام baseline سیاست و خروجی بسته safe-share (همراه با حذف توکن‌های GitHub/Slack و بلوک‌های کلید خصوصی).",
-        ru: "Правиловая очистка логов с предпросмотром diff, подписанными локальными policy packs, сравнением симуляционных матриц, ранжированием влияния правил, пакетной санитизацией файлов, слиянием baseline-политики и экспортом safe-share пакета (включая удаление GitHub/Slack токенов и блоков приватных ключей).",
+        fa: "پاک‌سازی قانون‌محور لاگ با پیش‌نمایش diff، بسته‌های خط‌مشی محلیِ امضاشده، مقایسه ماتریس شبیه‌سازی، رتبه‌بندی اثر قوانین، پاک‌سازی دسته‌ای فایل، ادغام خط‌مشی پایه و خروجی بستهٔ اشتراک امن؛ همراه با حذف توکن‌های GitHub/Slack و بلوک‌های کلید خصوصی.",
+        ru: "Правиловая очистка логов с diff-предпросмотром, подписанными локальными пакетами политики, сравнением матриц моделирования, ранжированием влияния правил, пакетной санитизацией файлов, слиянием базовой политики и экспортом пакета безопасной передачи, включая удаление токенов GitHub/Slack и блоков закрытых ключей.",
     },
     "Run batch mode for multiple files, then export outputs/report.": {
         fa: "حالت دسته‌ای را برای چند فایل اجرا کنید و سپس خروجی‌ها/گزارش را بگیرید.",
@@ -368,16 +368,16 @@ export const guidePhraseTranslations = {
         ru: "Санитизируйте чаты и документы перед отправкой",
     },
     "Save or load preferences stored under the nullid:* keys in localStorage (not the vault DB), with integrity checks and optional signed metadata.": {
-        fa: "ترجیحات ذخیره‌شده زیر کلیدهای nullid:* در localStorage (نه DB گاوصندوق) را با بررسی یکپارچگی و فراداده امضاشده اختیاری ذخیره/بارگذاری کنید.",
-        ru: "Сохраняйте или загружайте настройки из ключей nullid:* в localStorage (не vault DB) с проверкой целостности и опциональными подписанными метаданными.",
+        fa: "ترجیحات ذخیره‌شده زیر کلیدهای nullid:* در localStorage، نه پایگاه‌دادهٔ گاوصندوق، را با بررسی یکپارچگی و فرادادهٔ امضاشدهٔ اختیاری ذخیره یا بارگذاری کنید.",
+        ru: "Сохраняйте или загружайте настройки из ключей nullid:* в localStorage, а не из базы сейфа, с проверкой целостности и опциональными подписанными метаданными.",
     },
     "Save/import policy packs to reuse rule sets and custom regexes locally.": {
-        fa: "بسته‌های سیاست را ذخیره/وارد کنید تا مجموعه‌قوانین و regexهای سفارشی را محلی دوباره استفاده کنید.",
-        ru: "Сохраняйте/импортируйте policy packs для повторного локального использования наборов правил и кастомных regex.",
+        fa: "بسته‌های خط‌مشی را ذخیره یا وارد کنید تا مجموعه‌قوانین و regexهای سفارشی را به‌صورت محلی دوباره استفاده کنید.",
+        ru: "Сохраняйте или импортируйте пакеты политики, чтобы повторно использовать наборы правил и пользовательские regex локально.",
     },
     "Schema versioning and payload hashing guard incompatible or tampered snapshots; only keys under nullid:* are written back.": {
-        fa: "نسخه‌بندی schema و هش payload از snapshotهای ناسازگار یا دستکاری‌شده محافظت می‌کند؛ فقط کلیدهای nullid:* بازنویسی می‌شوند.",
-        ru: "Версионирование схемы и хэш payload защищают от несовместимых/подмененных снимков; обратно записываются только ключи nullid:*.",
+        fa: "نسخه‌بندی schema و هش payload از اسنپ‌شات‌های ناسازگار یا دستکاری‌شده محافظت می‌کند؛ فقط کلیدهای nullid:* دوباره نوشته می‌شوند.",
+        ru: "Версионирование схемы и хэш payload защищают от несовместимых или подмененных снимков; обратно записываются только ключи nullid:*.",
     },
     "Security engineering": {
         fa: "مهندسی امنیت",
@@ -508,16 +508,16 @@ export const guidePhraseTranslations = {
         ru: "Результаты по буферу обмена, service worker и политике браузера отражают текущие разрешения среды и могут меняться между сеансами.",
     },
     "Vault content lives in IndexedDB and is not included; export the vault separately.": {
-        fa: "محتوای vault در IndexedDB است و شامل نمی‌شود؛ vault را جداگانه خروجی بگیرید.",
-        ru: "Содержимое vault хранится в IndexedDB и не включается; экспортируйте vault отдельно.",
+        fa: "محتوای گاوصندوق در IndexedDB نگه داشته می‌شود و در این خروجی نمی‌آید؛ آن را جداگانه خروجی بگیرید.",
+        ru: "Содержимое сейфа хранится в IndexedDB и в этот экспорт не входит; экспортируйте сейф отдельно.",
     },
     "Wipe clears IndexedDB/localStorage vault stores.": {
-        fa: "عملیات Wipe، ذخیره‌گاه‌های vault در IndexedDB/localStorage را پاک می‌کند.",
-        ru: "Wipe очищает хранилища vault в IndexedDB/localStorage.",
+        fa: "عملیات Wipe، ذخیره‌گاه‌های گاوصندوق را در IndexedDB و localStorage پاک می‌کند.",
+        ru: "Команда Wipe очищает хранилища сейфа в IndexedDB и localStorage.",
     },
     "Profiles, policy packs, and vault snapshots support optional shared-passphrase HMAC verification.": {
-        fa: "پروفایل‌ها، policy packها و snapshotهای vault از اعتبارسنجی اختیاری HMAC با عبارت عبور مشترک پشتیبانی می‌کنند.",
-        ru: "Профили, policy pack и снимки vault поддерживают опциональную HMAC-проверку по общей парольной фразе.",
+        fa: "پروفایل‌ها، بسته‌های خط‌مشی و اسنپ‌شات‌های گاوصندوق از اعتبارسنجی اختیاری HMAC با عبارت عبور مشترک پشتیبانی می‌کنند.",
+        ru: "Профили, пакеты политики и снимки сейфа поддерживают опциональную HMAC-проверку по общей парольной фразе.",
     },
     "Export/import (plain or encrypted) for offline backup; optional shared-passphrase HMAC verification is available.": {
         fa: "برای پشتیبان آفلاین خروجی/ورودی (ساده یا رمزگذاری‌شده) بگیرید؛ اعتبارسنجی اختیاری HMAC با عبارت عبور مشترک هم در دسترس است.",
@@ -560,12 +560,12 @@ export const guidePhraseTranslations = {
         ru: "Импортируйте через System → Import profile и выберите JSON-файл; профили с HMAC можно проверить той же парольной фразой.",
     },
     "Vault content lives outside profile snapshots; export the vault separately.": {
-        fa: "محتوای vault خارج از snapshotهای پروفایل نگه داشته می‌شود؛ vault را جداگانه خروجی بگیرید.",
-        ru: "Содержимое vault находится вне снимков профиля; экспортируйте vault отдельно.",
+        fa: "محتوای گاوصندوق خارج از اسنپ‌شات‌های پروفایل نگه داشته می‌شود؛ آن را جداگانه خروجی بگیرید.",
+        ru: "Содержимое сейфа не входит в снимки профиля; экспортируйте сейф отдельно.",
     },
     "Vault fallback blobs/metadata stored under nullid:vault:data:{store}:* are excluded from profile export/import; older nullid:vault:{store}:* fallback records are migrated locally and still ignored there.": {
-        fa: "blobها/فراداده‌های fallback vault که زیر nullid:vault:data:{store}:* ذخیره می‌شوند از خروجی/ورودی پروفایل حذف می‌شوند؛ رکوردهای قدیمی fallback زیر nullid:vault:{store}:* به‌صورت محلی مهاجرت داده می‌شوند و همچنان در اینجا نادیده گرفته می‌شوند.",
-        ru: "Fallback-blobs/метаданные vault под nullid:vault:data:{store}:* исключаются из экспорта/импорта профиля; более старые fallback-записи под nullid:vault:{store}:* мигрируются локально и здесь по-прежнему игнорируются.",
+        fa: "blobها و فراداده‌های حالت جایگزینِ گاوصندوق که زیر nullid:vault:data:{store}:* ذخیره می‌شوند، از خروجی و ورود پروفایل حذف می‌شوند؛ رکوردهای قدیمی‌ترِ nullid:vault:{store}:* هم به‌صورت محلی مهاجرت داده می‌شوند و همچنان در این بخش نادیده گرفته می‌شوند.",
+        ru: "Fallback-blobs и метаданные сейфа под nullid:vault:data:{store}:* исключаются из экспорта и импорта профиля; более старые fallback-записи под nullid:vault:{store}:* мигрируются локально и здесь по-прежнему игнорируются.",
     },
     "HMAC-protected imports without the correct verification passphrase are rejected.": {
         fa: "ورودی‌های محافظت‌شده با HMAC بدون عبارت عبور تایید درست رد می‌شوند.",

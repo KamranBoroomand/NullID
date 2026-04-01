@@ -25,6 +25,17 @@ describe("sanitize engine", () => {
         assert.equal(Boolean(config), true);
         assert.equal(config?.rulesState.maskEmail, true);
         assert.equal(Array.isArray(config?.customRules), true);
+        assert.equal(config?.customRules.length, 1);
+        assert.equal(config?.customRules[0]?.pattern, "secret");
+    });
+    it("rejects unsafe custom regex patterns during policy normalization", () => {
+        const config = normalizePolicyConfig({
+            rulesState: { maskEmail: false, maskIp: false },
+            jsonAware: false,
+            customRules: [{ pattern: "(a+)+", replacement: "[x]", flags: "g", scope: "both" }],
+        });
+        assert.equal(Boolean(config), true);
+        assert.equal(config?.customRules.length, 0);
     });
     it("runs batch sanitize for multiple files", () => {
         const outputs = runBatchSanitize([

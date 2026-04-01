@@ -1,4 +1,4 @@
-import { createSnapshotIntegrity, verifySnapshotIntegrity } from "./snapshotIntegrity.js";
+import { SnapshotIntegrityError, createSnapshotIntegrity, verifySnapshotIntegrity } from "./snapshotIntegrity.js";
 import { isVaultLocalStorageRecordKey } from "./vaultStorageKeys.js";
 export const PROFILE_SCHEMA_VERSION = 2;
 const LEGACY_PROFILE_SCHEMA_VERSION = 1;
@@ -117,6 +117,82 @@ export async function importProfileFile(file, options) {
     const applied = applyEntries(entries);
     return { applied, signed, verified, legacy: false };
 }
+export async function verifyProfilePayload(input, options) {
+    const descriptor = describeProfilePayload(input);
+    if (!isPlainObject(input)) {
+        return invalidProfileResult(descriptor, "Invalid profile payload");
+    }
+    const exportedAt = typeof input.exportedAt === "string" ? input.exportedAt : undefined;
+    if (input.schemaVersion === LEGACY_PROFILE_SCHEMA_VERSION) {
+        const entries = parseLegacyEntries(input);
+        return {
+            ...descriptor,
+            verificationState: "unsigned",
+            verificationLabel: "Unsigned",
+            trustBasis: ["Legacy profile payload with no integrity metadata."],
+            verifiedChecks: [`Parsed ${Object.keys(entries).length} profile entr${Object.keys(entries).length === 1 ? "y" : "ies"}.`],
+            unverifiedChecks: ["Legacy profile payloads do not carry payload hashing or HMAC verification metadata."],
+            warnings: [],
+            exportedAt,
+            sampleKeys: sampleEntryKeys(entries),
+        };
+    }
+    if (input.schemaVersion !== PROFILE_SCHEMA_VERSION) {
+        return invalidProfileResult(descriptor, `Unsupported profile schema: ${String(input.schemaVersion ?? "unknown")}`, exportedAt);
+    }
+    if (input.kind && input.kind !== "profile") {
+        return invalidProfileResult(descriptor, "Invalid profile payload kind", exportedAt);
+    }
+    if (!isPlainObject(input.entries)) {
+        return invalidProfileResult(descriptor, "Invalid profile payload", exportedAt);
+    }
+    const entries = input.entries;
+    if (!Object.values(entries).every((value) => isSupportedValue(value))) {
+        return invalidProfileResult(descriptor, "Profile payload contains unsupported value types", exportedAt, sampleEntryKeys(entries));
+    }
+    try {
+        const verification = await verifySnapshotIntegrity({
+            subject: "Profile",
+            countKey: "entryCount",
+            actualCount: Object.keys(entries).length,
+            payload: {
+                schemaVersion: PROFILE_SCHEMA_VERSION,
+                exportedAt: input.exportedAt,
+                entries,
+            },
+            integrity: input.integrity,
+            signature: input.signature,
+            verificationPassphrase: options?.verificationPassphrase,
+            missingIntegrityMessage: "Profile integrity metadata missing",
+            invalidIntegrityMessage: "Invalid profile integrity metadata",
+            countMismatchMessage: "Profile integrity mismatch (entry count)",
+            hashMismatchMessage: "Profile integrity mismatch (hash)",
+            invalidSignatureMessage: "Invalid profile signature metadata",
+            verificationRequiredMessage: "Profile is signed; verification passphrase required",
+            verificationFailedMessage: "Profile signature verification failed",
+        });
+        const signed = verification.signed;
+        return {
+            ...descriptor,
+            verificationState: signed ? "verified" : "integrity-checked",
+            verificationLabel: signed ? "HMAC verified" : "Integrity checked",
+            trustBasis: signed
+                ? ["Shared-secret HMAC verification succeeded.", "Payload hash and entry count matched the embedded metadata."]
+                : ["Payload hash and entry count matched the embedded integrity metadata.", "No sender identity is asserted."],
+            verifiedChecks: [
+                `Profile entry count matched (${Object.keys(entries).length}).`,
+                "Payload hash matched the embedded integrity metadata.",
+            ],
+            unverifiedChecks: signed ? ["Shared-secret verification proves tamper detection for holders of the same secret, not public-key identity."] : [],
+            warnings: [],
+            exportedAt,
+            sampleKeys: sampleEntryKeys(entries),
+        };
+    }
+    catch (error) {
+        return profileErrorResult(descriptor, error, sampleEntryKeys(entries), exportedAt);
+    }
+}
 function parseLegacyEntries(parsed) {
     if (!isPlainObject(parsed.entries)) {
         throw new Error("Invalid legacy profile payload");
@@ -153,4 +229,55 @@ function isSupportedValue(value) {
     if (t === "object")
         return Object.values(value).every(isSupportedValue);
     return false;
+}
+function sampleEntryKeys(entries) {
+    return Object.keys(entries).sort().slice(0, 6);
+}
+function invalidProfileResult(descriptor, failure, exportedAt, sampleKeys = []) {
+    return {
+        ...descriptor,
+        verificationState: "invalid",
+        verificationLabel: "Invalid",
+        trustBasis: ["NullID could not validate the structure of this profile payload."],
+        verifiedChecks: [],
+        unverifiedChecks: ["No integrity or authenticity guarantees could be established."],
+        warnings: [failure],
+        exportedAt,
+        sampleKeys,
+        failure,
+    };
+}
+function profileErrorResult(descriptor, error, sampleKeys, exportedAt) {
+    const failure = error instanceof Error ? error.message : "Profile verification failed";
+    if (error instanceof SnapshotIntegrityError) {
+        if (error.code === "verification-required") {
+            return {
+                ...descriptor,
+                verificationState: "verification-required",
+                verificationLabel: "Verification required",
+                trustBasis: ["Shared-secret HMAC metadata is present."],
+                verifiedChecks: [],
+                unverifiedChecks: ["A verification passphrase is required before authenticity can be checked."],
+                warnings: descriptor.keyHint ? [`Expected key hint: ${descriptor.keyHint}`] : [],
+                exportedAt,
+                sampleKeys,
+                failure,
+            };
+        }
+        if (error.code === "verification-failed" || error.code === "integrity-count-mismatch" || error.code === "integrity-hash-mismatch") {
+            return {
+                ...descriptor,
+                verificationState: "mismatch",
+                verificationLabel: "Mismatch",
+                trustBasis: ["Profile integrity metadata was present, but verification did not succeed."],
+                verifiedChecks: [],
+                unverifiedChecks: ["The payload may be tampered, incomplete, or paired with the wrong shared secret."],
+                warnings: [failure],
+                exportedAt,
+                sampleKeys,
+                failure,
+            };
+        }
+    }
+    return invalidProfileResult(descriptor, failure, exportedAt, sampleKeys);
 }

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { guideExtras, guideTools } from "../content/guideContent.js";
 describe("guide content coverage", () => {
     it("covers every primary tool module exactly once", () => {
-        const expected = ["hash", "redact", "sanitize", "meta", "enc", "pw", "vault", "selftest"];
+        const expected = ["hash", "share", "incident", "redact", "sanitize", "verify", "meta", "enc", "pw", "vault", "selftest"];
         const actual = guideTools.map((item) => item.key).sort();
         assert.deepEqual(actual, [...expected].sort());
     });

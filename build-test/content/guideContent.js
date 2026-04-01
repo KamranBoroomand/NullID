@@ -55,6 +55,70 @@ export const guideTools = [
         ],
     },
     {
+        key: "share",
+        title: "Safe Share Assistant",
+        whatItDoes: "Guided local workflow for preparing text snippets or files to share safely, with workflow presets, sanitize or metadata review, optional NULLID:ENC:1 wrapping, and receiver-friendly workflow package export.",
+        whatWhen: [
+            "Package a support snippet or screenshot for someone else without falling back to ad-hoc copy/paste",
+            "Prepare a receiver-facing package with transforms, warnings, and honest trust labels already attached",
+        ],
+        howSteps: [
+            "Choose text or a file, then let NullID classify what kind of share you are preparing.",
+            "Pick a workflow preset such as support ticket, external minimum disclosure, or evidence archive.",
+            "Review sanitize findings or metadata signals before exporting.",
+            "Decide whether to include only a source reference, a locally cleaned file, or a context-preserving original payload when the preset allows it.",
+            "Optionally wrap the exported workflow package in a NULLID:ENC:1 envelope before sending it onward.",
+        ],
+        limits: [
+            "Workflow packages are still unsigned in this step; they do not prove sender identity.",
+            "NULLID:ENC:1 adds confidentiality for the exported file, not public-key authenticity.",
+            "Some file formats still require external offline cleanup before wider sharing.",
+            "Lower-level tools remain available when you need direct control over sanitize, metadata, or envelope details.",
+        ],
+    },
+    {
+        key: "incident",
+        title: "Incident Workflow",
+        whatItDoes: "Guided local workflow for assembling incident notes, prepared text/file artifacts, hashes, transform summaries, and receiver-facing reporting into one incident package.",
+        whatWhen: [
+            "Hand off an incident to another responder without losing what was changed, preserved, or left unproven",
+            "Assemble a local incident package with notes, metadata review, and honest trust language instead of juggling separate primitive exports",
+        ],
+        howSteps: [
+            "Define the incident title, purpose, case reference, recipient scope, and a short summary.",
+            "Prepare case notes with the same incident template headings used in Secure Notes, then review sanitize findings before export.",
+            "Add extra text snippets or file artifacts; files are analyzed locally for metadata risk and cleaned in-browser when supported.",
+            "Choose an incident mode such as handoff, evidence archive, minimal disclosure, or internal investigation.",
+            "Review the final package summary, included artifacts, transform log, and what the receiver can and cannot verify before exporting.",
+        ],
+        limits: [
+            "Incident packages are still unsigned in this step and do not prove sender identity.",
+            "NULLID:ENC:1 only protects the exported file at rest/in transit for parties with the passphrase; it is not a sender signature.",
+            "Some file formats still require external offline cleanup before they are safe for broader sharing.",
+            "This workflow improves discipline and explainability, not legal/forensic chain-of-custody guarantees.",
+        ],
+    },
+    {
+        key: "verify",
+        title: "Verify Package",
+        whatItDoes: "Receiver-side inspection for workflow packages, safe-share bundles, policy packs, profile snapshots, vault snapshots, and NULLID:ENC:1 envelopes with honest trust labels.",
+        whatWhen: [
+            "Check what a received package really contains before opening or re-sharing it",
+            "Differentiate unsigned, integrity-checked, HMAC-verified, mismatched, malformed, and unsupported artifacts locally",
+        ],
+        howSteps: [
+            "Paste the artifact JSON or load a local file into the verifier.",
+            "Provide an envelope passphrase only when the package is wrapped in NULLID:ENC:1.",
+            "Provide a verification passphrase only for formats that explicitly use shared-secret HMAC metadata.",
+            "Review the trust basis, verified checks, warnings, and transform summary before acting on the artifact.",
+        ],
+        limits: [
+            "Unsigned workflow packages do not assert sender identity.",
+            "Shared-secret HMAC only proves integrity to parties who already know the same passphrase.",
+            "Decrypted envelopes can still contain unsupported payloads; successful decryption is not the same as package verification.",
+        ],
+    },
+    {
         key: "meta",
         title: "Metadata Inspector",
         whatItDoes: "Reads local image metadata (JPEG/TIFF EXIF, PNG/WebP/GIF hints), surfaces browser compatibility diagnostics, re-encodes images with configurable output codec/quality, and records before/after forensic SHA-256 fingerprints.",

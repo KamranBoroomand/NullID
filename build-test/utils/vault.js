@@ -1,7 +1,7 @@
 import { getVaultBackend, getAllValues, getValue, putValue, clearStore } from "./storage.js";
 import { decodeBase64UrlStrict, fromBase64Url, toBase64Url, utf8ToBytes, bytesToUtf8, randomBytes } from "./encoding.js";
 import { MAX_KDF_ITERATIONS, decryptText, encryptText } from "./cryptoEnvelope.js";
-import { createSnapshotIntegrity, verifySnapshotIntegrity } from "./snapshotIntegrity.js";
+import { SnapshotIntegrityError, createSnapshotIntegrity, verifySnapshotIntegrity } from "./snapshotIntegrity.js";
 import { getVaultFallbackKeyCandidates } from "./vaultStorageKeys.js";
 const AAD = utf8ToBytes("nullid:vault:v1");
 const VAULT_EXPORT_SCHEMA_VERSION = 2;
@@ -160,6 +160,55 @@ export function describeVaultPayload(input) {
         keyHint: typeof signature?.keyHint === "string" ? signature.keyHint : undefined,
         legacy: schemaVersion !== VAULT_EXPORT_SCHEMA_VERSION,
     };
+}
+export async function verifyVaultPayload(input, options) {
+    const descriptor = describeVaultPayload(input);
+    if (!isRecord(input)) {
+        return invalidVaultResult(descriptor, "Invalid vault snapshot payload");
+    }
+    const exportedAt = typeof input.exportedAt === "string" ? input.exportedAt : undefined;
+    if (input.schemaVersion === VAULT_EXPORT_SCHEMA_VERSION) {
+        const noteIds = sampleVaultNoteIds(input);
+        try {
+            const resolved = await validateSignedVaultSnapshot(input, options);
+            return {
+                ...descriptor,
+                verificationState: resolved.signed ? "verified" : "integrity-checked",
+                verificationLabel: resolved.signed ? "HMAC verified" : "Integrity checked",
+                trustBasis: resolved.signed
+                    ? ["Shared-secret HMAC verification succeeded.", "Payload hash and note count matched the embedded metadata."]
+                    : ["Payload hash and note count matched the embedded integrity metadata.", "No sender identity is asserted."],
+                verifiedChecks: [
+                    `Vault note count matched (${resolved.snapshot.notes.length}).`,
+                    "Payload hash matched the embedded integrity metadata.",
+                ],
+                unverifiedChecks: resolved.signed ? ["Shared-secret verification proves tamper detection for holders of the same secret, not public-key identity."] : [],
+                warnings: [],
+                exportedAt,
+                noteIds,
+            };
+        }
+        catch (error) {
+            return vaultErrorResult(descriptor, error, exportedAt, noteIds);
+        }
+    }
+    try {
+        const legacy = normalizeLegacySnapshot(input);
+        return {
+            ...descriptor,
+            verificationState: "unsigned",
+            verificationLabel: "Unsigned",
+            trustBasis: ["Legacy vault snapshot with no integrity metadata."],
+            verifiedChecks: [`Parsed ${legacy.notes.length} vault note entr${legacy.notes.length === 1 ? "y" : "ies"}.`],
+            unverifiedChecks: ["Legacy vault snapshots do not carry payload hashing or HMAC verification metadata."],
+            warnings: [],
+            exportedAt,
+            noteIds: legacy.notes.map((note) => note.id).slice(0, 6),
+        };
+    }
+    catch (error) {
+        return invalidVaultResult(descriptor, error instanceof Error ? error.message : "Invalid vault snapshot payload", exportedAt);
+    }
 }
 export async function exportVaultEncrypted(passphrase, options) {
     const snapshot = await readVaultSnapshot(options);
@@ -350,4 +399,62 @@ async function applySnapshot(snapshot) {
     if (snapshot.notes?.length) {
         await Promise.all(snapshot.notes.map((note) => putValue(backend, "notes", note.id, note)));
     }
+}
+function invalidVaultResult(descriptor, failure, exportedAt) {
+    return {
+        ...descriptor,
+        verificationState: "invalid",
+        verificationLabel: "Invalid",
+        trustBasis: ["NullID could not validate the structure of this vault snapshot payload."],
+        verifiedChecks: [],
+        unverifiedChecks: ["No integrity or authenticity guarantees could be established."],
+        warnings: [failure],
+        exportedAt,
+        noteIds: [],
+        failure,
+    };
+}
+function vaultErrorResult(descriptor, error, exportedAt, noteIds = []) {
+    const failure = error instanceof Error ? error.message : "Vault verification failed";
+    if (error instanceof SnapshotIntegrityError) {
+        if (error.code === "verification-required") {
+            return {
+                ...descriptor,
+                verificationState: "verification-required",
+                verificationLabel: "Verification required",
+                trustBasis: ["Shared-secret HMAC metadata is present."],
+                verifiedChecks: [],
+                unverifiedChecks: ["A verification passphrase is required before authenticity can be checked."],
+                warnings: descriptor.keyHint ? [`Expected key hint: ${descriptor.keyHint}`] : [],
+                exportedAt,
+                noteIds,
+                failure,
+            };
+        }
+        if (error.code === "verification-failed" || error.code === "integrity-count-mismatch" || error.code === "integrity-hash-mismatch") {
+            return {
+                ...descriptor,
+                verificationState: "mismatch",
+                verificationLabel: "Mismatch",
+                trustBasis: ["Vault integrity metadata was present, but verification did not succeed."],
+                verifiedChecks: [],
+                unverifiedChecks: ["The payload may be tampered, incomplete, or paired with the wrong shared secret."],
+                warnings: [failure],
+                exportedAt,
+                noteIds,
+                failure,
+            };
+        }
+    }
+    return invalidVaultResult(descriptor, failure, exportedAt);
+}
+function sampleVaultNoteIds(input) {
+    if (!isRecord(input))
+        return [];
+    const container = isRecord(input.vault) ? input.vault : input;
+    const notes = Array.isArray(container.notes) ? container.notes : [];
+    return notes
+        .filter((note) => isRecord(note) && typeof note.id === "string" && note.id.trim().length > 0)
+        .map((note) => note.id)
+        .slice(0, 6);
 }
