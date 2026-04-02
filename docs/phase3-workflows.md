@@ -1,6 +1,8 @@
 # NullID Phase 3 Workflows
 
-This document describes the platform-breadth workflows added in Phase 3.
+This document preserves the historical implementation notes for the Phase 3 platform-breadth workflows.
+
+Current release status and remaining GA priorities now live in `docs/release-readiness.md`.
 
 ## 1) PDF metadata scrubbing (CLI)
 Command:

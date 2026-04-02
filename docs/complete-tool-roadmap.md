@@ -1,8 +1,10 @@
 # NullID Complete Tool Roadmap
 
-This roadmap tracks the major expansion areas required to make NullID a complete, broad-support offline security tool.
+This document preserves the phase-by-phase planning history used to expand NullID into a broad offline security tool.
 
-## Phase 1: Coverage Backbone (Current)
+Current release priorities and remaining GA work now live in `docs/release-readiness.md`.
+
+## Phase 1: Coverage Backbone (Completed)
 - [x] Expand local CLI coverage beyond hash/sanitize.
 - [x] Add CLI commands for redaction, encryption/decryption, password generation, and metadata inspection.
 - [x] Add structured sanitize format support in CLI (`json`, `ndjson`, `csv`, `xml`, `yaml`, `text`, `auto`).
@@ -36,7 +38,7 @@ This roadmap tracks the major expansion areas required to make NullID a complete
 - [x] Visual regression snapshots for module-specific mobile layouts (sanitize, metadata, vault).
 - [x] Gap review + prioritization for next assurance track.
 
-## Phase 6: Complete Tool Rollout (Current)
+## Phase 6: Complete Tool Rollout (Completed)
 - [x] Expand visual snapshot matrix to desktop + theme variants.
 - [x] Add workflow-level visual regression gate with snapshot drift reporting.
 - [x] Extend signed workflow docs with key-hint profile operating conventions (`docs/signed-workflow-conventions.md`).
@@ -48,7 +50,7 @@ This roadmap tracks the major expansion areas required to make NullID a complete
 - [x] Extend archive sanitization manifest contract with per-file findings + severity totals and regression tests.
 - [x] Add signed import/export trust-state labels (`unsigned`, `verified`, `mismatch`) across profile/policy/vault flows.
 
-## Phase 7: GA Readiness (Planned)
+## Phase 7: GA Readiness (Tracked In `docs/release-readiness.md`)
 - [ ] Validate production-domain headers/CSP on final hosting endpoint.
 - [ ] Publish release key custody/rotation/revocation runbook.
 - [ ] Execute full restore drill for signed profile/policy/vault exports.

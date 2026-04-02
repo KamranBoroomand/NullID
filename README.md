@@ -18,14 +18,14 @@ Offline-first security toolbox for hashing, redaction, sanitization, encryption,
 12. [Project Structure](#project-structure)
 13. [Contributing](#contributing)
 14. [FAQ](#faq)
-15. [Roadmap](#roadmap)
+15. [Current Status and Roadmap](#current-status-and-roadmap)
 16. [License](#license)
 
 ## Overview
 NullID is a Vite + React + TypeScript single-page app designed as a local security workbench. It also ships a local Node CLI (`scripts/nullid-local.mjs`) so browser usage and automation-friendly offline workflows stay aligned for the tools the CLI exposes.
 
 Current release line:
-- `0.1.x` (release-candidate baseline)
+- `0.1.0` (release-candidate baseline)
 
 Shared workflow artifact contract:
 - `nullid-workflow-package` is the versioned local JSON contract for inspectable workflow bundles and reports with artifact-manifest integrity metadata.
@@ -243,17 +243,17 @@ Primary npm scripts:
 | `npm run assets:brand` | `node scripts/generate-brand-assets.mjs` | Regenerate social/app icon assets from template. |
 | `npm run preview` | `vite preview` | Preview production build locally. |
 | `npm run typecheck` | `tsc -b` | Run TypeScript project checks. |
-| `npm run i18n:check` | `node scripts/check-i18n-coverage.mjs` | Fail if any `t(...)` key or `tr(...)` phrase used in source is missing from translation catalogs. |
+| `npm run i18n:check` | `STRICT_I18N_PHRASES=1 node scripts/check-i18n-coverage.mjs` | Fail if any `t(...)` key or `tr(...)` phrase used in source is missing from translation catalogs, including strict phrase coverage. |
 | `npm run lint` | `node scripts/lint.js` | Enforce offline policy via AST scan (disallowed network primitives/URL literals in `src/`). |
 | `npm run audit:headers` | `node scripts/verify-security-headers.mjs` | Verify static-host header configs and strict security directive values. |
 | `npm run audit:deps` | `npm audit --audit-level=high` | Run dependency vulnerability audit (network required). |
 | `npm run security:check` | `npm run audit:headers && npm run lint && npm run test` | Run local security checks (header baseline + no-network policy + unit tests). |
 | `npm run test` | `tsc -p tsconfig.test.json && node --test build-test/__tests__/*.js` | Compile and run utility tests. |
-| `npm run e2e` | `playwright test tests/e2e/app.spec.ts tests/e2e/i18n-layout.spec.ts` | Run Playwright behavior and i18n layout suites. |
+| `npm run e2e` | `playwright test tests/e2e/app.spec.ts tests/e2e/i18n-layout.spec.ts tests/e2e/i18n-switching.spec.ts` | Run Playwright behavior plus locale layout and locale-switching suites. |
 | `npm run test:visual` | `playwright test tests/e2e/visual-regression.spec.ts` | Run desktop visual regression matrix (core modules × light/dark themes). |
 | `npm run test:visual:update` | `playwright test tests/e2e/visual-regression.spec.ts --update-snapshots` | Refresh visual snapshot baselines after intentional UI changes. |
 | `npm run visual:drift-report` | `node scripts/collect-visual-drift.mjs` | Build drift summary artifacts (`json` + markdown) from Playwright diff output. |
-| `npm run test:e2e:i18n-layout` | `playwright test tests/e2e/i18n-layout.spec.ts` | Run RU/FA layout integrity tests. |
+| `npm run test:e2e:i18n-layout` | `playwright test tests/e2e/i18n-layout.spec.ts` | Run EN/RU/FA layout integrity tests. |
 | `npm run validate` | `npm run typecheck && npm run i18n:check && npm run lint && npm run test && npm run e2e && npm run build && npm run verify:build` | Full local quality pipeline. |
 
 Team references:
@@ -265,7 +265,7 @@ Team references:
 - Release dry-run workflow: `.github/workflows/release-dry-run.yml`
 - Signed release workflow: `.github/workflows/release-signed.yml`
 - Dependency monitoring: `.github/dependabot.yml`
-- Platform breadth notes: `docs/phase3-workflows.md`
+- Historical platform-breadth notes: `docs/phase3-workflows.md`
 - Signed workflow conventions: `docs/signed-workflow-conventions.md`
 - Release checklist: `docs/release-security-checklist.md`
 - Release readiness tracker: `docs/release-readiness.md`
@@ -334,7 +334,7 @@ Security references:
 ## Quality Gates
 - Unit tests cover crypto envelopes, hashing behavior, policy integrity, vault snapshot integrity, redaction overlap, and theme contrast.
 - Playwright covers end-to-end browser behavior.
-- RU/FA i18n layout checks catch overflow and clipping regressions.
+- EN/RU/FA i18n layout checks catch overflow and clipping regressions.
 - Visual snapshots cover desktop core modules in both light/dark theme modes via `tests/e2e/visual-regression.spec.ts`.
 - Visual regression CI uploads diff artifacts plus drift summaries and fails on unapproved changes.
 
@@ -349,7 +349,7 @@ src/
   theme/           # tokenized theme definitions
 scripts/           # CLI and build/release automation
 tests/e2e/         # Playwright specs
-docs/              # roadmap, threat model, release and workflow docs
+docs/              # release, security, workflow, and historical planning docs
 desktop/tauri/     # optional desktop packaging path
 .github/           # workflows, issue templates, policy automation
 ```
@@ -383,27 +383,22 @@ No runtime service integration is expected. Core processing is local, and lint c
 **Is this intended as certified cryptography software?**
 No. It uses standard primitives and includes integrity controls, but it is not presented as externally audited or formally certified.
 
-## Roadmap
-Status updated: February 28, 2026.
+## Current Status and Roadmap
+Status updated: April 1, 2026.
 
-Current focus:
-- [x] Expand visual snapshot matrix to include desktop coverage and theme variants (desktop baseline snapshots exist for each core module and theme mode).
-- [x] Add workflow-level visual regression gating with artifact-based drift reporting (CI uploads diff artifacts and fails on unapproved drift).
-- [x] Add release dry-run automation that enforces `release:bundle` and `release:verify` before publish (release workflow blocks publish on failed dry-run checks).
+Current release-ready baseline:
+- [x] Trust-model, verification, CLI parity, and multilingual hardening are in place across the current app and CLI release surfaces.
+- [x] `npm run validate` now enforces strict i18n phrase coverage and includes locale-switching coverage in the default e2e path.
+- [x] Visual regression gating is active on GitHub Actions with drift reporting and current Darwin baselines for the desktop matrix.
 
-Next up:
-- [x] Harden `desktop/tauri` packaging with cross-platform smoke tests (macOS, Linux, Windows CI legs).
-- [x] Extend `archive-sanitize` reporting with per-file finding summaries and severity totals (JSON report contract plus test coverage).
-- [x] Improve signed import/export trust-state visibility for key-hint profiles (UI state labels for unsigned, verified, and mismatch paths).
+Remaining before production GA:
+- [ ] Validate deployed production-domain headers/CSP on the final host, not only local/static configs.
+- [ ] Publish the release key custody / rotation / revocation runbook.
+- [ ] Execute and document a full restore drill for shared-passphrase HMAC-protected profile, policy, and vault exports.
+- [ ] Finish the accessibility pass, browser/device support matrix, and final native-language RU/FA editorial review.
 
-Completed recently:
-- [x] Metadata parsing hardening for malformed edge files and uncommon vendor tags.
-- [x] Signed export/import verification dialogs and shared key-hint profile reuse.
-- [x] Module-specific mobile visual regression snapshots.
-- [x] Deterministic SBOM + build-manifest + checksum verification pipeline.
-- [x] Signed release and provenance workflow integration.
-
-Phase-by-phase history and rationale are tracked in `docs/complete-tool-roadmap.md`.
+Current release-priority tracking lives in `docs/release-readiness.md`.
+Phase-by-phase history and rationale live in `docs/complete-tool-roadmap.md`.
 
 ## License
 MIT. See `LICENSE`.

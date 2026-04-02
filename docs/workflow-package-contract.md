@@ -8,8 +8,8 @@ The contract gives NullID one shared shape for workflow bundles and reports that
 
 - browser UI exports
 - CLI automation flows
-- future receiver-side verification
-- future incident-oriented reporting and handoff flows
+- receiver-side verification
+- incident-oriented reporting and handoff flows
 
 The goal is reuse, not replacement. Existing formats still matter:
 
@@ -27,7 +27,7 @@ In the current milestone set, the contract is emitted by:
 - the app `Log Sanitizer` safe-share export as an embedded compatibility bundle
 - the CLI `bundle` command, with optional Safe Share / incident-oriented workflow metadata via `--workflow`
 
-The CLI also has a minimal inspection path:
+The CLI also has a receiver-side inspection path:
 
 ```bash
 npm run cli -- package-inspect ./nullid-safe-share-bundle.json
@@ -100,7 +100,7 @@ This milestone preserves current behavior by extending rather than replacing:
 - The bundle schema moves forward to `schemaVersion: 2`.
 - The shared contract is embedded as `workflowPackage`.
 - Current schema-2 safe-share verification is based on that embedded workflow package; duplicated outer bundle fields remain compatibility metadata and are not cross-checked yet.
-- Legacy safe-share bundles without `workflowPackage` can still be mapped into the shared contract for inspection and future receiver flows.
+- Legacy safe-share bundles without `workflowPackage` can still be mapped into the shared contract for inspection and receiver flows.
 
 ## How Future Features Build On It
 
