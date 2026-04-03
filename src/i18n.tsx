@@ -1256,6 +1256,9 @@ export const phraseTranslations: Record<string, { fa: string; ru: string }> = {
     fa: "اعتبارسنجی رکوردهای Argon2id در این محیط اجرا ممکن نیست",
     ru: "Записи Argon2id нельзя проверить в этой среде выполнения",
   },
+  "passphrase required": { fa: "عبارت عبور لازم است", ru: "требуется парольная фраза" },
+  "not yet verified": { fa: "هنوز اعتبارسنجی نشده", ru: "пока не проверено" },
+  "verification succeeded": { fa: "اعتبارسنجی انجام شد", ru: "проверка выполнена" },
   "verification failed": { fa: "اعتبارسنجی شکست خورد", ru: "Проверка завершилась ошибкой" },
   "Store the full record string: it includes the algorithm, salt, cost settings, and derived hash needed for verification. Verification recomputes and compares; it does not decrypt or reverse the password.": {
     fa: "کل رشته رکورد را نگه دارید: شامل الگوریتم، salt، تنظیمات هزینه و هش مشتق‌شدهٔ لازم برای اعتبارسنجی است. اعتبارسنجی با محاسبهٔ دوباره و مقایسه انجام می‌شود؛ گذرواژه را رمزگشایی یا معکوس نمی‌کند.",

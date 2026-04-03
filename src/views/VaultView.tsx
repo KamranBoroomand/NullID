@@ -43,13 +43,19 @@ import {
 import { clearVaultSessionCookie, readVaultSessionCookie, setVaultSessionCookie, type SessionCookieResult } from "../utils/sessionSecurity";
 import { isLocalMfaSupported, registerLocalMfaCredential, verifyLocalMfaCredential, type LocalMfaCredential } from "../utils/localMfa";
 import { VAULT_PREFERENCE_STATE_KEYS } from "../utils/vaultStorageKeys";
+import {
+  formatSharedPassphraseTrustState,
+  getSharedPassphraseExportTrustState,
+  getSharedPassphraseImportTrustState,
+  sharedPassphraseTrustTagClass,
+  type SharedPassphraseTrustState,
+} from "../utils/sharedPassphraseTrustState";
 
 type DecryptedNote = { id: string; title: string; body: string; tags: string[]; createdAt: number; updatedAt: number };
 
 interface VaultViewProps {
   onOpenGuide?: (key?: ModuleKey) => void;
 }
-type TrustState = "unsigned" | "verified" | "mismatch";
 
 export function VaultView({ onOpenGuide }: VaultViewProps) {
   const { push } = useToast();
@@ -116,20 +122,25 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
     () => keyHintProfiles.find((profile) => profile.id === selectedKeyHintProfileId) ?? null,
     [keyHintProfiles, selectedKeyHintProfileId],
   );
-  const vaultExportTrustState: TrustState = !vaultExportSign
-    ? "unsigned"
-    : vaultSigningPassphrase.trim()
-      ? "verified"
-      : "mismatch";
-  const vaultImportTrustState = useMemo<TrustState>(() => {
+  const vaultExportTrustState = useMemo<SharedPassphraseTrustState>(
+    () =>
+      getSharedPassphraseExportTrustState({
+        signed: vaultExportSign,
+        hasPassphrase: Boolean(vaultSigningPassphrase.trim()),
+      }),
+    [vaultExportSign, vaultSigningPassphrase],
+  );
+  const vaultImportTrustState = useMemo<SharedPassphraseTrustState>(() => {
     const hasTrustError = Boolean(vaultImportError && /verification|signature|mismatch|integrity/i.test(vaultImportError));
     if (vaultImportMode === "plain") {
-      if (!vaultImportDescriptor?.signed) return "unsigned";
-      if (!vaultImportVerifyPassphrase.trim()) return "mismatch";
-      return hasTrustError ? "mismatch" : "verified";
+      return getSharedPassphraseImportTrustState({
+        signed: Boolean(vaultImportDescriptor?.signed),
+        hasPassphrase: Boolean(vaultImportVerifyPassphrase.trim()),
+        error: vaultImportError,
+      });
     }
-    if (hasTrustError) return "mismatch";
-    return vaultImportVerifyPassphrase.trim() ? "verified" : "unsigned";
+    if (hasTrustError) return "failed";
+    return "pending";
   }, [vaultImportDescriptor?.signed, vaultImportError, vaultImportMode, vaultImportVerifyPassphrase]);
 
   const filteredNotes = useMemo(
@@ -1104,7 +1115,9 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
           <>
             <div className="status-line">
               <span>{tr("trust state")}</span>
-              <span className={trustTagClass(vaultExportTrustState)}>{vaultExportTrustState}</span>
+              <span className={sharedPassphraseTrustTagClass(vaultExportTrustState)}>
+                {tr(formatSharedPassphraseTrustState(vaultExportTrustState))}
+              </span>
               {vaultExportKeyHint.trim() ? <span className="microcopy">{tr("hint")}: {vaultExportKeyHint.trim()}</span> : null}
             </div>
             <label className="action-dialog-field">
@@ -1180,7 +1193,9 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
           <>
             <div className="status-line">
               <span>{tr("trust state")}</span>
-              <span className={trustTagClass(vaultImportTrustState)}>{vaultImportTrustState}</span>
+              <span className={sharedPassphraseTrustTagClass(vaultImportTrustState)}>
+                {tr(formatSharedPassphraseTrustState(vaultImportTrustState))}
+              </span>
             </div>
             <label className="action-dialog-field">
               <span>{tr("Export passphrase")}</span>
@@ -1215,7 +1230,9 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
           <>
             <div className="status-line">
               <span>{tr("trust state")}</span>
-              <span className={trustTagClass(vaultImportTrustState)}>{vaultImportTrustState}</span>
+              <span className={sharedPassphraseTrustTagClass(vaultImportTrustState)}>
+                {tr(formatSharedPassphraseTrustState(vaultImportTrustState))}
+              </span>
               {vaultImportDescriptor.keyHint ? <span className="microcopy">{tr("hint")}: {vaultImportDescriptor.keyHint}</span> : null}
             </div>
             <p className="action-dialog-note">
@@ -1241,7 +1258,9 @@ export function VaultView({ onOpenGuide }: VaultViewProps) {
           <>
             <div className="status-line">
               <span>{tr("trust state")}</span>
-              <span className={trustTagClass(vaultImportTrustState)}>{vaultImportTrustState}</span>
+              <span className={sharedPassphraseTrustTagClass(vaultImportTrustState)}>
+                {tr(formatSharedPassphraseTrustState(vaultImportTrustState))}
+              </span>
             </div>
             <p className="action-dialog-note">{tr("Unsigned snapshot. Continue only if you trust this file.")}</p>
           </>
@@ -1300,10 +1319,4 @@ function gradeTagClass(grade: SecretGrade): string {
   if (grade === "critical" || grade === "weak") return "tag tag-danger";
   if (grade === "fair") return "tag";
   return "tag tag-accent";
-}
-
-function trustTagClass(state: TrustState): string {
-  if (state === "verified") return "tag tag-accent";
-  if (state === "mismatch") return "tag tag-danger";
-  return "tag";
 }

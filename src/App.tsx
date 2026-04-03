@@ -23,6 +23,13 @@ import {
   upsertKeyHintProfile,
   type KeyHintProfile,
 } from "./utils/keyHintProfiles";
+import {
+  formatSharedPassphraseTrustState,
+  getSharedPassphraseExportTrustState,
+  getSharedPassphraseImportTrustState,
+  sharedPassphraseTrustTagClass,
+  type SharedPassphraseTrustState,
+} from "./utils/sharedPassphraseTrustState";
 
 const HashView = lazy(() => import("./views/HashView").then((module) => ({ default: module.HashView })));
 const SafeShareView = lazy(() => import("./views/SafeShareView").then((module) => ({ default: module.SafeShareView })));
@@ -38,7 +45,6 @@ const SelfTestView = lazy(() => import("./views/SelfTestView").then((module) => 
 const GuideView = lazy(() => import("./views/GuideView").then((module) => ({ default: module.GuideView })));
 
 type StatusTone = "neutral" | "accent" | "danger";
-type TrustState = "unsigned" | "verified" | "mismatch";
 
 interface WorkspaceViewProps {
   active: ModuleKey;
@@ -125,17 +131,23 @@ function AppShell() {
     () => keyHintProfiles.find((profile) => profile.id === selectedKeyHintProfileId) ?? null,
     [keyHintProfiles, selectedKeyHintProfileId],
   );
-  const profileExportTrustState: TrustState = !profileExportSign
-    ? "unsigned"
-    : profileExportPassphrase.trim()
-      ? "verified"
-      : "mismatch";
-  const profileImportTrustState = useMemo<TrustState>(() => {
-    if (!profileImportDescriptor?.signed) return "unsigned";
-    if (!profileImportPassphrase.trim()) return "mismatch";
-    if (profileImportError && /verification|signature|mismatch|integrity/i.test(profileImportError)) return "mismatch";
-    return "verified";
-  }, [profileImportDescriptor?.signed, profileImportError, profileImportPassphrase]);
+  const profileExportTrustState = useMemo<SharedPassphraseTrustState>(
+    () =>
+      getSharedPassphraseExportTrustState({
+        signed: profileExportSign,
+        hasPassphrase: Boolean(profileExportPassphrase.trim()),
+      }),
+    [profileExportPassphrase, profileExportSign],
+  );
+  const profileImportTrustState = useMemo<SharedPassphraseTrustState>(
+    () =>
+      getSharedPassphraseImportTrustState({
+        signed: Boolean(profileImportDescriptor?.signed),
+        hasPassphrase: Boolean(profileImportPassphrase.trim()),
+        error: profileImportError,
+      }),
+    [profileImportDescriptor?.signed, profileImportError, profileImportPassphrase],
+  );
 
   const resolvedActiveModule = useMemo<ModuleKey>(
     () => (modules.some((module) => module.key === activeModule) ? activeModule : "guide"),
@@ -736,7 +748,9 @@ function AppShell() {
           <>
             <div className="status-line">
               <span>{tr("trust state")}</span>
-              <span className={trustTagClass(profileExportTrustState)}>{profileExportTrustState}</span>
+              <span className={sharedPassphraseTrustTagClass(profileExportTrustState)}>
+                {tr(formatSharedPassphraseTrustState(profileExportTrustState))}
+              </span>
               {profileExportKeyHint.trim() ? <span className="microcopy">{tr("hint")}: {profileExportKeyHint.trim()}</span> : null}
             </div>
             <label className="action-dialog-field">
@@ -827,7 +841,9 @@ function AppShell() {
           <>
             <div className="status-line">
               <span>{tr("trust state")}</span>
-              <span className={trustTagClass(profileImportTrustState)}>{profileImportTrustState}</span>
+              <span className={sharedPassphraseTrustTagClass(profileImportTrustState)}>
+                {tr(formatSharedPassphraseTrustState(profileImportTrustState))}
+              </span>
               {profileImportDescriptor.keyHint ? <span className="microcopy">{tr("hint")}: {profileImportDescriptor.keyHint}</span> : null}
             </div>
             <p className="action-dialog-note">
@@ -852,7 +868,9 @@ function AppShell() {
           <>
             <div className="status-line">
               <span>{tr("trust state")}</span>
-              <span className={trustTagClass(profileImportTrustState)}>{profileImportTrustState}</span>
+              <span className={sharedPassphraseTrustTagClass(profileImportTrustState)}>
+                {tr(formatSharedPassphraseTrustState(profileImportTrustState))}
+              </span>
             </div>
             <p className="action-dialog-note">{tr("Unsigned profile snapshot. Continue only if you trust the source.")}</p>
           </>
@@ -882,12 +900,6 @@ export default function App() {
       </ToastProvider>
     </I18nProvider>
   );
-}
-
-function trustTagClass(state: TrustState): string {
-  if (state === "verified") return "tag tag-accent";
-  if (state === "mismatch") return "tag tag-danger";
-  return "tag";
 }
 
 function clearManagedLocalState(options: { includeVault: boolean }) {

@@ -1,5 +1,6 @@
 # macOS Finder noise
 .DS_Store
+**/.DS_Store
 
 # Logs
 logs
@@ -45,6 +46,9 @@ node_modules/
 jspm_packages/
 playwright-report/
 test-results/
+build-test/
+output/playwright/
+output/visual-drift-*
 
 # Snowpack dependency directory (https://snowpack.dev/)
 web_modules/

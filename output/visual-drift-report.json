@@ -1,8 +1,0 @@
-{
-  "schemaVersion": 1,
-  "kind": "nullid-visual-drift-report",
-  "generatedAt": "2026-02-24T00:12:00.896Z",
-  "root": "test-results",
-  "driftCount": 0,
-  "entries": []
-}
