@@ -4,7 +4,10 @@ import {
   buildSafeShareSanitizeConfig,
   createSafeShareFileWorkflowPackage,
   createSafeShareTextWorkflowPackage,
+  getSafeSharePreset,
+  resolveSafeShareAnalysisRuleSets,
 } from "../utils/safeShareAssistant.js";
+import type { MetadataAnalysisResult } from "../utils/metadataAdvanced.js";
 import { buildRulesState } from "../utils/sanitizeEngine.js";
 import { verifyWorkflowPackagePayload } from "../utils/workflowPackage.js";
 
@@ -46,7 +49,7 @@ describe("safe share assistant", () => {
       fileName: "evidence.docx",
       fileMediaType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       sourceBytes,
-      analysis: {
+      analysis: makeMetadataAnalysis({
         format: "docx",
         kind: "document",
         risk: "high",
@@ -55,7 +58,10 @@ describe("safe share assistant", () => {
         recommendedSanitizer: "mat2",
         commandHint: "mat2 evidence.docx",
         guidance: ["Run mat2 locally and re-analyze before wider sharing."],
-      },
+        remainingTraces: ["Comments, tracked changes, speaker notes, and embedded previews may still remain."],
+        removable: ["OOXML document properties in docProps/core.xml, app.xml, and custom.xml."],
+        cannotGuarantee: ["Comments, tracked changes, embedded objects, and document body text are not removed by metadata-only handling."],
+      }),
       applyMetadataClean: true,
       includeSourceReference: true,
       protectAtExport: false,
@@ -76,7 +82,7 @@ describe("safe share assistant", () => {
       fileName: "clip.mp4",
       fileMediaType: "video/mp4",
       sourceBytes,
-      analysis: {
+      analysis: makeMetadataAnalysis({
         format: "mp4",
         kind: "video",
         risk: "medium",
@@ -85,7 +91,10 @@ describe("safe share assistant", () => {
         recommendedSanitizer: "mat2",
         commandHint: "ffmpeg -i clip.mp4 -map_metadata -1 -c copy clip-clean.mp4",
         guidance: ["Use ffmpeg locally to strip metadata before wider distribution."],
-      },
+        remainingTraces: ["Frame content, subtitle tracks, and burned-in overlays remain outside metadata cleanup."],
+        removable: ["Container metadata atoms and common creation/location tags through external offline tools such as ffmpeg."],
+        cannotGuarantee: ["Frame content, burned-in overlays, and subtitle tracks are outside metadata-only cleanup guarantees."],
+      }),
       applyMetadataClean: false,
       includeSourceReference: true,
       protectAtExport: false,
@@ -119,4 +128,64 @@ describe("safe share assistant", () => {
     assert.equal(policy.jsonAware, false);
     assert.equal(policy.customRules.length, 1);
   });
+
+  it("exposes transparent preset behavior for new practical presets", () => {
+    const preset = getSafeSharePreset("external-minimum-disclosure");
+    const regionRules = resolveSafeShareAnalysisRuleSets("external-minimum-disclosure");
+
+    assert.equal(preset.reviewChecklistEmphasis.length > 0, true);
+    assert.equal(Array.isArray(preset.sanitizeRules), true);
+    assert.deepEqual(regionRules, { iran: false, russia: false });
+  });
+
+  it("adds financial and filename privacy transforms to workflow packages", async () => {
+    const textPackage = await createSafeShareTextWorkflowPackage({
+      presetId: "customer-support-share",
+      producer,
+      inputText: "شماره کارت: ۶۰۳۷-۹۹۷۳-۹۱۸۹-۸۰۸۸",
+      includeSourceReference: false,
+    });
+    const filePackage = await createSafeShareFileWorkflowPackage({
+      presetId: "customer-support-share",
+      producer,
+      fileName: "alice/incident-4432/report.pdf",
+      fileMediaType: "application/pdf",
+      sourceBytes: new Uint8Array([1, 2, 3]),
+      analysis: makeMetadataAnalysis({
+        format: "pdf",
+        kind: "document",
+        risk: "medium",
+        fields: [],
+        signals: [{ id: "pdf-info", label: "Document info", severity: "medium", detail: "PDF info dictionary present." }],
+        recommendedSanitizer: "browser-pdf",
+        commandHint: null,
+        guidance: ["Review PDF metadata and visible content locally."],
+        remainingTraces: ["Visible page content remains outside metadata cleanup."],
+        removable: ["Basic PDF metadata fields in the document info dictionary."],
+        cannotGuarantee: ["Annotations and visible page content still require human review."],
+      }),
+      applyMetadataClean: false,
+      includeSourceReference: true,
+    });
+
+    assert.equal(textPackage.transforms?.some((transform) => transform.id === "financial-review"), true);
+    assert.equal(filePackage.transforms?.some((transform) => transform.id === "filename-privacy"), true);
+  });
 });
+
+function makeMetadataAnalysis(
+  input: Omit<MetadataAnalysisResult, "unsupportedCleanup" | "reviewRecommendations" | "metadataFound" | "reviewSections">,
+): MetadataAnalysisResult {
+  return {
+    ...input,
+    unsupportedCleanup: [],
+    reviewRecommendations: [...input.guidance],
+    metadataFound: input.signals.map((signal) => `${signal.label}: ${signal.detail}`),
+    reviewSections: [
+      { id: "metadata-found", label: "Metadata found", items: input.signals.map((signal) => `${signal.label}: ${signal.detail}`) },
+      { id: "removable-locally", label: "Removable locally", items: input.removable },
+      { id: "remaining-traces", label: "Remaining traces", items: input.remainingTraces },
+      { id: "review-recommendations", label: "Review recommendations", items: input.guidance },
+    ],
+  };
+}

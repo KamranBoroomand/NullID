@@ -16,8 +16,19 @@ import {
   type MetadataRiskLevel,
   type MetadataSanitizer,
 } from "../utils/metadataAdvanced";
+import {
+  buildArchiveComparisonReport,
+  inspectZipArchiveBytes,
+  parseArchiveReferenceDocument,
+  verifyArchiveInspection,
+  type ArchiveInspectionResult,
+  type ArchiveReferenceEntry,
+  type ArchiveVerificationResult,
+} from "../utils/archiveInspection";
 import type { ModuleKey } from "../components/ModuleList";
 import { useI18n } from "../i18n";
+import { buildExposureChecklist, reviewChecklistToText } from "../utils/reviewChecklist.js";
+import { localizeExportValue } from "../utils/reporting.js";
 
 type MetaField = { key: string; value: string };
 type OutputChoice = OutputMime | "auto";
@@ -34,9 +45,10 @@ interface MetaViewProps {
 }
 
 export function MetaView({ onOpenGuide }: MetaViewProps) {
-  const { t, tr } = useI18n();
+  const { t, tr, formatDateTime } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const advancedInputRef = useRef<HTMLInputElement>(null);
+  const archiveManifestInputRef = useRef<HTMLInputElement>(null);
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState("none");
   const [beforeFields, setBeforeFields] = useState<MetaField[]>([]);
@@ -64,6 +76,9 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
   const [advancedCleanBlob, setAdvancedCleanBlob] = useState<Blob | null>(null);
   const [advancedBeforeSha256, setAdvancedBeforeSha256] = useState("");
   const [advancedAfterSha256, setAdvancedAfterSha256] = useState("");
+  const [archiveInspection, setArchiveInspection] = useState<ArchiveInspectionResult | null>(null);
+  const [archiveManifestEntries, setArchiveManifestEntries] = useState<ArchiveReferenceEntry[]>([]);
+  const [archiveManifestLabel, setArchiveManifestLabel] = useState("none");
 
   const refreshCleanResult = useCallback(
     async (file: File) => {
@@ -161,6 +176,9 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
     setAdvancedCleanBlob(null);
     setAdvancedBeforeSha256("");
     setAdvancedAfterSha256("");
+    setArchiveInspection(null);
+    setArchiveManifestEntries([]);
+    setArchiveManifestLabel("none");
 
     try {
       const shouldReadFull = file.size <= 24_000_000 || file.type.startsWith("image/") || file.type.includes("pdf");
@@ -168,6 +186,10 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
       const analysis = analyzeMetadataFromBuffer(file.type || "", analysisBytes, file.name);
       setAdvancedAnalysis(analysis);
       setAdvancedBeforeSha256(await sha256Hex(file));
+      if (analysis.format === "zip") {
+        const archiveBytes = shouldReadFull ? analysisBytes : new Uint8Array(await file.arrayBuffer());
+        setArchiveInspection(await inspectZipArchiveBytes(archiveBytes));
+      }
       setAdvancedMessage(
         shouldReadFull
           ? `analysis ready (${analysis.risk} risk)`
@@ -177,6 +199,28 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
       console.error(error);
       const detail = error instanceof Error ? error.message : "advanced metadata analysis failed";
       setAdvancedMessage(detail);
+    }
+  }, []);
+
+  const handleArchiveManifestFile = useCallback(async (file?: File | null) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const entries = parseArchiveReferenceDocument(text);
+      if (entries.length === 0) {
+        setArchiveManifestEntries([]);
+        setArchiveManifestLabel(file.name);
+        setAdvancedMessage("manifest parsed but no hash entries matched this verifier");
+        return;
+      }
+      setArchiveManifestEntries(entries);
+      setArchiveManifestLabel(file.name);
+      setAdvancedMessage(`manifest loaded (${entries.length} hash entries)`);
+    } catch (error) {
+      console.error(error);
+      setArchiveManifestEntries([]);
+      setArchiveManifestLabel("none");
+      setAdvancedMessage(error instanceof Error ? error.message : "manifest load failed");
     }
   }, []);
 
@@ -262,20 +306,94 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
     downloadBlob(advancedCleanBlob, `${safeName}-clean.${ext}`);
   }, [advancedCleanBlob, advancedFileName]);
 
+  const archiveVerification = useMemo<ArchiveVerificationResult | null>(
+    () => (archiveInspection && archiveManifestEntries.length > 0 ? verifyArchiveInspection(archiveInspection, archiveManifestEntries) : null),
+    [archiveInspection, archiveManifestEntries],
+  );
+  const exposureChecklist = useMemo(
+    () => (advancedAnalysis
+      ? buildExposureChecklist({
+          title: `Exposure checklist :: ${advancedFileName}`,
+          analysis: advancedAnalysis,
+          archiveInspection,
+          archiveVerification,
+        })
+      : null),
+    [advancedAnalysis, advancedFileName, archiveInspection, archiveVerification],
+  );
+
   const exportAdvancedReport = useCallback(() => {
     if (!advancedFile || !advancedAnalysis) return;
-    const payload = {
-      file: advancedFile.name,
-      bytes: advancedFile.size,
-      sha256Before: advancedBeforeSha256 || null,
-      sha256After: advancedAfterSha256 || null,
-      mode: resolveAdvancedMode(advancedMode, advancedAnalysis.recommendedSanitizer),
-      analysis: advancedAnalysis,
-      actions: advancedActions,
-      generatedAt: new Date().toISOString(),
-    };
-    downloadBlob(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }), "nullid-metadata-analysis.json");
-  }, [advancedActions, advancedAfterSha256, advancedAnalysis, advancedBeforeSha256, advancedFile, advancedMode]);
+    const payload = archiveVerification
+      ? {
+          file: advancedFile.name,
+          bytes: advancedFile.size,
+          sha256Before: advancedBeforeSha256 || null,
+          sha256After: advancedAfterSha256 || null,
+          mode: resolveAdvancedMode(advancedMode, advancedAnalysis.recommendedSanitizer),
+          analysis: {
+            format: advancedAnalysis.format,
+            kind: advancedAnalysis.kind,
+            risk: advancedAnalysis.risk,
+            sections: advancedAnalysis.reviewSections,
+          },
+          actions: advancedActions,
+          archiveManifest: archiveManifestEntries.length > 0 ? {
+            file: archiveManifestLabel,
+            entries: archiveManifestEntries,
+          } : null,
+          archiveComparison: buildArchiveComparisonReport(archiveVerification),
+          generatedAt: new Date().toISOString(),
+        }
+      : {
+          file: advancedFile.name,
+          bytes: advancedFile.size,
+          sha256Before: advancedBeforeSha256 || null,
+          sha256After: advancedAfterSha256 || null,
+          mode: resolveAdvancedMode(advancedMode, advancedAnalysis.recommendedSanitizer),
+          analysis: {
+            format: advancedAnalysis.format,
+            kind: advancedAnalysis.kind,
+            risk: advancedAnalysis.risk,
+            signals: advancedAnalysis.signals,
+            sections: advancedAnalysis.reviewSections,
+          },
+          actions: advancedActions,
+          archiveInspection,
+          archiveManifest: archiveManifestEntries.length > 0 ? {
+            file: archiveManifestLabel,
+            entries: archiveManifestEntries,
+          } : null,
+          generatedAt: new Date().toISOString(),
+        };
+    const fileName = archiveVerification
+      ? "nullid-archive-comparison-report.json"
+      : archiveInspection
+        ? "nullid-verified-archive-report.json"
+        : "nullid-metadata-analysis.json";
+    downloadBlob(new Blob([JSON.stringify(localizeExportValue(payload, tr), null, 2)], { type: "application/json" }), fileName);
+  }, [
+    advancedActions,
+    advancedAfterSha256,
+    advancedAnalysis,
+    advancedBeforeSha256,
+    advancedFile,
+    advancedMode,
+    archiveInspection,
+    archiveManifestEntries,
+    archiveManifestLabel,
+    archiveVerification,
+  ]);
+
+  const exportExposureChecklistJson = useCallback(() => {
+    if (!exposureChecklist) return;
+    downloadBlob(new Blob([`${JSON.stringify(localizeExportValue(exposureChecklist, tr), null, 2)}\n`], { type: "application/json" }), `nullid-exposure-checklist-${Date.now()}.json`);
+  }, [exposureChecklist, tr]);
+
+  const exportExposureChecklistText = useCallback(() => {
+    if (!exposureChecklist) return;
+    downloadBlob(new Blob([reviewChecklistToText(exposureChecklist, { translate: tr, formatDateTime })], { type: "text/plain;charset=utf-8" }), `nullid-exposure-checklist-${Date.now()}.txt`);
+  }, [exposureChecklist, formatDateTime, tr]);
 
   const copyExternalCommand = useCallback(async () => {
     if (!advancedAnalysis?.commandHint) return;
@@ -553,9 +671,26 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
           <button className="button" type="button" onClick={exportAdvancedReport} disabled={!advancedAnalysis}>
             {tr("download analysis report")}
           </button>
+          <button className="button" type="button" onClick={() => void exportExposureChecklistJson()} disabled={!exposureChecklist}>
+            {tr("export checklist json")}
+          </button>
+          <button className="button" type="button" onClick={() => void exportExposureChecklistText()} disabled={!exposureChecklist}>
+            {tr("export checklist text")}
+          </button>
           <button className="button" type="button" onClick={() => void copyExternalCommand()} disabled={!advancedAnalysis?.commandHint}>
             {tr("copy command")}
           </button>
+          <button className="button" type="button" onClick={() => archiveManifestInputRef.current?.click()} disabled={!archiveInspection}>
+            {tr("load manifest")}
+          </button>
+          <input
+            ref={archiveManifestInputRef}
+            type="file"
+            accept="application/json,.json"
+            onChange={(event) => void handleArchiveManifestFile(event.target.files?.[0] ?? null)}
+            style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }}
+            tabIndex={-1}
+          />
         </div>
         <div className="status-line">
           <span>{tr("risk")}</span>
@@ -584,13 +719,169 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
             <div className="microcopy">{advancedAnalysis.commandHint}</div>
           </div>
         ) : null}
-        {advancedAnalysis?.guidance?.length ? (
+        {exposureChecklist?.sections.length ? (
           <div className="note-box">
-            <div className="section-title">{tr("Guidance")}</div>
-            <ul className="note-list">
-              {advancedAnalysis.guidance.map((item) => (
-                <li key={item}>{tr(item)}</li>
+            <div className="section-title">{tr("Manual review checklist")}</div>
+            <div className="grid-two">
+              {exposureChecklist.sections.map((section) => (
+                <div key={section.id}>
+                  <div className="microcopy" style={{ fontWeight: 600 }}>{tr(section.label)}</div>
+                  <ul className="note-list">
+                    {section.items.map((item) => (
+                      <li key={`${section.id}:${item}`}>{tr(item)}</li>
+                    ))}
+                  </ul>
+                </div>
               ))}
+            </div>
+          </div>
+        ) : null}
+        {advancedAnalysis?.reviewSections.length ? (
+          <div className="grid-two">
+            {advancedAnalysis.reviewSections.map((section) => (
+              <div key={section.id} className="note-box">
+                <div className="section-title">{tr(section.label)}</div>
+                <ul className="note-list">
+                  {section.items.map((item) => (
+                    <li key={`${section.id}:${item}`}>{tr(item)}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {archiveInspection ? (
+          <div className="grid-two">
+            <div className="note-box">
+              <div className="section-title">{tr("Archive summary")}</div>
+              <div className="status-line">
+                <span>{tr("entries")}</span>
+                <span className="microcopy">{archiveInspection.entryCount}</span>
+              </div>
+              <div className="status-line">
+                <span>{tr("files")}</span>
+                <span className="microcopy">{archiveInspection.fileCount}</span>
+              </div>
+              <div className="status-line">
+                <span>{tr("directories")}</span>
+                <span className="microcopy">{archiveInspection.directoryCount}</span>
+              </div>
+              <div className="status-line">
+                <span>{tr("manifest")}</span>
+                <span className="microcopy">{archiveManifestLabel}</span>
+              </div>
+              {archiveVerification ? (
+                <>
+                  <div className="status-line">
+                    <span>{tr("manifest source")}</span>
+                    <span className="microcopy">{archiveVerification.manifestEntries[0]?.source ?? tr("archive-manifest")}</span>
+                  </div>
+                  <div className="status-line">
+                    <span>{tr("matched")}</span>
+                    <span className="microcopy">{archiveVerification.matched}</span>
+                  </div>
+                  <div className="status-line">
+                    <span>{tr("mismatched")}</span>
+                    <span className="microcopy">{archiveVerification.mismatched}</span>
+                  </div>
+                  <div className="status-line">
+                    <span>{tr("missing")}</span>
+                    <span className="microcopy">{archiveVerification.missingFromArchive}</span>
+                  </div>
+                  <div className="status-line">
+                    <span>{tr("extra")}</span>
+                    <span className="microcopy">{archiveVerification.extraInArchive}</span>
+                  </div>
+                </>
+              ) : null}
+            </div>
+            <div className="note-box">
+              <div className="section-title">{tr("Archive verification notes")}</div>
+              <ul className="note-list">
+                {archiveVerification ? (
+                  <>
+                    {archiveVerification.localFacts.map((line) => <li key={line}>{tr(line)}</li>)}
+                    {archiveVerification.expectedFacts.map((line) => <li key={line}>{tr(line)}</li>)}
+                    {archiveVerification.declaredOnly.map((line) => <li key={line}>{tr(line)}</li>)}
+                  </>
+                ) : (
+                  <>
+                    <li>{tr("NullID hashed archive entries locally and listed them below.")}</li>
+                    <li>{tr("Load an archive manifest or workflow package to compare expected hashes.")}</li>
+                  </>
+                )}
+              </ul>
+            </div>
+          </div>
+        ) : null}
+        {archiveVerification ? (
+          <div className="grid-two">
+            <div className="note-box">
+              <div className="section-title">{tr("Archive comparison groups")}</div>
+              <div className="microcopy" style={{ fontWeight: 600 }}>{tr("Matched")}</div>
+              <ul className="note-list">
+                {archiveVerification.groups.matched.length > 0
+                  ? archiveVerification.groups.matched.slice(0, 8).map((entry) => (
+                    <li key={`matched:${entry.path}`}>{entry.path}</li>
+                  ))
+                  : <li>{tr("No matched archive members were listed.")}</li>}
+              </ul>
+              <div className="microcopy" style={{ fontWeight: 600 }}>{tr("Missing")}</div>
+              <ul className="note-list">
+                {archiveVerification.groups.missing.length > 0
+                  ? archiveVerification.groups.missing.map((entry) => (
+                    <li key={`missing:${entry.path}`}>{entry.path}: {tr("missing from archive")}</li>
+                  ))
+                  : <li>{tr("No missing archive members were listed.")}</li>}
+              </ul>
+              <div className="microcopy" style={{ fontWeight: 600 }}>{tr("Extra")}</div>
+              <ul className="note-list">
+                {archiveVerification.groups.extra.length > 0
+                  ? archiveVerification.groups.extra.map((entry) => (
+                    <li key={`extra:${entry.path}`}>{entry.path}: {tr("extra in archive")}</li>
+                  ))
+                  : <li>{tr("No extra archive members were listed.")}</li>}
+              </ul>
+              <div className="microcopy" style={{ fontWeight: 600 }}>{tr("Hash mismatch")}</div>
+              <ul className="note-list">
+                {archiveVerification.groups.hashMismatch.length > 0
+                  ? archiveVerification.groups.hashMismatch.map((entry) => (
+                    <li key={`mismatch:${entry.path}`}>{entry.path}: {tr("hash mismatch")}</li>
+                  ))
+                  : <li>{tr("No hash mismatches were listed.")}</li>}
+              </ul>
+              <div className="microcopy" style={{ fontWeight: 600 }}>{tr("Unsupported")}</div>
+              <ul className="note-list">
+                {archiveVerification.groups.unsupported.length > 0
+                  ? archiveVerification.groups.unsupported.map((entry) => (
+                    <li key={`unsupported:${entry.path}`}>{entry.path}: {tr("unsupported / not checked")}</li>
+                  ))
+                  : <li>{tr("No unsupported archive members were listed.")}</li>}
+              </ul>
+              <div className="microcopy" style={{ fontWeight: 600 }}>{tr("Not checked")}</div>
+              <ul className="note-list">
+                {archiveVerification.groups.notChecked.length > 0
+                  ? archiveVerification.groups.notChecked.map((entry) => (
+                    <li key={`unchecked:${entry.path}`}>{entry.path}: {tr("unsupported / not checked")}</li>
+                  ))
+                  : <li>{tr("No not-checked archive members were listed.")}</li>}
+              </ul>
+            </div>
+            <div className="note-box">
+              <div className="section-title">{tr("Comparison basis")}</div>
+              <ul className="note-list">
+                {archiveVerification.localFacts.map((line) => <li key={`local:${line}`}>{tr(line)}</li>)}
+                {archiveVerification.expectedFacts.map((line) => <li key={`expected:${line}`}>{tr(line)}</li>)}
+                {archiveVerification.declaredOnly.map((line) => <li key={`declared:${line}`}>{tr(line)}</li>)}
+              </ul>
+            </div>
+          </div>
+        ) : null}
+        {archiveVerification ? (
+          <div className="note-box">
+            <div className="section-title">{tr("Review recommendations")}</div>
+            <ul className="note-list">
+              {archiveVerification.manualReviewRecommendations.map((line) => <li key={line}>{tr(line)}</li>)}
             </ul>
           </div>
         ) : null}
@@ -621,6 +912,38 @@ export function MetaView({ onOpenGuide }: MetaViewProps) {
             )}
           </tbody>
         </table>
+        {archiveInspection ? (
+          <>
+            <div className="section-title">{tr("Archive contents")}</div>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>{tr("path")}</th>
+                  <th>{tr("status")}</th>
+                  <th>{tr("sha256")}</th>
+                  {archiveVerification ? <th>{tr("expected sha256")}</th> : null}
+                </tr>
+              </thead>
+              <tbody>
+                {(archiveVerification?.entries ?? archiveInspection.entries).slice(0, 200).map((entry) => (
+                  <tr key={`${entry.path}:${entry.compressedBytes}`}>
+                    <td>{entry.path}</td>
+                    <td>
+                      {"verification" in entry ? String(entry.verification) : String(entry.status)}
+                      <div className="microcopy">{entry.compressionLabel}</div>
+                    </td>
+                    <td className="microcopy">{entry.sha256 || tr("pending")}</td>
+                    {archiveVerification ? (
+                      <td className="microcopy">
+                        {"expectedSha256" in entry && typeof entry.expectedSha256 === "string" ? entry.expectedSha256 : tr("none")}
+                      </td>
+                    ) : null}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        ) : null}
         <div className="section-title">{tr("Detected fields")}</div>
         <table className="table">
           <tbody>

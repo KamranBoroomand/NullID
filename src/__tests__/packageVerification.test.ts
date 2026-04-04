@@ -73,6 +73,11 @@ describe("received artifact verification", () => {
     assert.match(result.trustBasis.join(" "), /verification is based on the embedded workflow package/i);
     assert.match(result.unverifiedChecks.join(" "), /outer safe-share wrapper fields/i);
     assert.equal(result.artifacts.some((artifact) => artifact.status === "verified"), true);
+    assert.equal(result.receiverExplanation.verified.some((line) => /schema 1 parsed successfully/i.test(line)), true);
+    assert.equal(result.receiverExplanation.declaredOnly.some((line) => /package-declared/i.test(line) || /transform summaries/i.test(line)), true);
+    assert.equal(result.receiverExplanation.notProvable.some((line) => /sender identity/i.test(line)), true);
+    assert.equal(result.receiverExplanation.manualReview.length > 0, true);
+    assert.equal(result.descriptiveWorkflowMetadata?.transforms.find((transform) => transform.label === "Sanitize transformation")?.applied.includes("maskUser"), true);
   });
 
   it("treats tampered schema-2 safe-share outer wrapper fields as unverified while preserving nested workflow verification", async () => {

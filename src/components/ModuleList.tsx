@@ -4,8 +4,13 @@ import "./ModuleList.css";
 
 export type ModuleKey =
   | "hash"
+  | "batch"
   | "share"
   | "incident"
+  | "secret"
+  | "analyze"
+  | "finance"
+  | "paths"
   | "redact"
   | "sanitize"
   | "verify"

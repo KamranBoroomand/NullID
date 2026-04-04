@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 type AppLocale = "en" | "ru" | "fa";
-type ModuleKey = "hash" | "share" | "incident" | "verify" | "redact" | "sanitize" | "meta" | "enc" | "pw" | "vault" | "selftest" | "guide";
+type ModuleKey = "hash" | "batch" | "share" | "incident" | "secret" | "analyze" | "verify" | "redact" | "sanitize" | "meta" | "enc" | "pw" | "vault" | "selftest" | "guide";
 
 interface ViewportScenario {
   label: string;
@@ -21,7 +21,7 @@ interface LayoutMetrics {
 }
 
 const locales: AppLocale[] = ["en", "ru", "fa"];
-const moduleKeys: ModuleKey[] = ["hash", "share", "incident", "verify", "redact", "sanitize", "meta", "enc", "pw", "vault", "selftest", "guide"];
+const moduleKeys: ModuleKey[] = ["hash", "batch", "share", "incident", "secret", "analyze", "verify", "redact", "sanitize", "meta", "enc", "pw", "vault", "selftest", "guide"];
 const viewports: ViewportScenario[] = [
   { label: "desktop", width: 1280, height: 900 },
   { label: "mobile", width: 390, height: 844 },

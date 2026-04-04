@@ -29,6 +29,12 @@ export interface MetadataSignal {
   detail: string;
 }
 
+export interface MetadataReviewSection {
+  id: "metadata-found" | "removable-locally" | "remaining-traces" | "unsupported-cleanup" | "review-recommendations";
+  label: string;
+  items: string[];
+}
+
 export interface MetadataAnalysisResult {
   format: MetadataDetectedFormat;
   kind: MetadataTargetKind;
@@ -38,6 +44,13 @@ export interface MetadataAnalysisResult {
   recommendedSanitizer: MetadataSanitizer;
   commandHint: string | null;
   guidance: string[];
+  remainingTraces: string[];
+  removable: string[];
+  cannotGuarantee: string[];
+  unsupportedCleanup: string[];
+  reviewRecommendations: string[];
+  metadataFound: string[];
+  reviewSections: MetadataReviewSection[];
 }
 
 export interface PdfSanitizeBufferResult {
@@ -107,6 +120,12 @@ export function analyzeMetadataFromBuffer(mime: string, bytes: Uint8Array, fileN
   const signals = collectSignals(format, fields, bytes);
   const risk = resolveRisk(signals);
   const recommendedSanitizer = chooseSanitizer(format, kind);
+  const metadataFound = buildMetadataFoundList(fields, signals, format);
+  const removable = buildRemovableList(format, fields);
+  const remainingTraces = buildRemainingTracesList(format, kind);
+  const unsupportedCleanup = buildUnsupportedCleanupList(format, kind, recommendedSanitizer);
+  const reviewRecommendations = buildReviewRecommendations(recommendedSanitizer, kind, signals, format);
+  const cannotGuarantee = buildCannotGuaranteeList(format, kind);
 
   return {
     format,
@@ -117,6 +136,19 @@ export function analyzeMetadataFromBuffer(mime: string, bytes: Uint8Array, fileN
     recommendedSanitizer,
     commandHint: buildCommandHint(format, fileName),
     guidance: buildGuidance(recommendedSanitizer, kind),
+    remainingTraces,
+    removable,
+    cannotGuarantee,
+    unsupportedCleanup,
+    reviewRecommendations,
+    metadataFound,
+    reviewSections: buildReviewSections({
+      metadataFound,
+      removable,
+      remainingTraces,
+      unsupportedCleanup,
+      reviewRecommendations,
+    }),
   };
 }
 
@@ -198,12 +230,16 @@ function collectMetadataFields(format: MetadataDetectedFormat, mime: string, byt
   const scanText = buildScanText(bytes);
 
   if (format === "pdf") {
+    capturePdfField(scanText, /\/Title\s*(\((?:\\.|[^()])*\)|<[^>]*>)/i, "title", addField);
+    capturePdfField(scanText, /\/Subject\s*(\((?:\\.|[^()])*\)|<[^>]*>)/i, "subject", addField);
+    capturePdfField(scanText, /\/Keywords\s*(\((?:\\.|[^()])*\)|<[^>]*>)/i, "keywords", addField);
     capturePdfField(scanText, /\/Author\s*(\((?:\\.|[^()])*\)|<[^>]*>)/i, "author", addField);
     capturePdfField(scanText, /\/Creator\s*(\((?:\\.|[^()])*\)|<[^>]*>)/i, "creator", addField);
     capturePdfField(scanText, /\/Producer\s*(\((?:\\.|[^()])*\)|<[^>]*>)/i, "producer", addField);
     capturePdfField(scanText, /\/(?:CreationDate|ModDate)\s*(\((?:\\.|[^()])*\)|<[^>]*>)/i, "timestamp", addField);
     if (/<x:xmpmeta[\s\S]*?<\/x:xmpmeta>/i.test(scanText)) addField("xmp", "present");
     if (/\/Metadata\s+\d+\s+\d+\s+R/i.test(scanText)) addField("metadataRef", "present");
+    if (/\/EmbeddedFiles\b/i.test(scanText)) addField("embeddedFiles", "present");
   }
 
   if (format === "docx" || format === "xlsx" || format === "pptx" || format === "zip") {
@@ -211,9 +247,17 @@ function collectMetadataFields(format: MetadataDetectedFormat, mime: string, byt
     if (scanText.includes("docProps/app.xml")) addField("docProps.app", "present");
     if (scanText.includes("docProps/custom.xml")) addField("docProps.custom", "present");
     captureXmlField(scanText, "dc:creator", "creator", addField);
+    captureXmlField(scanText, "dc:title", "title", addField);
+    captureXmlField(scanText, "dc:subject", "subject", addField);
     captureXmlField(scanText, "cp:lastModifiedBy", "lastModifiedBy", addField);
     captureXmlField(scanText, "dcterms:created", "created", addField);
     captureXmlField(scanText, "dcterms:modified", "modified", addField);
+    captureXmlField(scanText, "Application", "application", addField);
+    captureXmlField(scanText, "Company", "company", addField);
+    captureXmlField(scanText, "Manager", "manager", addField);
+    captureXmlField(scanText, "Template", "template", addField);
+    captureXmlField(scanText, "HyperlinkBase", "hyperlinkBase", addField);
+    captureXmlField(scanText, "cp:revision", "revision", addField);
   }
 
   if (videoFormats.has(format)) {
@@ -397,6 +441,223 @@ function buildGuidance(sanitizer: MetadataSanitizer, kind: MetadataTargetKind): 
     "No safe in-browser sanitizer is available for this file format.",
     "Use external offline tooling and re-analyze before sharing.",
   ];
+}
+
+function buildMetadataFoundList(
+  fields: MetadataField[],
+  signals: MetadataSignal[],
+  format: MetadataDetectedFormat,
+) {
+  return dedupeList([
+    `Detected format: ${format}`,
+    ...(signals.length > 0
+      ? signals.map((signal) => `${signal.label}: ${signal.detail}`)
+      : ["No high-signal metadata markers were surfaced in this local scan."]),
+    ...(fields.length > 0
+      ? fields.slice(0, 10).map((field) => `${field.key}: ${field.value}`)
+      : ["No structured metadata fields were parsed from the scanned bytes."]),
+  ]);
+}
+
+function buildRemovableList(format: MetadataDetectedFormat, fields: MetadataField[]): string[] {
+  if (format === "pdf") {
+    return dedupeList([
+      fields.some((field) => ["author", "creator", "producer", "title", "subject", "keywords", "timestamp"].includes(field.key))
+        ? "PDF info-dictionary fields such as author, title, producer, and timestamps."
+        : "",
+      fields.some((field) => field.key === "xmp") ? "Embedded XMP metadata packets." : "",
+      fields.some((field) => field.key === "metadataRef") ? "Direct PDF metadata references that point at metadata objects." : "",
+    ]);
+  }
+
+  if (["docx", "xlsx", "pptx"].includes(format)) {
+    return dedupeList([
+      "OOXML document properties in docProps/core.xml, app.xml, and custom.xml.",
+      fields.some((field) => ["creator", "lastModifiedBy", "company", "manager", "template"].includes(field.key))
+        ? "Author, editor, company, manager, and template strings when external cleanup rewrites package metadata."
+        : "",
+    ]);
+  }
+
+  if (format === "zip") {
+    return dedupeList([
+      "Archive-internal metadata files only if you unpack, inspect, and re-pack them intentionally.",
+      "NullID can hash and verify ZIP contents locally, but it does not silently rewrite arbitrary archive members here.",
+    ]);
+  }
+
+  if (videoFormats.has(format)) {
+    return [
+      "Container metadata atoms and common creation/location tags through external offline tools such as ffmpeg.",
+    ];
+  }
+
+  if (classifyFormat(format) === "image") {
+    return [
+      "EXIF, XMP, and similar container metadata when the file is re-encoded locally.",
+    ];
+  }
+
+  return [
+    "Only metadata markers that the chosen offline sanitizer explicitly rewrites.",
+  ];
+}
+
+function buildRemainingTracesList(format: MetadataDetectedFormat, kind: MetadataTargetKind): string[] {
+  if (format === "pdf") {
+    return [
+      "Visible page text, annotations, attachments, and incremental-update history may still carry private context.",
+      "Embedded files or hidden objects can survive unless you review the document structure manually.",
+    ];
+  }
+
+  if (["docx", "xlsx", "pptx"].includes(format)) {
+    return [
+      "Comments, tracked changes, speaker notes, hidden sheets/slides, and embedded previews may still remain.",
+      "Relationship targets, embedded objects, and document body content can preserve context beyond document properties.",
+    ];
+  }
+
+  if (kind === "archive") {
+    return [
+      "Archive member names, folder layout, and each embedded file remain intact unless you repack intentionally.",
+      "Archive comments, per-entry timestamps, and unsupported compressed members may still carry context.",
+    ];
+  }
+
+  if (kind === "image") {
+    return [
+      "Visible pixels, burned-in labels, faces, watermarks, and any identifying scene content remain after metadata cleanup.",
+      "Sidecar files or alternate image derivatives outside the current file are not covered by this analysis.",
+    ];
+  }
+
+  if (kind === "video") {
+    return [
+      "Frame content, subtitle tracks, waveform-visible audio, and burned-in overlays remain outside metadata-only cleanup.",
+      "Sidecar captions, thumbnails, and container-specific atoms may still exist in related files.",
+    ];
+  }
+
+  return [
+    "NullID can only explain what this local scan could see in the current file bytes.",
+  ];
+}
+
+function buildCannotGuaranteeList(format: MetadataDetectedFormat, kind: MetadataTargetKind): string[] {
+  if (format === "pdf") {
+    return [
+      "Hidden content, attachments, or incremental-update history are not guaranteed removed by this best-effort browser rewrite.",
+      "Visible page content still needs manual review; metadata cleanup does not prove the document is safe to share.",
+    ];
+  }
+
+  if (["docx", "xlsx", "pptx"].includes(format)) {
+    return [
+      "Comments, tracked changes, embedded objects, and document body text are not removed by metadata-only handling.",
+      "NullID does not guarantee every OOXML relationship or embedded preview is clean without a full external scrub.",
+    ];
+  }
+
+  if (kind === "archive") {
+    return [
+      "Archive member names, folder structure, and payload contents stay intact unless you rewrite them explicitly.",
+      "A matching manifest proves byte consistency for listed entries, not that the archive is complete or harmless.",
+    ];
+  }
+
+  if (kind === "image") {
+    return [
+      "Pixels, visible watermarks, and information rendered into the image are unaffected by metadata cleanup.",
+      "Codec conversion can change bytes, but it does not prove all identifying context is gone.",
+    ];
+  }
+
+  if (kind === "video") {
+    return [
+      "Frame content, burned-in overlays, and subtitle tracks are outside metadata-only cleanup guarantees.",
+      "Different containers can carry extra atoms or sidecar files that still need manual review.",
+    ];
+  }
+
+  return [
+    "NullID only reports signals it can see locally; absence of findings is not proof that no metadata or context remains.",
+  ];
+}
+
+function buildUnsupportedCleanupList(
+  format: MetadataDetectedFormat,
+  kind: MetadataTargetKind,
+  sanitizer: MetadataSanitizer,
+) {
+  if (sanitizer === "manual") {
+    return [
+      "This file type currently has no safe in-browser cleanup path in NullID.",
+      "Use an external offline tool, then re-run local analysis before sharing.",
+    ];
+  }
+
+  if (sanitizer === "mat2") {
+    return [
+      "This surface can inspect the file locally, but cleanup depends on external offline tooling.",
+      kind === "archive"
+        ? "Archive member payloads are not silently rewritten here; unpack and repack intentionally if you need cleanup."
+        : "NullID does not silently rewrite embedded document/media structures for this format in-browser.",
+    ];
+  }
+
+  if (format === "pdf") {
+    return [
+      "Browser PDF cleanup is best-effort and does not rebuild the full document structure.",
+    ];
+  }
+
+  return [];
+}
+
+function buildReviewRecommendations(
+  sanitizer: MetadataSanitizer,
+  kind: MetadataTargetKind,
+  signals: MetadataSignal[],
+  format: MetadataDetectedFormat,
+) {
+  const recommendations = [
+    ...buildGuidance(sanitizer, kind),
+    ...buildCannotGuaranteeList(format, kind),
+  ];
+
+  if (signals.some((signal) => signal.id === "geo" || signal.id === "geo-scan")) {
+    recommendations.push("Check whether visible content or companion files also expose location information.");
+  }
+  if (signals.some((signal) => signal.id === "author" || signal.id === "identity-scan")) {
+    recommendations.push("Review author, owner, and serial strings before export because they often survive outside obvious metadata panels.");
+  }
+  if (kind === "archive") {
+    recommendations.push("Review archive member names and folder layout separately from hash comparison results.");
+  }
+
+  return dedupeList(recommendations);
+}
+
+function buildReviewSections(input: {
+  metadataFound: string[];
+  removable: string[];
+  remainingTraces: string[];
+  unsupportedCleanup: string[];
+  reviewRecommendations: string[];
+}): MetadataReviewSection[] {
+  const sections: MetadataReviewSection[] = [
+    { id: "metadata-found", label: "Metadata found", items: input.metadataFound },
+    { id: "removable-locally", label: "Removable locally", items: input.removable },
+    { id: "remaining-traces", label: "Remaining traces", items: input.remainingTraces },
+    { id: "unsupported-cleanup", label: "Unsupported cleanup", items: input.unsupportedCleanup },
+    { id: "review-recommendations", label: "Review recommendations", items: input.reviewRecommendations },
+  ];
+  return sections.filter((section) => section.items.length > 0);
+}
+
+function dedupeList(items: string[]) {
+  return Array.from(new Set(items.filter(Boolean)));
 }
 
 function buildCommandHint(format: MetadataDetectedFormat, fileName: string): string | null {

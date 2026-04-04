@@ -29,11 +29,12 @@
     "security:check": "npm run audit:headers && npm run lint && npm run test",
     "pretest": "node scripts/clean-test-build.mjs",
     "test": "tsc -p tsconfig.test.json && node --test build-test/__tests__/*.js",
-    "e2e": "playwright test tests/e2e/app.spec.ts tests/e2e/i18n-layout.spec.ts tests/e2e/i18n-switching.spec.ts",
-    "test:visual": "playwright test tests/e2e/visual-regression.spec.ts",
-    "test:visual:update": "playwright test tests/e2e/visual-regression.spec.ts --update-snapshots",
+    "e2e": "node scripts/run-e2e.mjs tests/e2e/app.spec.ts tests/e2e/i18n-layout.spec.ts tests/e2e/i18n-switching.spec.ts",
+    "e2e:install": "npx playwright install --with-deps chromium",
+    "test:visual": "node scripts/run-e2e.mjs tests/e2e/visual-regression.spec.ts",
+    "test:visual:update": "node scripts/run-e2e.mjs tests/e2e/visual-regression.spec.ts --update-snapshots",
     "visual:drift-report": "node scripts/collect-visual-drift.mjs",
-    "test:e2e:i18n-layout": "playwright test tests/e2e/i18n-layout.spec.ts",
+    "test:e2e:i18n-layout": "node scripts/run-e2e.mjs tests/e2e/i18n-layout.spec.ts",
     "validate": "npm run typecheck && npm run i18n:check && npm run lint && npm run test && npm run e2e && npm run build && npm run verify:build"
   },
   "dependencies": {

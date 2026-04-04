@@ -10,6 +10,8 @@ import { probeCanvasEncodeSupport, type OutputMime } from "../utils/imageFormats
 import { analyzeMetadataFromBuffer, type MetadataAnalysisResult } from "../utils/metadataAdvanced.js";
 import { prepareLocalMetadataCleanup } from "../utils/localArtifactPreparation.js";
 import { applySanitizeRules, type PolicyPack } from "../utils/sanitizeEngine.js";
+import { analyzeFinancialIdentifiers } from "../utils/financialReview.js";
+import { analyzePathPrivacy } from "../utils/pathPrivacy.js";
 import {
   buildSafeShareSanitizeConfig,
   classifyTextForSafeShare,
@@ -17,10 +19,13 @@ import {
   createSafeShareTextWorkflowPackage,
   formatShareClassLabel,
   getSafeSharePreset,
+  resolveSafeShareAnalysisRuleSets,
   safeSharePresetIds,
   summarizeSanitizeFindings,
   type SafeSharePresetId,
 } from "../utils/safeShareAssistant.js";
+import { buildWorkflowReviewDashboard } from "../utils/workflowReview.js";
+import { consumeSafeShareWorkflowDraft } from "../utils/workflowDraftTransfer.js";
 import type { WorkflowPackage } from "../utils/workflowPackage.js";
 
 type ShareMode = "text" | "file";
@@ -78,11 +83,20 @@ export function SafeShareView({ onOpenGuide }: SafeShareViewProps) {
     [policyPacks, selectedPolicyId],
   );
   const textPolicy = useMemo(() => buildSafeShareSanitizeConfig(presetId, selectedPolicy), [presetId, selectedPolicy]);
+  const analysisRuleSets = useMemo(() => resolveSafeShareAnalysisRuleSets(presetId), [presetId]);
   const textPreview = useMemo(
     () => applySanitizeRules(textInput, textPolicy.rulesState, textPolicy.customRules, textPolicy.jsonAware),
     [textInput, textPolicy],
   );
   const textFindings = useMemo(() => summarizeSanitizeFindings(textPreview.report).slice(0, 8), [textPreview.report]);
+  const textFinancialReview = useMemo(
+    () => analyzeFinancialIdentifiers(textInput, { enabledRuleSets: analysisRuleSets }),
+    [analysisRuleSets, textInput],
+  );
+  const filePathPrivacy = useMemo(
+    () => (shareFile ? analyzePathPrivacy(shareFile.name) : null),
+    [shareFile],
+  );
   const shareClass = useMemo(
     () => (mode === "text" ? formatShareClassLabel(classifyTextForSafeShare(textInput)) : analysis ? formatShareClassLabelForFile(analysis) : "pending input"),
     [analysis, mode, textInput],
@@ -95,6 +109,10 @@ export function SafeShareView({ onOpenGuide }: SafeShareViewProps) {
       buildId: typeof import.meta.env.VITE_BUILD_ID === "string" && import.meta.env.VITE_BUILD_ID.trim() ? import.meta.env.VITE_BUILD_ID.trim() : null,
     }),
     [],
+  );
+  const reviewDashboard = useMemo(
+    () => (previewPackage ? buildWorkflowReviewDashboard(previewPackage) : null),
+    [previewPackage],
   );
 
   useEffect(() => {
@@ -238,6 +256,23 @@ export function SafeShareView({ onOpenGuide }: SafeShareViewProps) {
     if (mode !== "file" || !shareFile || !analysis) return;
     void refreshFileCleanup(shareFile, analysis);
   }, [analysis, applyMetadataClean, mode, outputSupport, refreshFileCleanup, shareFile]);
+
+  useEffect(() => {
+    const draft = consumeSafeShareWorkflowDraft();
+    if (!draft) return;
+    if (draft.item.kind === "text") {
+      setMode("text");
+      setTextInput(draft.item.text);
+      setTextSourceLabel(draft.item.label);
+      push("batch selection imported into safe share", "accent");
+      return;
+    }
+    const file = new File([draft.item.sourceBytes.slice().buffer as ArrayBuffer], draft.item.fileName, {
+      type: draft.item.fileMediaType || "application/octet-stream",
+    });
+    void handleShareFile(file);
+    push("batch selection imported into safe share", "accent");
+  }, [handleShareFile, push, setMode, setTextInput, setTextSourceLabel]);
 
   useEffect(() => {
     let cancelled = false;
@@ -439,6 +474,12 @@ export function SafeShareView({ onOpenGuide }: SafeShareViewProps) {
               <li key={line}>{tr(line)}</li>
             ))}
           </ul>
+          <div className="panel-subtext">{tr("Preset transparency")}</div>
+          <ul className="microcopy">
+            <li>{tr("Active sanitize rules")}: {preset.sanitizeRules.join(", ")}</li>
+            <li>{tr("Region detectors")}: {Object.entries(analysisRuleSets).filter(([, enabled]) => enabled).map(([key]) => key).join(", ") || tr("none")}</li>
+            <li>{tr("Checklist emphasis")}: {preset.reviewChecklistEmphasis.join(" | ")}</li>
+          </ul>
           {mode === "text" ? (
             <label className="microcopy" htmlFor="safe-share-policy-pack">
               {tr("Optional sanitize policy pack")}
@@ -481,6 +522,18 @@ export function SafeShareView({ onOpenGuide }: SafeShareViewProps) {
                   <li>{tr("No sanitize findings were recorded yet.")}</li>
                 )}
               </ul>
+              <div className="panel-subtext">{tr("Financial review")}</div>
+              <ul className="microcopy">
+                {textFinancialReview.findings.length > 0 ? (
+                  textFinancialReview.findings.slice(0, 4).map((finding) => (
+                    <li key={`${finding.start}:${finding.end}:${finding.key}`}>
+                      {tr(finding.label)}: {tr(finding.reason)} <code>{finding.preview}</code>
+                    </li>
+                  ))
+                ) : (
+                  <li>{tr("No financial identifier findings were detected yet.")}</li>
+                )}
+              </ul>
               <div className="panel-subtext">{tr("Prepared output preview")}</div>
               <pre className="log-preview" aria-label={tr("Safe share output preview")}>
                 {textPreview.output || tr("nothing to preview")}
@@ -516,6 +569,22 @@ export function SafeShareView({ onOpenGuide }: SafeShareViewProps) {
                     {analysis.guidance.map((line) => (
                       <li key={line}>{tr(line)}</li>
                     ))}
+                  </ul>
+                </>
+              ) : null}
+              {filePathPrivacy ? (
+                <>
+                  <div className="panel-subtext">{tr("Filename / path privacy")}</div>
+                  <ul className="microcopy">
+                    {filePathPrivacy.findings.length > 0 ? (
+                      filePathPrivacy.findings.map((finding) => (
+                        <li key={`${finding.key}:${finding.reason}`}>
+                          {tr(finding.label)}: {tr(finding.reason)}
+                        </li>
+                      ))
+                    ) : (
+                      <li>{tr("No filename/path privacy hints were generated for the current file name.")}</li>
+                    )}
                   </ul>
                 </>
               ) : null}
@@ -669,6 +738,27 @@ export function SafeShareView({ onOpenGuide }: SafeShareViewProps) {
               ))}
             </tbody>
           </table>
+        </section>
+      ) : null}
+
+      {reviewDashboard ? (
+        <section className="panel" aria-label={tr("Workflow review dashboard")}>
+          <div className="panel-heading">
+            <span>{tr("Workflow review dashboard")}</span>
+            <span className="panel-subtext">{tr("what is being shared before export")}</span>
+          </div>
+          <div className="grid-two">
+            {reviewDashboard.sections.map((section) => (
+              <div key={section.id}>
+                <div className="panel-subtext">{tr(section.label)}</div>
+                <ul className="microcopy">
+                  {section.items.map((line) => (
+                    <li key={`${section.id}:${line}`}>{tr(line)}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
         </section>
       ) : null}
 

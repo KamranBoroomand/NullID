@@ -23,6 +23,12 @@ import { analyzeMetadataFromBuffer, type MetadataAnalysisResult } from "../utils
 import { prepareLocalMetadataCleanup } from "../utils/localArtifactPreparation.js";
 import { applySanitizeRules, type PolicyPack } from "../utils/sanitizeEngine.js";
 import { buildSafeShareSanitizeConfig, summarizeSanitizeFindings } from "../utils/safeShareAssistant.js";
+import { buildWorkflowReviewDashboard } from "../utils/workflowReview.js";
+import {
+  consumeIncidentWorkflowDraft,
+  type WorkflowDraftFileItem,
+  type WorkflowDraftTextItem,
+} from "../utils/workflowDraftTransfer.js";
 import type { WorkflowPackage } from "../utils/workflowPackage.js";
 
 interface IncidentWorkflowViewProps {
@@ -127,6 +133,10 @@ export function IncidentWorkflowView({ onOpenGuide }: IncidentWorkflowViewProps)
     }),
     [],
   );
+  const reviewDashboard = useMemo(
+    () => (previewPackage ? buildWorkflowReviewDashboard(previewPackage) : null),
+    [previewPackage],
+  );
 
   useEffect(() => {
     setIncludeSourceReference(mode.includeSourceReferenceDefault);
@@ -211,6 +221,36 @@ export function IncidentWorkflowView({ onOpenGuide }: IncidentWorkflowViewProps)
     if (!draftFile || !draftAnalysis) return;
     void refreshDraftCleanup(draftFile, draftAnalysis);
   }, [applyMetadataClean, draftAnalysis, draftFile, outputSupport, refreshDraftCleanup]);
+
+  useEffect(() => {
+    const draft = consumeIncidentWorkflowDraft();
+    if (!draft?.items.length) return;
+    setTextArtifacts((previous) => [
+      ...previous,
+      ...draft.items
+        .filter((item): item is WorkflowDraftTextItem => item.kind === "text")
+        .map((item, index) => ({
+          id: buildLocalId("batch-text", previous.length + index),
+          label: item.label,
+          inputText: item.text,
+        })),
+    ]);
+    setFileArtifacts((previous) => [
+      ...previous,
+      ...draft.items
+        .filter((item): item is WorkflowDraftFileItem => item.kind === "file")
+        .map((item, index) => ({
+          id: buildLocalId("batch-file", previous.length + index),
+          label: item.label,
+          fileName: item.fileName,
+          fileMediaType: item.fileMediaType,
+          sourceBytes: Uint8Array.from(item.sourceBytes),
+          analysis: item.analysis,
+          cleanActions: [],
+        })),
+    ]);
+    push("batch selection imported into incident workflow", "accent");
+  }, [push]);
 
   const handleTextArtifactFile = useCallback(
     async (file?: File | null) => {
@@ -941,6 +981,27 @@ export function IncidentWorkflowView({ onOpenGuide }: IncidentWorkflowViewProps)
           )}
         </section>
       </div>
+
+      {reviewDashboard ? (
+        <section className="panel" aria-label={tr("Workflow review dashboard")}>
+          <div className="panel-heading">
+            <span>{tr("Workflow review dashboard")}</span>
+            <span className="panel-subtext">{tr("what is being shared before export")}</span>
+          </div>
+          <div className="grid-two">
+            {reviewDashboard.sections.map((section) => (
+              <div key={section.id}>
+                <div className="panel-subtext">{tr(section.label)}</div>
+                <ul className="microcopy">
+                  {section.items.map((line) => (
+                    <li key={`${section.id}:${line}`}>{tr(line)}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="panel" aria-label={tr("Incident export")}>
         <div className="panel-heading">

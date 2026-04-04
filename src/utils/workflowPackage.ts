@@ -343,6 +343,7 @@ export function createSanitizeWorkflowPackage(input: CreateSanitizeWorkflowPacka
         report: normalizeStringList(input.summary.report, 200, 240),
         metadata: {
           detectedFormat: input.detectedFormat ?? "text",
+          linesAffected: input.summary.linesAffected,
         },
       },
     ],

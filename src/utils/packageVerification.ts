@@ -52,10 +52,25 @@ export interface VerificationWorkflowReport {
   receiverCannotVerify: string[];
 }
 
+export interface VerificationTransformSummary {
+  label: string;
+  summary: string;
+  applied: string[];
+  report: string[];
+  metadata: VerificationFact[];
+}
+
+export interface VerificationReceiverExplanation {
+  verified: string[];
+  declaredOnly: string[];
+  notProvable: string[];
+  manualReview: string[];
+}
+
 export interface VerificationDescriptiveWorkflowMetadata {
   title?: string;
   facts: VerificationFact[];
-  transforms: VerificationFact[];
+  transforms: VerificationTransformSummary[];
   policySummary: VerificationFact[];
   workflowReport?: VerificationWorkflowReport;
   warnings: string[];
@@ -79,6 +94,7 @@ export interface ReceivedArtifactVerificationResult {
   policySummary: VerificationFact[];
   workflowReport?: VerificationWorkflowReport;
   descriptiveWorkflowMetadata?: VerificationDescriptiveWorkflowMetadata;
+  receiverExplanation: VerificationReceiverExplanation;
   envelope?: VerificationFact[];
   failure?: string;
 }
@@ -95,7 +111,7 @@ export async function inspectReceivedArtifact(
 ): Promise<ReceivedArtifactVerificationResult> {
   const trimmed = rawInput.trim();
   if (!trimmed) {
-    return {
+    return finalizeResult({
       artifactType: "malformed",
       artifactKindLabel: "Empty input",
       title: "No artifact provided",
@@ -111,7 +127,7 @@ export async function inspectReceivedArtifact(
       transforms: [],
       policySummary: [],
       failure: "Empty input",
-    };
+    });
   }
 
   if (trimmed.startsWith("NULLID:ENC:1.")) {
@@ -122,7 +138,7 @@ export async function inspectReceivedArtifact(
   try {
     parsed = JSON.parse(trimmed) as unknown;
   } catch {
-    return {
+    return finalizeResult({
       artifactType: "malformed",
       artifactKindLabel: "Malformed artifact",
       title: options?.sourceLabel ? `Malformed artifact (${options.sourceLabel})` : "Malformed artifact",
@@ -138,7 +154,7 @@ export async function inspectReceivedArtifact(
       transforms: [],
       policySummary: [],
       failure: "Malformed JSON or unsupported artifact encoding",
-    };
+    });
   }
 
   return inspectParsedArtifact(parsed, options);
@@ -152,7 +168,7 @@ function inspectEnvelopePayload(
   try {
     meta = inspectEnvelope(payload);
   } catch (error) {
-    return {
+    return finalizeResult({
       artifactType: "malformed",
       artifactKindLabel: "Malformed envelope",
       title: "Malformed NULLID envelope",
@@ -168,12 +184,12 @@ function inspectEnvelopePayload(
       transforms: [],
       policySummary: [],
       failure: error instanceof Error ? error.message : "Invalid envelope",
-    };
+    });
   }
 
   const envelopeFacts = envelopeFactsFromMeta(meta);
   if (!options?.envelopePassphrase?.trim()) {
-    return {
+    return finalizeResult({
       artifactType: "envelope",
       artifactKindLabel: "Encrypted envelope",
       title: meta.header.name ? `Encrypted envelope (${meta.header.name})` : "Encrypted envelope",
@@ -190,12 +206,12 @@ function inspectEnvelopePayload(
       policySummary: [],
       envelope: envelopeFacts,
       failure: "Passphrase required to inspect inner payload",
-    };
+    });
   }
 
   return decryptText(options.envelopePassphrase.trim(), payload)
     .then((decrypted) => inspectParsedOrMalformedAfterDecrypt(decrypted, envelopeFacts, options))
-    .catch((error) => ({
+    .catch((error) => finalizeResult({
       artifactType: "envelope",
       artifactKindLabel: "Encrypted envelope",
       title: meta.header.name ? `Encrypted envelope (${meta.header.name})` : "Encrypted envelope",
@@ -223,16 +239,16 @@ async function inspectParsedOrMalformedAfterDecrypt(
   try {
     const parsed = JSON.parse(decrypted) as unknown;
     const inner = await inspectParsedArtifact(parsed, options);
-    return {
+    return finalizeResult({
       ...inner,
       envelope,
       trustBasis: [
         "NULLID:ENC:1 envelope decrypted locally.",
         ...inner.trustBasis,
       ],
-    };
+    });
   } catch {
-    return {
+    return finalizeResult({
       artifactType: "unsupported",
       artifactKindLabel: "Unsupported decrypted payload",
       title: "Unsupported decrypted payload",
@@ -248,7 +264,7 @@ async function inspectParsedOrMalformedAfterDecrypt(
       transforms: [],
       policySummary: [],
       envelope,
-    };
+    });
   }
 }
 
@@ -262,7 +278,7 @@ async function inspectParsedArtifact(
       verified = await verifyWorkflowPackagePayload(parsed);
     } catch (error) {
       const descriptor = describeWorkflowPackagePayload(parsed);
-      return {
+      return finalizeResult({
         artifactType: isRecord(parsed) && parsed.kind === "nullid-safe-share" ? "safe-share-bundle" : "workflow-package",
         artifactKindLabel: isRecord(parsed) && parsed.kind === "nullid-safe-share" ? "Safe-share bundle" : "Workflow package",
         title: "Invalid workflow package",
@@ -281,12 +297,12 @@ async function inspectParsedArtifact(
         transforms: [],
         policySummary: [],
         failure: error instanceof Error ? error.message : "Invalid workflow package payload",
-      };
+      });
     }
     const workflowPackage = verified.workflowPackage;
     const artifactKindLabel = verified.descriptor.sourceKind === "safe-share" ? "Safe-share bundle" : "Workflow package";
     const schema2SafeShareBundle = isSchema2SafeShareBundle(parsed);
-    return {
+    return finalizeResult({
       artifactType: verified.descriptor.sourceKind === "safe-share" ? "safe-share-bundle" : "workflow-package",
       artifactKindLabel,
       title: artifactKindLabel,
@@ -338,14 +354,14 @@ async function inspectParsedArtifact(
       policySummary: [],
       descriptiveWorkflowMetadata: summarizeDescriptiveWorkflowMetadata(workflowPackage),
       failure: verified.failure,
-    };
+    });
   }
 
   if (looksLikePolicyPack(parsed)) {
     const verified = await verifyPolicyPackPayload(parsed, {
       verificationPassphrase: options?.verificationPassphrase,
     });
-    return {
+    return finalizeResult({
       artifactType: "policy-pack",
       artifactKindLabel: "Sanitize policy pack",
       title: "Sanitize policy pack",
@@ -372,14 +388,14 @@ async function inspectParsedArtifact(
       transforms: [],
       policySummary: [],
       failure: verified.failure,
-    };
+    });
   }
 
   if (looksLikeProfile(parsed)) {
     const verified = await verifyProfilePayload(parsed, {
       verificationPassphrase: options?.verificationPassphrase,
     });
-    return {
+    return finalizeResult({
       artifactType: "profile",
       artifactKindLabel: "Profile snapshot",
       title: "Profile snapshot",
@@ -407,14 +423,14 @@ async function inspectParsedArtifact(
       transforms: [],
       policySummary: [],
       failure: verified.failure,
-    };
+    });
   }
 
   if (looksLikeVault(parsed)) {
     const verified = await verifyVaultPayload(parsed, {
       verificationPassphrase: options?.verificationPassphrase,
     });
-    return {
+    return finalizeResult({
       artifactType: "vault",
       artifactKindLabel: "Vault snapshot",
       title: "Vault snapshot",
@@ -442,10 +458,10 @@ async function inspectParsedArtifact(
       transforms: [],
       policySummary: [],
       failure: verified.failure,
-    };
+    });
   }
 
-  return {
+  return finalizeResult({
     artifactType: "unsupported",
     artifactKindLabel: "Unsupported artifact",
     title: "Unsupported artifact",
@@ -460,7 +476,7 @@ async function inspectParsedArtifact(
     artifacts: [],
     transforms: [],
     policySummary: [],
-  };
+  });
 }
 
 function looksLikeWorkflowArtifact(value: unknown) {
@@ -495,6 +511,82 @@ function overallArtifactStatus(state: ReceivedVerificationState): VerificationAr
   if (state === "verified" || state === "integrity-checked") return "verified";
   if (state === "mismatch") return "mismatch";
   return "unverified";
+}
+
+function finalizeResult(
+  result: Omit<ReceivedArtifactVerificationResult, "receiverExplanation">,
+): ReceivedArtifactVerificationResult {
+  return {
+    ...result,
+    receiverExplanation: buildReceiverExplanation(result),
+  };
+}
+
+function buildReceiverExplanation(
+  result: Omit<ReceivedArtifactVerificationResult, "receiverExplanation">,
+): VerificationReceiverExplanation {
+  const declaredOnly = normalizeUniqueLines(buildDeclaredOnlyLines(result));
+  const notProvable = normalizeUniqueLines(
+    result.unverifiedChecks.filter((line) => isNotProvableLine(line)).concat(
+      result.descriptiveWorkflowMetadata?.workflowReport?.receiverCannotVerify ?? [],
+    ),
+  );
+  const verified = normalizeUniqueLines(result.verifiedChecks);
+  const manualReview = normalizeUniqueLines(buildManualReviewLines(result, declaredOnly, notProvable));
+  return {
+    verified,
+    declaredOnly,
+    notProvable,
+    manualReview,
+  };
+}
+
+function isNotProvableLine(line: string) {
+  return /sender identity|authorship|omitted context|complete|not asserted|external cleanup|not integrity-verified/i.test(line);
+}
+
+function buildDeclaredOnlyLines(result: Omit<ReceivedArtifactVerificationResult, "receiverExplanation">) {
+  const lines = result.unverifiedChecks.filter((line) => /descriptive|declared|not integrity-verified/i.test(line));
+  const metadata = result.descriptiveWorkflowMetadata;
+  if (!metadata) return lines;
+  if (metadata.title || metadata.facts.length > 0) {
+    lines.push("Workflow title, preset, and producer details were parsed successfully but remain package-declared only.");
+  }
+  if (metadata.workflowReport) {
+    lines.push("Workflow report purpose, audience, and receiver guidance were parsed successfully but remain package-declared only.");
+  }
+  if (metadata.policySummary.length > 0) {
+    lines.push("Policy metadata was parsed successfully but remains package-declared only.");
+  }
+  if (metadata.transforms.length > 0) {
+    lines.push("Transform summaries were parsed successfully but remain package-declared only.");
+  }
+  if (metadata.warnings.length > 0 || metadata.limitations.length > 0) {
+    lines.push("Package-declared warnings and limitations were parsed successfully but remain package-declared only.");
+  }
+  return lines;
+}
+
+function buildManualReviewLines(
+  result: Omit<ReceivedArtifactVerificationResult, "receiverExplanation">,
+  declaredOnly: string[],
+  notProvable: string[],
+) {
+  return [
+    ...result.warnings,
+    ...result.limitations,
+    ...result.artifacts
+      .filter((artifact) => artifact.status === "mismatch" || artifact.status === "unverified")
+      .map((artifact) => `${artifact.label}: ${artifact.detail}`),
+    ...result.artifacts
+      .filter((artifact) => artifact.status === "reference")
+      .map((artifact) => `${artifact.label}: referenced only; inspect the original source separately if context matters.`),
+    ...result.unverifiedChecks.filter((line) => !declaredOnly.includes(line) && !notProvable.includes(line)),
+  ];
+}
+
+function normalizeUniqueLines(lines: string[]) {
+  return Array.from(new Set(lines.filter(Boolean)));
 }
 
 function summarizeWorkflowPolicy(
@@ -562,6 +654,9 @@ function summarizeDescriptiveWorkflowMetadata(workflowPackage: {
   transforms?: Array<{
     label: string;
     summary: string;
+    applied?: string[];
+    report?: string[];
+    metadata?: Record<string, unknown>;
   }>;
   policy?: {
     type: "sanitize";
@@ -591,7 +686,13 @@ function summarizeDescriptiveWorkflowMetadata(workflowPackage: {
   ];
   const transforms = (workflowPackage.transforms ?? []).map((transform) => ({
     label: transform.label,
-    value: transform.summary,
+    summary: transform.summary,
+    applied: [...(transform.applied ?? [])],
+    report: [...(transform.report ?? [])],
+    metadata: Object.entries(transform.metadata ?? {}).map(([label, value]) => ({
+      label,
+      value: typeof value === "string" ? value : JSON.stringify(value),
+    })),
   }));
   const policySummary = summarizeWorkflowPolicy(workflowPackage.policy);
   const workflowReport = summarizeWorkflowReport(workflowPackage.report);

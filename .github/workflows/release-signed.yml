@@ -34,6 +34,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install Playwright browser
+        run: npm run e2e:install
+
       - name: Typecheck
         run: npm run typecheck
 
@@ -45,6 +48,9 @@ jobs:
 
       - name: Unit tests
         run: npm run test
+
+      - name: Browser e2e
+        run: CI=1 npm run e2e
 
       - name: Build reproducible artifacts
         run: npm run build:repro

@@ -55,6 +55,18 @@ describe("metadata advanced", () => {
     assert.equal(analysis.recommendedSanitizer, "mat2");
     assert.equal((analysis.commandHint || "").includes("ffmpeg"), true);
   });
+
+  it("builds explicit review sections for metadata exposure guidance", () => {
+    const bytes = latin1(
+      "%PDF-1.7\n1 0 obj\n<< /Author (Alice) /Creator (Office) /CreationDate (D:20250101000000Z) /Metadata 2 0 R >>\nendobj\n<x:xmpmeta>private</x:xmpmeta>",
+    );
+    const analysis = analyzeMetadataFromBuffer("application/pdf", bytes, "report.pdf");
+
+    assert.equal(analysis.reviewSections.some((section) => section.id === "metadata-found"), true);
+    assert.equal(analysis.reviewSections.some((section) => section.id === "removable-locally"), true);
+    assert.equal(analysis.reviewSections.some((section) => section.id === "review-recommendations"), true);
+    assert.equal(analysis.metadataFound.length > 0, true);
+  });
 });
 
 function ascii(value: string) {

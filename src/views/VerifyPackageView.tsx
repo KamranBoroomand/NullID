@@ -1,10 +1,12 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import "./styles.css";
 import { Chip } from "../components/Chip";
 import { useToast } from "../components/ToastHost";
 import type { ModuleKey } from "../components/ModuleList";
 import { useI18n } from "../i18n";
 import { inspectReceivedArtifact, type ReceivedArtifactVerificationResult, type ReceivedVerificationState } from "../utils/packageVerification.js";
+import { buildVerificationChecklist, reviewChecklistToText } from "../utils/reviewChecklist.js";
+import { localizeExportValue } from "../utils/reporting.js";
 
 interface VerifyPackageViewProps {
   onOpenGuide?: (key?: ModuleKey) => void;
@@ -12,7 +14,7 @@ interface VerifyPackageViewProps {
 
 export function VerifyPackageView({ onOpenGuide }: VerifyPackageViewProps) {
   const { push } = useToast();
-  const { t, tr } = useI18n();
+  const { t, tr, formatDateTime } = useI18n();
   const [input, setInput] = useState("");
   const [sourceLabel, setSourceLabel] = useState("");
   const [envelopePassphrase, setEnvelopePassphrase] = useState("");
@@ -20,6 +22,7 @@ export function VerifyPackageView({ onOpenGuide }: VerifyPackageViewProps) {
   const [result, setResult] = useState<ReceivedArtifactVerificationResult | null>(null);
   const [isInspecting, setIsInspecting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const checklist = useMemo(() => (result ? buildVerificationChecklist(result) : null), [result]);
 
   const inspectArtifact = async () => {
     setIsInspecting(true);
@@ -57,6 +60,18 @@ export function VerifyPackageView({ onOpenGuide }: VerifyPackageViewProps) {
     setEnvelopePassphrase("");
     setVerificationPassphrase("");
     setResult(null);
+  };
+
+  const exportChecklistJson = () => {
+    if (!checklist) return;
+    downloadBlob(new Blob([`${JSON.stringify(localizeExportValue(checklist, tr), null, 2)}\n`], { type: "application/json" }), `nullid-verification-checklist-${Date.now()}.json`);
+    push("review checklist exported", "accent");
+  };
+
+  const exportChecklistText = () => {
+    if (!checklist) return;
+    downloadBlob(new Blob([reviewChecklistToText(checklist, { translate: tr, formatDateTime })], { type: "text/plain;charset=utf-8" }), `nullid-verification-checklist-${Date.now()}.txt`);
+    push("review checklist exported", "accent");
   };
 
   return (
@@ -154,6 +169,57 @@ export function VerifyPackageView({ onOpenGuide }: VerifyPackageViewProps) {
 
       {result ? (
         <>
+          <section className="panel" aria-label={tr("Receiver explanation")}>
+            <div className="panel-heading">
+              <span>{tr("Receiver explanation")}</span>
+              <span className="panel-subtext">{tr("derived from actual verification results")}</span>
+            </div>
+            <div className="controls-row">
+              <button className="button" type="button" onClick={exportChecklistJson}>
+                {tr("export checklist json")}
+              </button>
+              <button className="button" type="button" onClick={exportChecklistText}>
+                {tr("export checklist text")}
+              </button>
+            </div>
+            <div className="grid-two">
+              <div>
+                <div className="panel-subtext">{tr("What is verified")}</div>
+                <ul className="microcopy">
+                  {result.receiverExplanation.verified.length > 0
+                    ? result.receiverExplanation.verified.map((line) => <li key={line}>{tr(line)}</li>)
+                    : <li>{tr("No checks completed.")}</li>}
+                </ul>
+              </div>
+              <div>
+                <div className="panel-subtext">{tr("What is declared only")}</div>
+                <ul className="microcopy">
+                  {result.receiverExplanation.declaredOnly.length > 0
+                    ? result.receiverExplanation.declaredOnly.map((line) => <li key={line}>{tr(line)}</li>)
+                    : <li>{tr("No package-declared-only fields were surfaced.")}</li>}
+                </ul>
+              </div>
+            </div>
+            <div className="grid-two">
+              <div>
+                <div className="panel-subtext">{tr("What is not provable")}</div>
+                <ul className="microcopy">
+                  {result.receiverExplanation.notProvable.length > 0
+                    ? result.receiverExplanation.notProvable.map((line) => <li key={line}>{tr(line)}</li>)
+                    : <li>{tr("No additional unprovable claims were surfaced.")}</li>}
+                </ul>
+              </div>
+              <div>
+                <div className="panel-subtext">{tr("What to review manually")}</div>
+                <ul className="microcopy">
+                  {result.receiverExplanation.manualReview.length > 0
+                    ? result.receiverExplanation.manualReview.map((line) => <li key={line}>{tr(line)}</li>)
+                    : <li>{tr("No extra manual review items were surfaced.")}</li>}
+                </ul>
+              </div>
+            </div>
+          </section>
+
           <div className="grid-two">
             <section className="panel" aria-label={tr("Verified checks")}>
               <div className="panel-heading">
@@ -369,16 +435,40 @@ export function VerifyPackageView({ onOpenGuide }: VerifyPackageViewProps) {
                 <span>{tr("Package-declared transform summary")}</span>
                 <span className="panel-subtext">{tr("descriptive only; not integrity-verified")}</span>
               </div>
-              <table className="table">
-                <tbody>
-                  {result.descriptiveWorkflowMetadata.transforms.map((fact) => (
-                    <tr key={`${fact.label}:${fact.value}`}>
-                      <th>{tr(fact.label)}</th>
-                      <td>{tr(fact.value)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {result.descriptiveWorkflowMetadata.transforms.map((transform) => (
+                <div key={`${transform.label}:${transform.summary}`} className="note-box" style={{ marginBottom: "0.75rem" }}>
+                  <div className="section-title">{tr(transform.label)}</div>
+                  <div className="microcopy">{tr(transform.summary)}</div>
+                  {transform.applied.length ? (
+                    <>
+                      <div className="panel-subtext">{tr("Applied details")}</div>
+                      <ul className="microcopy">
+                        {transform.applied.map((line) => <li key={`${transform.label}:applied:${line}`}>{tr(line)}</li>)}
+                      </ul>
+                    </>
+                  ) : null}
+                  {transform.report.length ? (
+                    <>
+                      <div className="panel-subtext">{tr("Reported details")}</div>
+                      <ul className="microcopy">
+                        {transform.report.map((line) => <li key={`${transform.label}:report:${line}`}>{tr(line)}</li>)}
+                      </ul>
+                    </>
+                  ) : null}
+                  {transform.metadata.length ? (
+                    <table className="table">
+                      <tbody>
+                        {transform.metadata.map((fact) => (
+                          <tr key={`${transform.label}:${fact.label}:${fact.value}`}>
+                            <th>{tr(fact.label)}</th>
+                            <td>{tr(fact.value)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : null}
+                </div>
+              ))}
             </section>
           ) : null}
 
@@ -433,6 +523,15 @@ export function VerifyPackageView({ onOpenGuide }: VerifyPackageViewProps) {
       ) : null}
     </div>
   );
+}
+
+function downloadBlob(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 function chipToneForState(state: ReceivedVerificationState) {

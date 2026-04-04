@@ -1,6 +1,7 @@
 import { toBase64 } from "./encoding.js";
 import { hashBytes, hashText } from "./hash.js";
 import type { MetadataAnalysisResult, MetadataSanitizer } from "./metadataAdvanced.js";
+import { defaultRuleSetState, type RedactionRuleSet } from "./redaction.js";
 import {
   applySanitizeRules,
   buildRulesState,
@@ -14,6 +15,16 @@ import {
   type WorkflowPackageProducer,
   type WorkflowPackageTransform,
 } from "./workflowPackage.js";
+import { scanSecrets, summarizeSecretFindings } from "./secretScanner.js";
+import { analyzeStructuredText, summarizeStructuredAnalysis } from "./structuredTextAnalyzer.js";
+import {
+  analyzeFinancialIdentifiers,
+  summarizeFinancialReview,
+} from "./financialReview.js";
+import {
+  analyzePathPrivacy,
+  summarizePathPrivacy,
+} from "./pathPrivacy.js";
 
 export type SafeSharePresetId =
   | "general-safe-share"
@@ -21,7 +32,12 @@ export type SafeSharePresetId =
   | "external-minimum"
   | "internal-investigation"
   | "incident-handoff"
-  | "evidence-archive";
+  | "evidence-archive"
+  | "customer-support-share"
+  | "legal-document-share"
+  | "journalist-source-share"
+  | "internal-incident-handoff"
+  | "external-minimum-disclosure";
 
 export type SafeShareShareClass =
   | "structured-log"
@@ -43,6 +59,8 @@ export interface SafeSharePreset {
   allowOriginalBinaryPackaging: boolean;
   sanitizeRules: RuleKey[];
   jsonAware: boolean;
+  analysisRuleSets: Record<Exclude<RedactionRuleSet, "general">, boolean>;
+  reviewChecklistEmphasis: string[];
   guidance: string[];
   limitations: string[];
 }
@@ -61,6 +79,7 @@ export interface CreateSafeShareTextPackageInput {
   policyPack?: PolicyPack | null;
   policyOverride?: SanitizePolicyConfig;
   protectAtExport?: boolean;
+  analysisRuleSets?: Record<Exclude<RedactionRuleSet, "general">, boolean>;
 }
 
 export interface CreateSafeShareFilePackageInput {
@@ -106,6 +125,11 @@ export const safeSharePresets: Record<SafeSharePresetId, SafeSharePreset> = {
       "maskIban",
     ],
     jsonAware: true,
+    analysisRuleSets: defaultRuleSetState(),
+    reviewChecklistEmphasis: [
+      "Review what changed before sharing.",
+      "Check remaining identifiers that pattern matching cannot prove.",
+    ],
     guidance: [
       "Balanced preset for sharing cleaned text or locally sanitized files.",
       "Keeps the package unsigned unless you add an outer NULLID:ENC:1 envelope at export.",
@@ -140,6 +164,11 @@ export const safeSharePresets: Record<SafeSharePresetId, SafeSharePreset> = {
       "stripJsonSecrets",
     ],
     jsonAware: true,
+    analysisRuleSets: defaultRuleSetState(),
+    reviewChecklistEmphasis: [
+      "Keep debugging context, but review secrets and direct identifiers.",
+      "Confirm filenames and screenshots do not reveal customer or staff details.",
+    ],
     guidance: [
       "Keeps timestamps and some context so the receiver can still debug.",
       "Best for log snippets, stack traces, and screenshots or PDFs that need metadata cleanup first.",
@@ -178,6 +207,11 @@ export const safeSharePresets: Record<SafeSharePresetId, SafeSharePreset> = {
       "maskIban",
     ],
     jsonAware: true,
+    analysisRuleSets: defaultRuleSetState(),
+    reviewChecklistEmphasis: [
+      "Minimize direct identifiers and contextual clues.",
+      "Prefer reports or cleaned outputs over original binaries.",
+    ],
     guidance: [
       "Use this when the receiver needs the least possible amount of original context.",
       "When file cleanup is unavailable, this preset exports a report-only package instead of raw file bytes.",
@@ -214,6 +248,11 @@ export const safeSharePresets: Record<SafeSharePresetId, SafeSharePreset> = {
       "maskIban",
     ],
     jsonAware: true,
+    analysisRuleSets: defaultRuleSetState(),
+    reviewChecklistEmphasis: [
+      "Preserve enough chronology for internal review.",
+      "Make remaining traces and unprovable claims explicit to the receiver.",
+    ],
     guidance: [
       "Designed for internal responders who need context, chronology, and attached notes without losing obvious secret hygiene.",
       "Original binaries can be preserved when needed, with explicit report metadata describing what stayed intact.",
@@ -250,6 +289,11 @@ export const safeSharePresets: Record<SafeSharePresetId, SafeSharePreset> = {
       "maskIban",
     ],
     jsonAware: true,
+    analysisRuleSets: defaultRuleSetState(),
+    reviewChecklistEmphasis: [
+      "Preserve responder context without hiding what remained unchanged.",
+      "Review original-binary inclusion carefully before forwarding.",
+    ],
     guidance: [
       "Adds hashes, transform summaries, and receiver-facing warnings for another responder.",
       "If local file cleanup is unavailable, the original binary can still be packaged with explicit warnings.",
@@ -285,6 +329,11 @@ export const safeSharePresets: Record<SafeSharePresetId, SafeSharePreset> = {
       "maskIban",
     ],
     jsonAware: true,
+    analysisRuleSets: defaultRuleSetState(),
+    reviewChecklistEmphasis: [
+      "Prioritize context preservation and explicit warnings.",
+      "Call out declared-only versus locally verified facts.",
+    ],
     guidance: [
       "Use when preserving context matters more than aggressive reduction.",
       "Local cleanup is optional here; if you package the original binary, NullID makes that explicit in warnings and transforms.",
@@ -292,6 +341,217 @@ export const safeSharePresets: Record<SafeSharePresetId, SafeSharePreset> = {
     limitations: [
       "Preserving more context can preserve more residual sensitivity.",
       "This preset is not a legal/forensic chain-of-custody guarantee.",
+    ],
+  },
+  "customer-support-share": {
+    id: "customer-support-share",
+    label: "Customer support share",
+    description: "Support-oriented sharing with explicit review of customer identifiers, filenames, and operational context.",
+    includeSourceReferenceDefault: true,
+    defaultApplyMetadataClean: true,
+    allowOriginalBinaryPackaging: false,
+    sanitizeRules: [
+      "maskIp",
+      "maskIpv6",
+      "maskEmail",
+      "maskPhoneIntl",
+      "maskIranNationalId",
+      "scrubJwt",
+      "maskBearer",
+      "maskAwsKey",
+      "maskAwsSecret",
+      "maskGithubToken",
+      "maskSlackToken",
+      "stripPrivateKeyBlock",
+      "stripCookies",
+      "maskUser",
+      "stripJsonSecrets",
+      "maskCard",
+      "maskIban",
+    ],
+    jsonAware: true,
+    analysisRuleSets: defaultRuleSetState(),
+    reviewChecklistEmphasis: [
+      "Review customer numbers, financial identifiers, and path labels.",
+      "Keep enough product context for support without exposing unnecessary personal data.",
+    ],
+    guidance: [
+      "Designed for customer-support or vendor-support sharing with explicit review of identifiers and filenames.",
+      "Uses the same local workflow package contract; no hidden behavior is added by the preset.",
+    ],
+    limitations: [
+      "Operational context may still expose internal environment details if you choose to preserve it.",
+      "This preset does not assert sender identity or customer authenticity.",
+    ],
+  },
+  "legal-document-share": {
+    id: "legal-document-share",
+    label: "Legal document share",
+    description: "Conservative legal/document sharing with stronger emphasis on visible review, identifiers, and residual traces.",
+    includeSourceReferenceDefault: true,
+    defaultApplyMetadataClean: true,
+    allowOriginalBinaryPackaging: false,
+    sanitizeRules: [
+      "maskIp",
+      "maskIpv6",
+      "maskEmail",
+      "maskPhoneIntl",
+      "maskIranNationalId",
+      "scrubJwt",
+      "maskBearer",
+      "maskAwsKey",
+      "maskAwsSecret",
+      "maskGithubToken",
+      "maskSlackToken",
+      "stripPrivateKeyBlock",
+      "stripCookies",
+      "dropUA",
+      "normalizeTs",
+      "maskUser",
+      "stripJsonSecrets",
+      "maskCard",
+      "maskIban",
+    ],
+    jsonAware: true,
+    analysisRuleSets: defaultRuleSetState(),
+    reviewChecklistEmphasis: [
+      "Review remaining document traces, metadata, and reference numbers manually.",
+      "Prefer cleaned outputs and explicit reports over original binaries.",
+    ],
+    guidance: [
+      "This preset favors explicit review sections and minimal hidden context for document sharing.",
+      "Document numbers may still require human validation because pattern matching does not prove legal significance.",
+    ],
+    limitations: [
+      "NullID does not make legal admissibility or evidentiary guarantees.",
+      "Visible page content and embedded previews still need human review after metadata cleanup.",
+    ],
+  },
+  "journalist-source-share": {
+    id: "journalist-source-share",
+    label: "Journalist source share",
+    description: "Aggressive minimum-disclosure preset for source protection scenarios with explicit residual-risk reporting.",
+    includeSourceReferenceDefault: false,
+    defaultApplyMetadataClean: true,
+    allowOriginalBinaryPackaging: false,
+    sanitizeRules: [
+      "maskIp",
+      "maskIpv6",
+      "maskEmail",
+      "maskPhoneIntl",
+      "maskIranNationalId",
+      "scrubJwt",
+      "maskBearer",
+      "maskAwsKey",
+      "maskAwsSecret",
+      "maskGithubToken",
+      "maskSlackToken",
+      "stripPrivateKeyBlock",
+      "stripCookies",
+      "dropUA",
+      "normalizeTs",
+      "maskUser",
+      "stripJsonSecrets",
+      "maskCard",
+      "maskIban",
+    ],
+    jsonAware: true,
+    analysisRuleSets: defaultRuleSetState(),
+    reviewChecklistEmphasis: [
+      "Minimize identifying context, filenames, and reference labels.",
+      "Review what remains visible or declared-only before external sharing.",
+    ],
+    guidance: [
+      "Keeps source references off by default and emphasizes explicit reporting of what stayed unproven.",
+      "Original binaries are not packaged automatically under this preset.",
+    ],
+    limitations: [
+      "This preset reduces exposure but does not guarantee anonymity or source protection.",
+      "Visible content, writing style, and contextual clues can still identify a source.",
+    ],
+  },
+  "internal-incident-handoff": {
+    id: "internal-incident-handoff",
+    label: "Internal incident handoff",
+    description: "Internal responder handoff with explicit transform reporting and practical review prompts.",
+    includeSourceReferenceDefault: true,
+    defaultApplyMetadataClean: true,
+    allowOriginalBinaryPackaging: true,
+    sanitizeRules: [
+      "maskIp",
+      "maskIpv6",
+      "maskEmail",
+      "maskPhoneIntl",
+      "maskIranNationalId",
+      "scrubJwt",
+      "maskBearer",
+      "maskAwsKey",
+      "maskAwsSecret",
+      "maskGithubToken",
+      "maskSlackToken",
+      "stripPrivateKeyBlock",
+      "stripCookies",
+      "maskUser",
+      "stripJsonSecrets",
+      "maskCard",
+      "maskIban",
+    ],
+    jsonAware: true,
+    analysisRuleSets: defaultRuleSetState(),
+    reviewChecklistEmphasis: [
+      "Highlight what was verified locally versus declared only.",
+      "Carry responder context without hiding residual identifiers or traces.",
+    ],
+    guidance: [
+      "This preset keeps the handoff practical for internal teams while still surfacing transform and review data explicitly.",
+      "Original binaries may still be included when local cleanup is unavailable, but the package says so directly.",
+    ],
+    limitations: [
+      "Internal sharing still carries operational sensitivity and should be scoped carefully.",
+      "The package is not signed and does not prove authorship or sender identity.",
+    ],
+  },
+  "external-minimum-disclosure": {
+    id: "external-minimum-disclosure",
+    label: "External minimum disclosure",
+    description: "Enhanced external-sharing preset with aggressive disclosure reduction and explicit review/export transparency.",
+    includeSourceReferenceDefault: false,
+    defaultApplyMetadataClean: true,
+    allowOriginalBinaryPackaging: false,
+    sanitizeRules: [
+      "maskIp",
+      "maskIpv6",
+      "maskEmail",
+      "maskPhoneIntl",
+      "maskIranNationalId",
+      "scrubJwt",
+      "maskBearer",
+      "maskAwsKey",
+      "maskAwsSecret",
+      "maskGithubToken",
+      "maskSlackToken",
+      "stripPrivateKeyBlock",
+      "stripCookies",
+      "dropUA",
+      "normalizeTs",
+      "maskUser",
+      "stripJsonSecrets",
+      "maskCard",
+      "maskIban",
+    ],
+    jsonAware: true,
+    analysisRuleSets: defaultRuleSetState(),
+    reviewChecklistEmphasis: [
+      "Focus on removed versus still-visible data before export.",
+      "Avoid original payload inclusion and keep receiver claims minimal.",
+    ],
+    guidance: [
+      "This is the stronger export-facing minimum-disclosure preset for external sharing.",
+      "It records active rules and review emphasis directly in the package so the behavior stays inspectable.",
+    ],
+    limitations: [
+      "Aggressive reduction may remove useful chronology or debugging context.",
+      "This preset does not guarantee anonymity, authenticity, or completeness.",
     ],
   },
 };
@@ -315,6 +575,16 @@ export function buildSafeShareSanitizeConfig(presetId: SafeSharePresetId, policy
     rulesState: buildRulesState(preset.sanitizeRules),
     jsonAware: preset.jsonAware,
     customRules: [],
+  };
+}
+
+export function resolveSafeShareAnalysisRuleSets(
+  presetId: SafeSharePresetId,
+  override?: Record<Exclude<RedactionRuleSet, "general">, boolean>,
+) {
+  return {
+    ...getSafeSharePreset(presetId).analysisRuleSets,
+    ...(override ?? {}),
   };
 }
 
@@ -364,20 +634,51 @@ export async function createSafeShareTextWorkflowPackage(input: CreateSafeShareT
   const sanitize = applySanitizeRules(input.inputText, policy.rulesState, policy.customRules, policy.jsonAware);
   const findings = summarizeSanitizeFindings(sanitize.report);
   const classification = classifyTextForSafeShare(input.inputText);
+  const analysisRuleSets = resolveSafeShareAnalysisRuleSets(input.presetId, input.analysisRuleSets);
+  const structuredAnalysis = analyzeStructuredText(input.inputText, {
+    enabledRuleSets: analysisRuleSets,
+  });
+  const secretScan = scanSecrets(input.inputText);
+  const financialReview = analyzeFinancialIdentifiers(input.inputText, {
+    enabledRuleSets: analysisRuleSets,
+  });
   const includeSourceReference = input.includeSourceReference ?? preset.includeSourceReferenceDefault;
   const [inputHash, outputHash] = await Promise.all([
     hashText(input.inputText, "SHA-256"),
     hashText(sanitize.output, "SHA-256"),
   ]);
+  const structuredAnalysisSummary = {
+    countsByCategory: structuredAnalysis.countsByCategory,
+    countsByRuleSet: structuredAnalysis.countsByRuleSet,
+    total: structuredAnalysis.total,
+    financialFindings: financialReview.total,
+    secretFindings: secretScan.total,
+  };
+  const structuredAnalysisSummaryJson = JSON.stringify(structuredAnalysisSummary);
 
   const assistantReport = {
     mode: "text",
     workflowPreset: preset.id,
     classification,
     findings,
+    activeSanitizeRules: preset.sanitizeRules,
+    activeRegionRuleSets: analysisRuleSets,
+    reviewChecklistEmphasis: preset.reviewChecklistEmphasis,
     linesAffected: sanitize.linesAffected,
     appliedRules: sanitize.applied,
     protectAtExport: Boolean(input.protectAtExport),
+    structuredAnalysis,
+    financialReview: {
+      total: financialReview.total,
+      countsByCategory: financialReview.countsByCategory,
+      findings: financialReview.findings,
+      notes: financialReview.notes,
+    },
+    secretScan: {
+      total: secretScan.total,
+      byType: secretScan.byType,
+      notes: secretScan.notes,
+    },
   };
   const assistantReportHash = await hashText(JSON.stringify(assistantReport), "SHA-256");
 
@@ -397,6 +698,7 @@ export async function createSafeShareTextWorkflowPackage(input: CreateSafeShareT
     ...(includeSourceReference ? [input.sourceLabel ? `Original input reference (${input.sourceLabel})` : "Original input reference"] : []),
     "Shared output",
     "Sanitize policy snapshot",
+    "Structured analysis summary",
     "Safe Share report",
   ];
 
@@ -410,11 +712,63 @@ export async function createSafeShareTextWorkflowPackage(input: CreateSafeShareT
         `classification:${classification}`,
         `findings:${findings.length}`,
         `source-reference:${includeSourceReference ? "included" : "omitted"}`,
+        `active-rules:${preset.sanitizeRules.join(",")}`,
       ],
       metadata: {
         workflowPreset: preset.id,
+        reviewChecklistEmphasis: preset.reviewChecklistEmphasis.join(","),
       },
     },
+    {
+      id: "structured-analysis",
+      type: "text-analysis",
+      label: "Structured text analysis",
+      summary: `Local analysis grouped ${structuredAnalysis.total} finding${structuredAnalysis.total === 1 ? "" : "s"} across text categories.`,
+      applied: summarizeStructuredAnalysis(structuredAnalysis),
+      report: [
+        ...structuredAnalysis.regionGroups
+          .filter((group) => group.total > 0)
+          .map((group) => `${group.ruleSet}: ${group.total}`),
+        ...(secretScan.total > 0 ? [`likely secrets: ${secretScan.total}`] : []),
+      ],
+      metadata: {
+        enabledRegionRuleSets: Object.entries(analysisRuleSets)
+          .filter(([, enabled]) => enabled)
+          .map(([key]) => key)
+          .join(",") || "none",
+      },
+    },
+    {
+      id: "financial-review",
+      type: "financial-review",
+      label: "Financial identifier review",
+      summary: financialReview.total > 0
+        ? `${financialReview.total} financial identifier finding${financialReview.total === 1 ? "" : "s"} were reviewed locally before sharing.`
+        : "No financial identifier findings were detected in the reviewed text.",
+      applied: Object.entries(financialReview.countsByCategory)
+        .filter(([, count]) => count > 0)
+        .map(([category, count]) => `${category}: ${count}`),
+      report: summarizeFinancialReview(financialReview),
+      metadata: {
+        patternBasedLabels: financialReview.findings
+          .filter((finding) => finding.detectionKind === "pattern-based")
+          .map((finding) => finding.label)
+          .join(",") || "none",
+      },
+    },
+    ...(secretScan.total > 0
+      ? [{
+          id: "secret-scan",
+          type: "secret-scan",
+          label: "Secret scan",
+          summary: `${secretScan.total} pattern-based / likely secret finding${secretScan.total === 1 ? "" : "s"} detected locally before sharing.`,
+          applied: Object.entries(secretScan.byType).map(([label, count]) => `${label}: ${count}`),
+          report: summarizeSecretFindings(secretScan.findings),
+          metadata: {
+            heuristicCandidatesIncluded: "yes",
+          },
+        }]
+      : []),
     {
       id: "sanitize-transform",
       type: "sanitize",
@@ -444,13 +798,20 @@ export async function createSafeShareTextWorkflowPackage(input: CreateSafeShareT
       highlights: [
         `Share class: ${formatShareClassLabel(classification)}`,
         `Applied rules: ${sanitize.applied.length}`,
+        `Region detectors: ${Object.entries(analysisRuleSets).filter(([, enabled]) => enabled).map(([key]) => key).join(", ") || "none"}`,
         `Protection: ${input.protectAtExport ? "NULLID:ENC:1 at export" : "none"}`,
       ],
     },
     report: {
       purpose: `Prepare text content for ${preset.label.toLowerCase()}.`,
       includedArtifacts: includedLabels,
-      transformedArtifacts: ["Sanitize review", "Sanitize transformation"],
+      transformedArtifacts: [
+        "Safe Share review",
+        "Structured text analysis",
+        "Financial identifier review",
+        ...(secretScan.total > 0 ? ["Secret scan"] : []),
+        "Sanitize transformation",
+      ],
       preservedArtifacts: includeSourceReference ? ["Original input reference only"] : [],
       receiverCanVerify: [
         "Workflow package structure and schema version.",
@@ -499,6 +860,17 @@ export async function createSafeShareTextWorkflowPackage(input: CreateSafeShareT
         json: policy,
       },
       {
+        id: "structured-analysis-summary",
+        role: "report",
+        label: "Structured analysis summary",
+        kind: "json",
+        mediaType: "application/json",
+        included: true,
+        bytes: new TextEncoder().encode(structuredAnalysisSummaryJson).byteLength,
+        sha256: (await hashText(structuredAnalysisSummaryJson, "SHA-256")).hex,
+        json: structuredAnalysisSummary,
+      },
+      {
         id: "safe-share-report",
         role: "report",
         label: "Safe Share report",
@@ -526,6 +898,7 @@ export async function createSafeShareTextWorkflowPackage(input: CreateSafeShareT
 export async function createSafeShareFileWorkflowPackage(input: CreateSafeShareFilePackageInput): Promise<WorkflowPackage> {
   const preset = getSafeSharePreset(input.presetId);
   const classification = classifyMetadataAnalysisForSafeShare(input.analysis);
+  const pathPrivacy = analyzePathPrivacy(input.fileName);
   const includeSourceReference = input.includeSourceReference ?? preset.includeSourceReferenceDefault;
   const sourceHash = await hashBytes(input.sourceBytes, "SHA-256");
   const shouldUseCleaned = Boolean(input.applyMetadataClean) && Boolean(input.cleanedBytes?.length);
@@ -549,6 +922,9 @@ export async function createSafeShareFileWorkflowPackage(input: CreateSafeShareF
     signals: input.analysis.signals,
     guidance: input.analysis.guidance,
     commandHint: input.analysis.commandHint,
+    activeSanitizeRules: preset.sanitizeRules,
+    reviewChecklistEmphasis: preset.reviewChecklistEmphasis,
+    pathPrivacy,
     protectAtExport: Boolean(input.protectAtExport),
     binaryIncluded: Boolean(sharedBytes),
     cleaned: shouldUseCleaned,
@@ -592,9 +968,11 @@ export async function createSafeShareFileWorkflowPackage(input: CreateSafeShareF
         `classification:${classification}`,
         `risk:${input.analysis.risk}`,
         `binary-included:${sharedBytes ? "yes" : "no"}`,
+        `active-rules:${preset.sanitizeRules.join(",")}`,
       ],
       metadata: {
         workflowPreset: preset.id,
+        reviewChecklistEmphasis: preset.reviewChecklistEmphasis.join(","),
       },
     },
     {
@@ -602,6 +980,7 @@ export async function createSafeShareFileWorkflowPackage(input: CreateSafeShareF
       type: "metadata",
       label: "Metadata analysis",
       summary: `${input.analysis.format} analyzed locally with ${input.analysis.signals.length} metadata signal${input.analysis.signals.length === 1 ? "" : "s"}.`,
+      applied: input.analysis.fields.map((field) => field.key),
       report: input.analysis.signals.map((signal) => `${signal.label}: ${signal.detail}`),
       metadata: {
         recommendedSanitizer: input.analysis.recommendedSanitizer,
@@ -609,16 +988,31 @@ export async function createSafeShareFileWorkflowPackage(input: CreateSafeShareF
       },
     },
     ...(shouldUseCleaned
-      ? [{
-          id: "metadata-clean",
-          type: "metadata-clean",
-          label: "Metadata cleanup",
-          summary: "Local cleanup was applied before packaging the shareable file artifact.",
-          metadata: {
-            outputMediaType: input.cleanedMediaType || input.fileMediaType,
-          },
-        }]
+        ? [{
+            id: "metadata-clean",
+            type: "metadata-clean",
+            label: "Metadata cleanup",
+            summary: "Local cleanup was applied before packaging the shareable file artifact.",
+            applied: input.analysis.removable,
+            report: input.analysis.cannotGuarantee,
+            metadata: {
+              outputMediaType: input.cleanedMediaType || input.fileMediaType,
+            },
+          }]
       : []),
+    {
+      id: "filename-privacy",
+      type: "path-privacy",
+      label: "Filename / path privacy",
+      summary: pathPrivacy.total > 0
+        ? `${pathPrivacy.total} filename/path privacy hint${pathPrivacy.total === 1 ? "" : "s"} were generated locally before export.`
+        : "No filename/path privacy hints were generated from the current file label.",
+      applied: pathPrivacy.suggestions.flatMap((suggestion) => suggestion.replacements.map((replacement) => `${replacement.segment} -> ${replacement.replacement}`)),
+      report: summarizePathPrivacy(pathPrivacy),
+      metadata: {
+        normalizedPath: pathPrivacy.normalizedPath,
+      },
+    },
   ];
 
   return createWorkflowPackage({
@@ -637,6 +1031,7 @@ export async function createSafeShareFileWorkflowPackage(input: CreateSafeShareF
       highlights: [
         `Share class: ${formatShareClassLabel(classification)}`,
         `Metadata risk: ${input.analysis.risk}`,
+        `Filename hints: ${pathPrivacy.total}`,
         `Protection: ${input.protectAtExport ? "NULLID:ENC:1 at export" : "none"}`,
       ],
     },
@@ -647,6 +1042,7 @@ export async function createSafeShareFileWorkflowPackage(input: CreateSafeShareF
         "Safe Share review",
         "Metadata analysis",
         ...(shouldUseCleaned ? ["Metadata cleanup"] : []),
+        "Filename / path privacy",
       ],
       preservedArtifacts,
       receiverCanVerify: [

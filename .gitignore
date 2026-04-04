@@ -1,6 +1,12 @@
 # macOS Finder noise
 .DS_Store
 **/.DS_Store
+.AppleDouble
+._*
+
+# Windows Explorer noise
+Thumbs.db
+Desktop.ini
 
 # Logs
 logs

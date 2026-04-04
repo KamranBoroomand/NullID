@@ -1,6 +1,6 @@
 # NullID Release Readiness
 
-Last updated: 2026-04-01
+Last updated: 2026-04-04
 
 This document tracks what is already at release-candidate quality and what is still missing before a production GA cut.
 
@@ -26,17 +26,18 @@ This document tracks what is already at release-candidate quality and what is st
 - Security and release checks:
   - Replaced regex-only offline-policy lint with AST-based source scanning.
   - Hardened security-header audit to strict directive/value checks.
+  - Standard browser validation now runs through the default `npm run e2e` Playwright path, with the same config also backing `npm run test:visual`.
   - Visual snapshots updated for intentional UI changes.
 
 ## Quality Gate Status
 
-Latest local validation run (`npm run validate`) passed end-to-end on 2026-04-01:
+Latest local validation run (`npm run validate`) passed end-to-end on 2026-04-04:
 
 - `typecheck` passed
 - `i18n:check` passed
 - `lint` passed
-- `test` passed (141/141)
-- `e2e` passed (29/29)
+- `test` passed (164/164)
+- `e2e` passed (36/36)
 - `build` passed
 - `verify:build` passed
 

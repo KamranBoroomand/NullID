@@ -101,10 +101,79 @@ test("redaction module applies masking for detected values", async ({ page }) =>
   await openApp(page);
   await page.getByRole("button", { name: /Text Redaction/i }).click();
   await page.getByRole("textbox", { name: "Redaction input" }).fill("Reach me at alice@example.com token abcdefghijklmnopqrstuvwxyz1234");
+  await expect(page.getByLabel("Replacement preview")).toContainText("alice@example.com");
+  await expect(page.getByLabel("Replacement preview")).toContainText("[email]");
   await page.getByRole("button", { name: /apply redaction/i }).click();
   const output = page.getByLabel("Redacted output");
-  await expect(output).toContainText("[Email]");
-  await expect(output).toContainText("[Bearer / token]");
+  await expect(output).toHaveValue(/\[email\]/i);
+  await expect(output).toHaveValue(/\[token\]|\[bearer/i);
+});
+
+test("secret scanner flags likely secrets with reasons", async ({ page }) => {
+  await openApp(page);
+  await page.getByRole("button", { name: /Secret Scanner/i }).click();
+  await page.getByRole("textbox", { name: "Secret scanner input" }).fill("Authorization: Bearer abcdefghijklmnopqrstuvwxyz123456 github_pat_1234567890_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef");
+  const findingsRegion = page.getByRole("region", { name: /Secret findings/i });
+  await expect(findingsRegion).toContainText("Bearer token");
+  await expect(findingsRegion).toContainText("GitHub token");
+  const reportDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: /export scan report/i }).click();
+  const report = await reportDownload;
+  const reportPath = await report.path();
+  expect(reportPath).not.toBeNull();
+  const payload = JSON.parse(fs.readFileSync(reportPath!, "utf8")) as Record<string, unknown>;
+  expect(payload.kind).toBe("nullid-secret-scan-report");
+  expect(Array.isArray(payload.sections)).toBeTruthy();
+  await page.getByRole("button", { name: /apply redaction/i }).click();
+  await expect(page.getByLabel("Secret scanner redacted output")).toHaveValue(/bearer-token/i);
+});
+
+test("structured analyzer groups findings and can hand them to redaction", async ({ page }) => {
+  await openApp(page);
+  await page.getByRole("button", { name: /Structured Analyzer/i }).click();
+  await page.getByRole("checkbox", { name: /Iran \/ Persian rules/i }).check();
+  await page.getByRole("checkbox", { name: /Russia rules/i }).check();
+  await page.getByRole("textbox", { name: "Structured analyzer input" }).fill("alice@example.com called شماره کارت: ۶۰۳۷-۹۹۷۳-۹۱۸۹-۸۰۸۸ Телефон: 8 (912) 345 67 89 and shared https://nullid.local token=ABCDEFGHIJKLMNOPQRSTUV123456");
+  await expect(page.getByLabel(/Emails findings/i)).toContainText("Email");
+  await expect(page.getByLabel(/Financial identifiers findings/i)).toContainText("Iran bank card");
+  await expect(page.getByLabel(/Likely secrets findings/i)).toContainText("Credential-like assignment");
+  await expect(page.getByLabel(/Iran \/ Persian rules summary/i)).toContainText("6037-9973-9189-8088");
+  await expect(page.getByLabel(/Russia rules summary/i)).toContainText("+7 912 345-67-89");
+  await page.getByRole("button", { name: /send to redaction/i }).click();
+  await expect(page.getByRole("button", { name: /Text Redaction/i })).toHaveAttribute("aria-current", "true");
+  await expect(page.getByLabel("Redacted output")).toHaveValue(/\[email\]/i);
+});
+
+test("financial review detects Iranian banking identifiers and exports a report", async ({ page }) => {
+  await openApp(page);
+  await page.getByRole("button", { name: /Financial Review/i }).click();
+  await page.getByRole("checkbox", { name: /Iran \/ Persian rules/i }).check();
+  await page.getByRole("textbox", { name: "Financial review input" }).fill("شماره کارت: ۶۰۳۷-۹۹۷۳-۹۱۸۹-۸۰۸۸ شبا IR۸۲۰۵۴۰۱۰۲۶۸۰۰۲۰۸۱۷۹۰۹۰۰۲");
+  await expect(page.getByRole("table")).toContainText("Iran bank card");
+  const reportDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: /export review report/i }).click();
+  const report = await reportDownload;
+  const reportPath = await report.path();
+  expect(reportPath).not.toBeNull();
+  const payload = JSON.parse(fs.readFileSync(reportPath!, "utf8")) as Record<string, unknown>;
+  expect(payload.kind).toBe("nullid-financial-review-report");
+  await page.getByRole("button", { name: /apply redaction/i }).click();
+  await expect(page.getByLabel("Financial review redacted output")).toHaveValue(/\[iran-card\]|\[financial-card\]/i);
+});
+
+test("filename privacy analyzer flags sensitive path segments and exports a report", async ({ page }) => {
+  await openApp(page);
+  await page.getByRole("button", { name: /Filename Privacy/i }).click();
+  await page.getByRole("textbox", { name: "Filename / path privacy input" }).fill("/Users/alice/projects/zephyr/incident-4432/customer-cards.csv");
+  await expect(page.getByText("Username in path")).toBeVisible();
+  await expect(page.getByText("Case / ticket ID in filename/path")).toBeVisible();
+  const reportDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: /export review report/i }).click();
+  const report = await reportDownload;
+  const reportPath = await report.path();
+  expect(reportPath).not.toBeNull();
+  const payload = JSON.parse(fs.readFileSync(reportPath!, "utf8")) as Record<string, unknown>;
+  expect(payload.kind).toBe("nullid-path-privacy-report");
 });
 
 test("metadata module flags HEIC inputs as unsupported with remediation text", async ({ page }) => {
@@ -157,8 +226,60 @@ test("verify package surface inspects a received safe-share bundle honestly", as
 
   await expect(page.getByLabel("Safe-share bundle").first()).toBeVisible();
   await expect(page.getByLabel("Integrity checked").first()).toBeVisible();
-  await expect(page.getByText("Sender identity is not asserted by this package format.")).toBeVisible();
+  await expect(page.getByText("Sender identity is not asserted by this package format.").first()).toBeVisible();
+  await expect(page.getByText("What is declared only")).toBeVisible();
+  await expect(page.getByText("What to review manually")).toBeVisible();
+  await expect(page.getByRole("button", { name: /export checklist json/i })).toBeVisible();
   await expect(page.getByLabel("Reported transforms").getByText("Sanitize transformation")).toBeVisible();
+});
+
+test("metadata module compares archive contents and exports a comparison report", async ({ page }) => {
+  await openApp(page);
+  await page.getByRole("button", { name: /Metadata Inspector/i }).click();
+  const advancedDropzone = page.getByRole("button", { name: /Drop file for advanced metadata analysis/i });
+  const zipInput = advancedDropzone.locator('input[type="file"]');
+  const archiveBuffer = createStoredZip([
+    { name: "docs/readme.txt", content: Buffer.from("hello archive") },
+    { name: "data/report.json", content: Buffer.from("{\"ok\":true}") },
+  ]);
+  await zipInput.setInputFiles({
+    name: "sample.zip",
+    mimeType: "application/zip",
+    buffer: archiveBuffer,
+  });
+  await expect(page.getByText("sample.zip").first()).toBeVisible();
+  await expect(page.getByText("Archive contents")).toBeVisible();
+
+  const manifestInput = page.locator('input[type="file"][accept="application/json,.json"]');
+  const manifest = {
+    kind: "nullid-archive-manifest",
+    files: [
+      { path: "docs/readme.txt", sha256: "1612156f640b4c019a738d4857bb1f2d08cb9c75a359e15d13f6f89ba16f7c83" },
+      { path: "missing.txt", sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+    ],
+  };
+  await manifestInput.setInputFiles({
+    name: "manifest.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(manifest)),
+  });
+  const comparisonGroups = page.locator(".note-box").filter({ has: page.getByText("Archive comparison groups", { exact: true }) });
+  await expect(comparisonGroups).toBeVisible();
+  await expect(comparisonGroups.getByText("Matched", { exact: true })).toBeVisible();
+  await expect(comparisonGroups.getByText("Hash mismatch", { exact: true })).toBeVisible();
+  await expect(page.getByText(/missing\.txt: missing from archive/i)).toBeVisible();
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: /download analysis report/i }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toContain("archive-comparison-report");
+  const filePath = await download.path();
+  expect(filePath).not.toBeNull();
+  const report = JSON.parse(fs.readFileSync(filePath!, "utf8")) as Record<string, unknown>;
+  const archiveComparison = report.archiveComparison as Record<string, unknown>;
+  const groups = archiveComparison.groups as Record<string, unknown>;
+  expect(Array.isArray(groups.missing)).toBeTruthy();
+  expect(Array.isArray(groups.extra)).toBeTruthy();
 });
 
 test("safe share assistant exports a receiver-friendly workflow package", async ({ page }) => {
@@ -181,6 +302,7 @@ test("safe share assistant exports a receiver-friendly workflow package", async 
   expect(payload.workflowType).toBe("safe-share-assistant");
   expect(workflowPreset.id).toBe("support-ticket");
   expect(packageSignature.method).toBe("none");
+  await expect(page.getByText("Workflow review dashboard")).toBeVisible();
 
   await page.getByRole("button", { name: /Verify Package/i }).click();
   await page.getByLabel("Verification input").fill(fs.readFileSync(filePath!, "utf8"));
@@ -189,6 +311,21 @@ test("safe share assistant exports a receiver-friendly workflow package", async 
   await expect(page.getByLabel("Workflow package").first()).toBeVisible();
   await expect(page.getByLabel("Integrity checked").first()).toBeVisible();
   await expect(page.getByRole("cell", { name: "Support ticket / bug report", exact: true })).toBeVisible();
+});
+
+test("safe share file mode surfaces filename privacy hints before export", async ({ page }) => {
+  await openApp(page);
+  await page.getByRole("button", { name: /Safe Share/i }).click();
+  await page.getByRole("button", { name: /^file$/i }).click();
+  const fileInput = page.locator('input[aria-label="Safe share file"]');
+  await fileInput.setInputFiles({
+    name: "employee-12345-incident-4432.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("sample"),
+  });
+  await expect(page.getByText("Filename / path privacy")).toBeVisible();
+  await expect(page.getByText("Employee ID in filename/path")).toBeVisible();
+  await expect(page.getByText("Case / ticket ID in filename/path")).toBeVisible();
 });
 
 test("incident workflow exports a receiver-friendly incident package", async ({ page }) => {
@@ -203,6 +340,7 @@ test("incident workflow exports a receiver-friendly incident package", async ({ 
   await page.getByRole("button", { name: /^add text artifact$/i }).click();
 
   await expect(page.getByText(/Incident Workflow export with case context, prepared artifacts, and receiver-facing reporting\./i)).toBeVisible();
+  await expect(page.getByText("Workflow review dashboard")).toBeVisible();
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: /^export package$/i }).click();
   const download = await downloadPromise;
@@ -228,6 +366,35 @@ test("incident workflow exports a receiver-friendly incident package", async ({ 
   await expect(page.getByLabel("Integrity checked").first()).toBeVisible();
   await expect(page.getByRole("cell", { name: "Incident handoff", exact: true })).toBeVisible();
   await expect(page.getByLabel("Reported transforms").getByText("Incident workflow assembly")).toBeVisible();
+});
+
+test("batch review workspace can route selected items into workflows", async ({ page }) => {
+  await openApp(page);
+  await page.getByRole("button", { name: /Batch Review/i }).click();
+  await page.getByRole("checkbox", { name: /Iran \/ Persian rules/i }).check();
+  await page.getByLabel("Batch text label").fill("batch-snippet.txt");
+  await page.getByLabel("Batch text input").fill("alice@example.com شماره کارت: ۶۰۳۷-۹۹۷۳-۹۱۸۹-۸۰۸۸ token=abcdefghijklmnopqrstuvwxyz12345");
+  await page.getByRole("button", { name: /add text item/i }).click();
+  await expect(page.getByText("batch-snippet.txt", { exact: true }).first()).toBeVisible();
+  const reportDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: /export batch report/i }).click();
+  const report = await reportDownload;
+  const reportPath = await report.path();
+  expect(reportPath).not.toBeNull();
+  const payload = JSON.parse(fs.readFileSync(reportPath!, "utf8")) as Record<string, unknown>;
+  expect(payload.kind).toBe("nullid-batch-review-report");
+  const checklistDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: /export checklist json/i }).click();
+  const checklist = await checklistDownload;
+  const checklistPath = await checklist.path();
+  expect(checklistPath).not.toBeNull();
+  const checklistPayload = JSON.parse(fs.readFileSync(checklistPath!, "utf8")) as Record<string, unknown>;
+  expect(checklistPayload.kind).toBe("nullid-review-checklist");
+  expect(JSON.stringify(checklistPayload)).toContain("Region-specific identifiers detected");
+  await page.getByLabel(/select batch-snippet\.txt/i).check();
+  await page.getByRole("button", { name: /send selected to safe share/i }).click();
+  await expect(page.getByRole("button", { name: /Safe Share/i })).toHaveAttribute("aria-current", "true");
+  await expect(page.getByLabel("Safe share input text")).toHaveValue(/alice@example\.com/);
 });
 
 test("sanitize module batch-processes local files", async ({ page }) => {
@@ -259,6 +426,62 @@ test("mobile navigation scrolls and allows selection", async ({ browser }) => {
   await expect(page.getByText("Encrypt").first()).toBeVisible();
   await context.close();
 });
+
+function createStoredZip(entries: Array<{ name: string; content: Buffer }>) {
+  const localParts: Uint8Array[] = [];
+  const centralParts: Uint8Array[] = [];
+  let offset = 0;
+
+  entries.forEach((entry) => {
+    const name = Buffer.from(entry.name, "utf8");
+    const size = entry.content.length;
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(0, 6);
+    local.writeUInt16LE(0, 8);
+    local.writeUInt32LE(0, 10);
+    local.writeUInt32LE(0, 14);
+    local.writeUInt32LE(size, 18);
+    local.writeUInt32LE(size, 22);
+    local.writeUInt16LE(name.length, 26);
+    local.writeUInt16LE(0, 28);
+    localParts.push(local, name, entry.content);
+
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt16LE(0, 8);
+    central.writeUInt16LE(0, 10);
+    central.writeUInt32LE(0, 12);
+    central.writeUInt32LE(0, 16);
+    central.writeUInt32LE(size, 20);
+    central.writeUInt32LE(size, 24);
+    central.writeUInt16LE(name.length, 28);
+    central.writeUInt16LE(0, 30);
+    central.writeUInt16LE(0, 32);
+    central.writeUInt16LE(0, 34);
+    central.writeUInt16LE(0, 36);
+    central.writeUInt32LE(0, 38);
+    central.writeUInt32LE(offset, 42);
+    centralParts.push(central, name);
+
+    offset += local.length + name.length + entry.content.length;
+  });
+
+  const centralDirectory = Buffer.concat(centralParts.map((part) => Buffer.from(part)));
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(0, 4);
+  eocd.writeUInt16LE(0, 6);
+  eocd.writeUInt16LE(entries.length, 8);
+  eocd.writeUInt16LE(entries.length, 10);
+  eocd.writeUInt32LE(centralDirectory.length, 12);
+  eocd.writeUInt32LE(offset, 16);
+  eocd.writeUInt16LE(0, 20);
+  return Buffer.concat([...localParts.map((part) => Buffer.from(part)), centralDirectory, eocd]);
+}
 
 test("mobile secure notes flow supports create and render", async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 375, height: 812 } });

@@ -68,6 +68,27 @@ export const guideTools: GuideToolContent[] = [
     ],
   },
   {
+    key: "batch",
+    title: "Batch Review Workspace",
+    whatItDoes:
+      "Collect multiple text entries and files into one local review session, summarize findings per item, and hand selected items into sharing workflows only after review.",
+    whatWhen: [
+      "Review a mixed set of notes, logs, screenshots, archives, and office files in one sitting before controlled sharing",
+      "Build a sender/receiver checklist from actual local analysis instead of generic reminders",
+    ],
+    howSteps: [
+      "Add pasted text entries or local files into the session.",
+      "Review per-item findings, metadata, redaction preview availability, and likely-secret summaries.",
+      "Reorder or remove items until the session reflects what you actually want to hand off.",
+      "Export a batch report or checklist, then send selected items into Safe Share or Incident Workflow.",
+    ],
+    limits: [
+      "Batch review keeps all analysis local, but it does not prove completeness or sender identity.",
+      "Optional regional detectors remain conservative and can still false-positive.",
+      "Safe Share accepts one selected item at a time so the resulting package stays explicit.",
+    ],
+  },
+  {
     key: "share",
     title: "Safe Share Assistant",
     whatItDoes:
@@ -111,6 +132,90 @@ export const guideTools: GuideToolContent[] = [
       "NULLID:ENC:1 only protects the exported file at rest/in transit for parties with the passphrase; it is not a sender signature.",
       "Some file formats still require external offline cleanup before they are safe for broader sharing.",
       "This workflow improves discipline and explainability, not legal/forensic chain-of-custody guarantees.",
+    ],
+  },
+  {
+    key: "secret",
+    title: "Secret Scanner",
+    whatItDoes:
+      "Pattern-based local scanner for likely secrets such as JWTs, bearer tokens, private-key blocks, GitHub/Slack/AWS-style tokens, credential-like assignments, and high-entropy candidates.",
+    whatWhen: [
+      "Check pasted config, logs, headers, or snippets for likely secrets before sharing",
+      "Export a local report that explains why a token was flagged without sending content anywhere",
+    ],
+    howSteps: [
+      "Paste text or load a local text file.",
+      "Review finding type, confidence, evidence mode, and reason for each match.",
+      "Apply redaction locally or send the exact findings into :redact for broader editing control.",
+      "Export a scan report if you need a local review artifact.",
+    ],
+    limits: [
+      "This tool reports pattern-based / likely secret findings only; it does not prove a token is active or valid.",
+      "Heuristic high-entropy candidates are useful for review but have a higher false-positive rate.",
+      "The default report avoids full token dumps, but the input itself remains in your current local session until you clear it.",
+    ],
+  },
+  {
+    key: "analyze",
+    title: "Structured Analyzer",
+    whatItDoes:
+      "Groups local text findings into emails, phones, URLs, IDs, likely secrets, and optional regional Iran/Russia patterns, then lets you export a clean version or analysis report.",
+    whatWhen: [
+      "Review sensitive text systematically before redaction or controlled sharing",
+      "Summarize what kinds of sensitive content appear in a pasted message, export, or transcript without network calls",
+    ],
+    howSteps: [
+      "Paste text or load a local text file.",
+      "Enable optional Iran/Persian or Russia rule sets only when they fit the material you are reviewing.",
+      "Review grouped findings by category and the separate regional summaries.",
+      "Export clean text directly or send the exact findings into :redact for a fuller edit/review pass.",
+    ],
+    limits: [
+      "Grouped counts help triage content, but they do not prove completeness or correctness.",
+      "Optional regional detectors are conservative and still need human review for false positives.",
+      "Secrets/tokens may be heuristic findings; treat them as leads for review rather than cryptographic certainty.",
+    ],
+  },
+  {
+    key: "finance",
+    title: "Financial Identifier Review",
+    whatItDoes:
+      "Locally reviews bank-card numbers, IBAN/Sheba identifiers, account-like numbers, and invoice/reference-style numeric labels, then offers exportable findings and redaction preview.",
+    whatWhen: [
+      "Review payment-related text before sharing with internal or external recipients",
+      "Check whether pasted invoices, payment notes, or support logs expose banking identifiers",
+    ],
+    howSteps: [
+      "Paste text or load a local text file.",
+      "Optionally enable Iran/Persian or Russia rules when they fit the material.",
+      "Review pattern-based versus likely findings, then preview redaction locally.",
+      "Export the review report or hand the exact matches into :redact.",
+    ],
+    limits: [
+      "Pattern-based matches still do not prove a card, IBAN, or account is active or correctly attributed.",
+      "Account/reference findings are context-driven and more false-positive prone than checksum-backed card/IBAN matches.",
+      "This tool helps review and redaction; it does not validate ownership, balances, or payment status.",
+    ],
+  },
+  {
+    key: "paths",
+    title: "Filename / Path Privacy",
+    whatItDoes:
+      "Reviews filenames and pasted paths for likely personal names, employee IDs, case/ticket IDs, project labels, usernames, and hostnames, then suggests preview-only safe renames.",
+    whatWhen: [
+      "Check whether file labels themselves leak identity or internal context before export",
+      "Prepare a safer filename/path naming convention without silently renaming anything",
+    ],
+    howSteps: [
+      "Paste one filename or path per line.",
+      "Review which segments were flagged and why they may be sensitive.",
+      "Compare the preview rename suggestion with the original label.",
+      "Apply your own manual rename only after review; NullID does not rename files automatically here.",
+    ],
+    limits: [
+      "Path findings are conservative hints, not proof that a segment is truly sensitive in context.",
+      "Browser file pickers usually expose only the filename, so deeper path review may require pasting the path manually.",
+      "Suggested replacements are previews only and are never auto-applied.",
     ],
   },
   {

@@ -5,6 +5,7 @@ import {
   createIncidentTextArtifactPackage,
   createIncidentWorkflowPackage,
 } from "../utils/incidentWorkflow.js";
+import type { MetadataAnalysisResult } from "../utils/metadataAdvanced.js";
 import { verifyWorkflowPackagePayload } from "../utils/workflowPackage.js";
 
 const producer = {
@@ -31,7 +32,7 @@ describe("incident workflow", () => {
       fileName: "capture.mp4",
       fileMediaType: "video/mp4",
       sourceBytes: new Uint8Array([0xde, 0xad, 0xbe, 0xef, 0x00, 0x01, 0x02, 0x03]),
-      analysis: {
+      analysis: makeMetadataAnalysis({
         format: "mp4",
         kind: "video",
         risk: "medium",
@@ -40,7 +41,10 @@ describe("incident workflow", () => {
         recommendedSanitizer: "mat2",
         commandHint: "ffmpeg -i capture.mp4 -map_metadata -1 -c copy capture-clean.mp4",
         guidance: ["Use ffmpeg locally to strip metadata before wider distribution."],
-      },
+        remainingTraces: ["Frame content, subtitle tracks, and burned-in overlays remain outside metadata cleanup."],
+        removable: ["Container metadata atoms and common creation/location tags through external offline tools such as ffmpeg."],
+        cannotGuarantee: ["Frame content, burned-in overlays, and subtitle tracks are outside metadata-only cleanup guarantees."],
+      }),
       applyMetadataClean: false,
       includeSourceReference: true,
       protectAtExport: false,
@@ -114,3 +118,20 @@ describe("incident workflow", () => {
     assert.match(workflowPackage.summary.title, /External share \/ minimum disclosure package/i);
   });
 });
+
+function makeMetadataAnalysis(
+  input: Omit<MetadataAnalysisResult, "unsupportedCleanup" | "reviewRecommendations" | "metadataFound" | "reviewSections">,
+): MetadataAnalysisResult {
+  return {
+    ...input,
+    unsupportedCleanup: [],
+    reviewRecommendations: [...input.guidance],
+    metadataFound: input.signals.map((signal) => `${signal.label}: ${signal.detail}`),
+    reviewSections: [
+      { id: "metadata-found", label: "Metadata found", items: input.signals.map((signal) => `${signal.label}: ${signal.detail}`) },
+      { id: "removable-locally", label: "Removable locally", items: input.removable },
+      { id: "remaining-traces", label: "Remaining traces", items: input.remainingTraces },
+      { id: "review-recommendations", label: "Review recommendations", items: input.guidance },
+    ],
+  };
+}

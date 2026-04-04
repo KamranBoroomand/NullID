@@ -4,6 +4,8 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 import os from "node:os";
+import zlib from "node:zlib";
+import readline from "node:readline/promises";
 
 const ENVELOPE_PREFIX = "NULLID:ENC:1";
 const ENVELOPE_AAD = Buffer.from("nullid:enc:v1", "utf8");
@@ -149,6 +151,12 @@ async function main() {
       return;
     case "archive-sanitize":
       runArchiveSanitize(args);
+      return;
+    case "archive-inspect":
+      runArchiveInspect(args);
+      return;
+    case "wizard":
+      await runWorkflowWizard(args);
       return;
     case "precommit":
       runPrecommit(args);
@@ -459,7 +467,7 @@ function runRedact(argv) {
   const outputPath = argv[1];
   if (!inputPath || !outputPath) {
     throw new Error(
-      "Usage: redact <input-file> <output-file> [--mode full|partial] [--detectors email,phone,token,ip,id,iban,card,ipv6,awskey,awssecret,github,slack,privatekey]",
+      "Usage: redact <input-file> <output-file> [--mode full|partial] [--detectors email,phone,url,token,ip,ssn,uuid,generic-id-context,iban,card,ipv6,awskey,awssecret,github,slack,privatekey,iran-id,iran-phone,persian-name,ru-phone,ru-inn,ru-snils] [--rule-sets iran,russia]",
     );
   }
 
@@ -470,15 +478,34 @@ function runRedact(argv) {
   }
 
   const detectors = buildRedactDetectors();
+  const ruleSets = new Set(
+    (getOption(argv, "--rule-sets") || "")
+      .split(",")
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean),
+  );
   const selectedKeys = (getOption(argv, "--detectors") || "")
     .split(",")
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean);
-  const selected = selectedKeys.length > 0 ? detectors.filter((detector) => selectedKeys.includes(detector.key)) : detectors;
+  const selected = detectors.filter((detector) => {
+    if (detector.ruleSet !== "general" && !ruleSets.has(detector.ruleSet)) return false;
+    return selectedKeys.length > 0 ? selectedKeys.includes(detector.key) : true;
+  });
 
   const findings = scanRedaction(text, selected);
   const output = applyRedaction(text, findings.matches, mode);
   fs.writeFileSync(path.resolve(outputPath), output, "utf8");
+  const changes = findings.matches.map((match) => ({
+    key: match.key,
+    label: match.label,
+    severity: match.severity,
+    ruleSet: match.ruleSet,
+    start: match.start,
+    end: match.end,
+    original: text.slice(match.start, match.end),
+    replacement: mode === "full" ? match.mask : partialMask(text.slice(match.start, match.end)),
+  }));
 
   console.log(
     JSON.stringify(
@@ -486,10 +513,12 @@ function runRedact(argv) {
         input: inputPath,
         output: outputPath,
         mode,
+        enabledRuleSets: Array.from(ruleSets),
         enabledDetectors: selected.map((detector) => detector.key),
         findingCount: findings.total,
         severity: findings.overall,
         byType: findings.counts,
+        changes,
       },
       null,
       2,
@@ -994,6 +1023,349 @@ function runArchiveSanitize(argv) {
   );
 }
 
+function runArchiveInspect(argv) {
+  const inputPath = argv[0];
+  if (!inputPath) {
+    throw new Error("Usage: archive-inspect <input.zip> [--manifest <json-file>] [--output <report-json>]");
+  }
+
+  const fullInput = path.resolve(inputPath);
+  const bytes = fs.readFileSync(fullInput);
+  const inspection = inspectZipArchiveCli(bytes);
+  const manifestPath = getOption(argv, "--manifest");
+  const manifestEntries = manifestPath ? parseArchiveReferenceDocumentCli(fs.readFileSync(path.resolve(manifestPath), "utf8")) : [];
+  const verification = manifestEntries.length > 0 ? verifyArchiveInspectionCli(inspection, manifestEntries) : null;
+  const payload = {
+    schemaVersion: 1,
+    kind: "nullid-archive-report",
+    createdAt: new Date().toISOString(),
+    file: path.basename(fullInput),
+    inspection,
+    manifest: manifestEntries.length > 0 ? {
+      file: manifestPath,
+      entries: manifestEntries,
+    } : null,
+    verification,
+  };
+
+  const reportPath = getOption(argv, "--output");
+  if (reportPath) {
+    fs.writeFileSync(path.resolve(reportPath), `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+  }
+
+  console.log(JSON.stringify(payload, null, 2));
+}
+
+async function runWorkflowWizard(argv) {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  try {
+    const workflowOptions = [
+      { key: "1", label: "Sanitize safe-share", value: "sanitize-safe-share" },
+      { key: "2", label: "General safe share", value: "general-safe-share" },
+      { key: "3", label: "Support ticket / bug report", value: "support-ticket" },
+      { key: "4", label: "Internal investigation package", value: "internal-investigation" },
+      { key: "5", label: "Incident artifact handoff", value: "incident-handoff" },
+      { key: "6", label: "Evidence archive / preserve context", value: "evidence-archive" },
+    ];
+    const inputModeOptions = [
+      { key: "1", label: "Paste text", value: "text" },
+      { key: "2", label: "Load file", value: "file" },
+    ];
+    const workflowChoice = getOption(argv, "--workflow")
+      || await promptChoice(rl, "Select workflow", workflowOptions, "1");
+    const mode = getOption(argv, "--input-mode")
+      || await promptChoice(rl, "Add input as", inputModeOptions, "1");
+    const preset = getOption(argv, "--preset") || await promptText(rl, "Sanitize preset [nginx]", "nginx");
+
+    let inputPath = "";
+    let inputText = "";
+    if (mode === "file") {
+      inputPath = path.resolve(getOption(argv, "--file") || await promptRequiredText(rl, "Input file path"));
+      inputText = fs.readFileSync(inputPath, "utf8");
+    } else {
+      inputText = getOption(argv, "--text") || await promptMultiline(rl, "Paste text. Finish with a single line containing END.");
+      inputPath = "wizard-input.txt";
+    }
+
+    const outputPath = path.resolve(getOption(argv, "--output") || await promptRequiredText(rl, "Output package path"));
+    const options = parseSanitizeOptions(["--preset", preset, ...argv]);
+    const result = sanitizeWithOptions(inputText, options);
+    const workflowPreset = workflowChoice === "sanitize-safe-share" ? null : resolveSafeShareWorkflowPresetCli(workflowChoice);
+    const bundle = createSanitizeSafeShareBundleCli({
+      inputPath,
+      options,
+      workflowPreset,
+      incidentMeta: {
+        title: "",
+        purpose: "",
+        caseReference: "",
+        recipientScope: "",
+      },
+      result,
+      input: inputText,
+    });
+
+    process.stdout.write("\nPreview transforms:\n");
+    bundle.workflowPackage.transforms.forEach((transform, index) => {
+      process.stdout.write(`${index + 1}. ${transform.label}: ${transform.summary}\n`);
+      if (Array.isArray(transform.applied) && transform.applied.length > 0) {
+        process.stdout.write(`   applied: ${transform.applied.join(", ")}\n`);
+      }
+      if (Array.isArray(transform.report) && transform.report.length > 0) {
+        process.stdout.write(`   report: ${transform.report.join(" | ")}\n`);
+      }
+    });
+
+    const confirm = hasFlag(argv, "--yes") ? "y" : (await promptText(rl, "Export package? [y/N]", "n")).toLowerCase();
+    if (confirm !== "y" && confirm !== "yes") {
+      console.log(JSON.stringify({ exported: false, output: outputPath }, null, 2));
+      return;
+    }
+
+    ensureDir(path.dirname(outputPath));
+    fs.writeFileSync(outputPath, `${JSON.stringify(bundle, null, 2)}\n`, "utf8");
+    console.log(
+      JSON.stringify(
+        {
+          exported: true,
+          output: outputPath,
+          workflowType: bundle.workflowPackage.workflowType,
+          workflowPreset: bundle.workflowPackage.workflowPreset?.id || null,
+          linesAffected: bundle.summary.linesAffected,
+          transforms: bundle.workflowPackage.transforms.map((transform) => ({
+            label: transform.label,
+            summary: transform.summary,
+          })),
+        },
+        null,
+        2,
+      ),
+    );
+  } finally {
+    rl.close();
+  }
+}
+
+function inspectZipArchiveCli(buffer) {
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  const entries = readZipCentralDirectoryCli(bytes).map((entry) => inspectZipEntryCli(bytes, entry));
+  return {
+    schemaVersion: 1,
+    kind: "nullid-archive-inspection",
+    createdAt: new Date().toISOString(),
+    fileCount: entries.filter((entry) => !entry.directory).length,
+    directoryCount: entries.filter((entry) => entry.directory).length,
+    entryCount: entries.length,
+    entries,
+    warnings: entries.filter((entry) => entry.status === "unsupported").map((entry) => `${entry.path}: ${entry.detail}`),
+  };
+}
+
+function inspectZipEntryCli(bytes, entry) {
+  if (entry.path.endsWith("/")) {
+    return {
+      path: entry.path,
+      directory: true,
+      compressionMethod: entry.compressionMethod,
+      compressionLabel: zipCompressionLabelCli(entry.compressionMethod),
+      compressedBytes: entry.compressedBytes,
+      uncompressedBytes: entry.uncompressedBytes,
+      sha256: null,
+      status: "directory",
+      detail: "Directory entry",
+    };
+  }
+
+  if (entry.encrypted) {
+    return {
+      path: entry.path,
+      directory: false,
+      compressionMethod: entry.compressionMethod,
+      compressionLabel: zipCompressionLabelCli(entry.compressionMethod),
+      compressedBytes: entry.compressedBytes,
+      uncompressedBytes: entry.uncompressedBytes,
+      sha256: null,
+      status: "unsupported",
+      detail: "Encrypted ZIP entries are not inspected locally in this surface.",
+    };
+  }
+
+  try {
+    const content = readZipEntryContentCli(bytes, entry);
+    return {
+      path: entry.path,
+      directory: false,
+      compressionMethod: entry.compressionMethod,
+      compressionLabel: zipCompressionLabelCli(entry.compressionMethod),
+      compressedBytes: entry.compressedBytes,
+      uncompressedBytes: entry.uncompressedBytes,
+      sha256: sha256Hex(Buffer.from(content)),
+      status: "hashed",
+      detail: "SHA-256 computed from extracted entry bytes.",
+    };
+  } catch (error) {
+    return {
+      path: entry.path,
+      directory: false,
+      compressionMethod: entry.compressionMethod,
+      compressionLabel: zipCompressionLabelCli(entry.compressionMethod),
+      compressedBytes: entry.compressedBytes,
+      uncompressedBytes: entry.uncompressedBytes,
+      sha256: null,
+      status: "unsupported",
+      detail: error instanceof Error ? error.message : "Unsupported ZIP entry",
+    };
+  }
+}
+
+function readZipEntryContentCli(bytes, entry) {
+  if (readUInt32Cli(bytes, entry.localHeaderOffset) !== 0x04034b50) {
+    throw new Error("Local ZIP header mismatch.");
+  }
+  const nameLength = readUInt16Cli(bytes, entry.localHeaderOffset + 26);
+  const extraLength = readUInt16Cli(bytes, entry.localHeaderOffset + 28);
+  const dataOffset = entry.localHeaderOffset + 30 + nameLength + extraLength;
+  const compressed = bytes.subarray(dataOffset, dataOffset + entry.compressedBytes);
+
+  if (entry.compressionMethod === 0) {
+    return Uint8Array.from(compressed);
+  }
+  if (entry.compressionMethod === 8) {
+    return zlib.inflateRawSync(Buffer.from(compressed));
+  }
+  throw new Error(`Unsupported ZIP compression method ${entry.compressionMethod}.`);
+}
+
+function readZipCentralDirectoryCli(bytes) {
+  const eocdOffset = findZipEocdOffsetCli(bytes);
+  const totalEntries = readUInt16Cli(bytes, eocdOffset + 10);
+  const centralDirectoryOffset = readUInt32Cli(bytes, eocdOffset + 16);
+  const entries = [];
+  let offset = centralDirectoryOffset;
+
+  for (let i = 0; i < totalEntries; i += 1) {
+    if (readUInt32Cli(bytes, offset) !== 0x02014b50) {
+      throw new Error("ZIP central directory is malformed.");
+    }
+    const flags = readUInt16Cli(bytes, offset + 8);
+    const compressionMethod = readUInt16Cli(bytes, offset + 10);
+    const compressedBytes = readUInt32Cli(bytes, offset + 20);
+    const uncompressedBytes = readUInt32Cli(bytes, offset + 24);
+    const nameLength = readUInt16Cli(bytes, offset + 28);
+    const extraLength = readUInt16Cli(bytes, offset + 30);
+    const commentLength = readUInt16Cli(bytes, offset + 32);
+    const localHeaderOffset = readUInt32Cli(bytes, offset + 42);
+    const name = Buffer.from(bytes.subarray(offset + 46, offset + 46 + nameLength)).toString("utf8");
+    entries.push({
+      path: name,
+      compressionMethod,
+      compressedBytes,
+      uncompressedBytes,
+      localHeaderOffset,
+      encrypted: Boolean(flags & 0x0001),
+    });
+    offset += 46 + nameLength + extraLength + commentLength;
+  }
+
+  return entries;
+}
+
+function findZipEocdOffsetCli(bytes) {
+  const minOffset = Math.max(0, bytes.length - 65557);
+  for (let offset = bytes.length - 22; offset >= minOffset; offset -= 1) {
+    if (readUInt32Cli(bytes, offset) === 0x06054b50) {
+      return offset;
+    }
+  }
+  throw new Error("ZIP end-of-central-directory record not found.");
+}
+
+function readUInt16Cli(bytes, offset) {
+  return bytes[offset] | (bytes[offset + 1] << 8);
+}
+
+function readUInt32Cli(bytes, offset) {
+  return (
+    bytes[offset]
+    | (bytes[offset + 1] << 8)
+    | (bytes[offset + 2] << 16)
+    | (bytes[offset + 3] << 24)
+  ) >>> 0;
+}
+
+function zipCompressionLabelCli(value) {
+  if (value === 0) return "stored";
+  if (value === 8) return "deflate";
+  return `method-${value}`;
+}
+
+function parseArchiveReferenceDocumentCli(text) {
+  const parsed = JSON.parse(text);
+  if (parsed && typeof parsed === "object" && parsed.kind === "nullid-archive-manifest" && Array.isArray(parsed.files)) {
+    return parsed.files.reduce((acc, entry) => {
+      if (!entry || typeof entry !== "object" || typeof entry.path !== "string") return acc;
+      const sha256 = typeof entry.sha256After === "string"
+        ? entry.sha256After
+        : typeof entry.sha256 === "string"
+          ? entry.sha256
+          : null;
+      if (!sha256) return acc;
+      acc.push({ path: entry.path, sha256: String(sha256).toLowerCase(), source: "archive-manifest" });
+      return acc;
+    }, []);
+  }
+
+  let workflowPackage = null;
+  try {
+    const match = resolveWorkflowPayloadCli(parsed);
+    workflowPackage = match && match.workflowPackage ? match.workflowPackage : null;
+  } catch {
+    workflowPackage = null;
+  }
+  if (!workflowPackage || !Array.isArray(workflowPackage.artifacts)) {
+    return [];
+  }
+  return workflowPackage.artifacts.reduce((acc, artifact) => {
+    if (!artifact || typeof artifact !== "object" || typeof artifact.sha256 !== "string") return acc;
+    const artifactPath = typeof artifact.filename === "string" && artifact.filename
+      ? artifact.filename
+      : typeof artifact.id === "string"
+        ? artifact.id
+        : null;
+    if (!artifactPath) return acc;
+    acc.push({ path: artifactPath, sha256: artifact.sha256.toLowerCase(), source: "workflow-package" });
+    return acc;
+  }, []);
+}
+
+function verifyArchiveInspectionCli(inspection, manifestEntries) {
+  const expectedByPath = new Map(manifestEntries.map((entry) => [entry.path, entry.sha256]));
+  const seen = new Set();
+  const entries = inspection.entries.map((entry) => {
+    if (entry.directory) return { ...entry, verification: "directory" };
+    if (entry.status === "unsupported") return { ...entry, verification: "unsupported" };
+    const expectedSha256 = expectedByPath.get(entry.path);
+    if (!expectedSha256) return { ...entry, verification: "extra" };
+    seen.add(entry.path);
+    return {
+      ...entry,
+      verification: entry.sha256 === expectedSha256 ? "matched" : "mismatch",
+      expectedSha256,
+    };
+  });
+  return {
+    matched: entries.filter((entry) => entry.verification === "matched").length,
+    mismatched: entries.filter((entry) => entry.verification === "mismatch").length,
+    missingFromArchive: manifestEntries.filter((entry) => !seen.has(entry.path)).length,
+    extraInArchive: entries.filter((entry) => entry.verification === "extra").length,
+    entries,
+  };
+}
+
 function runPolicyInit(argv) {
   const outputPath = path.resolve(argv[0] || "nullid.policy.json");
   if (fs.existsSync(outputPath) && !hasFlag(argv, "--force")) {
@@ -1359,6 +1731,7 @@ function createSanitizeWorkflowPackageCli({
           metadata: {
             classification,
             detectedFormat: detectedFormat || "text",
+            linesAffected: summary.linesAffected,
           },
         },
       ],
@@ -1465,6 +1838,7 @@ function createSanitizeWorkflowPackageCli({
         report: Array.isArray(summary.report) ? [...summary.report] : [],
         metadata: {
           detectedFormat: detectedFormat || "text",
+          linesAffected: summary.linesAffected,
         },
       },
     ],
@@ -2549,7 +2923,7 @@ Commands:
   sanitize-dir <input-dir> <output-dir> [--preset ...|--policy ...|--baseline ...] [--format auto|text|json|ndjson|csv|xml|yaml] [--ext .log,.txt,.json] [--report <json-file>]
   bundle <input-file> <output-json> [--preset ...|--workflow general-safe-share|support-ticket|external-minimum|internal-investigation|incident-handoff|evidence-archive] [--title ...] [--purpose ...] [--case-ref ...] [--recipient ...] [--policy ...|--baseline ...] [--format auto|text|json|ndjson|csv|xml|yaml]
   package-inspect <input-file> [--pass <passphrase>|--pass-env <VAR>] [--verify-pass <passphrase>|--verify-pass-env <VAR>]
-  redact <input-file> <output-file> [--mode full|partial] [--detectors email,phone,token,ip,id,iban,card,ipv6,awskey,awssecret,github,slack,privatekey]
+  redact <input-file> <output-file> [--mode full|partial] [--detectors email,phone,url,token,ip,ssn,uuid,generic-id-context,iban,card,ipv6,awskey,awssecret,github,slack,privatekey,iran-id,iran-phone,persian-name,ru-phone,ru-inn,ru-snils] [--rule-sets iran,russia]
   enc <input-file> <output-envelope-file> [--pass <passphrase>|--pass-env <VAR>] [--profile compat|strong|paranoid] [--iterations <n>] [--kdf-hash sha256|sha512]
   dec <input-envelope-file> <output-file> [--pass <passphrase>|--pass-env <VAR>]
   pwgen [--kind password|passphrase] [...options]
@@ -2559,6 +2933,8 @@ Commands:
   pdf-clean <input.pdf> <output.pdf>
   office-clean <input.docx|input.xlsx|input.pptx> <output-file>
   archive-sanitize <input-dir|input.zip> <output.zip> [--baseline <nullid.policy.json>] [--sanitize-text true|false]
+  archive-inspect <input.zip> [--manifest <json-file>] [--output <report-json>]
+  wizard
   precommit [--staged|--git-range <range>|--files a,b] [--threshold high|medium|low] [--baseline <nullid.policy.json>] [--apply-sanitize]
   policy-init [output-file] [--preset nginx|apache|auth|json] [--merge-mode strict-override|prefer-stricter] [--force]
 
@@ -2574,6 +2950,8 @@ Examples:
   node scripts/nullid-local.mjs pdf-clean ./report.pdf ./report.clean.pdf
   node scripts/nullid-local.mjs office-clean ./incident.docx ./incident.clean.docx
   node scripts/nullid-local.mjs archive-sanitize ./evidence ./evidence-sanitized.zip --baseline ./nullid.policy.json
+  node scripts/nullid-local.mjs archive-inspect ./evidence.zip --manifest ./nullid-archive-manifest.json --output ./archive-report.json
+  node scripts/nullid-local.mjs wizard
   node scripts/nullid-local.mjs precommit --staged --baseline ./nullid.policy.json --threshold high
   node scripts/nullid-local.mjs policy-init ./nullid.policy.json --preset nginx
   NULLID_PASSPHRASE='dev-secret' node scripts/nullid-local.mjs enc ./backup.tar ./backup.tar.nullid --profile strong
@@ -2584,6 +2962,41 @@ Examples:
   node scripts/nullid-local.mjs meta ./photo.jpg
 `.trim(),
   );
+}
+
+async function promptChoice(rl, label, options, defaultKey) {
+  const lines = options.map((option) => `${option.key}) ${option.label}`).join("\n");
+  const answer = (await rl.question(`${label}\n${lines}\n> `)).trim() || defaultKey;
+  const selected = options.find((option) => option.key === answer);
+  if (!selected) {
+    throw new Error(`Unknown selection: ${answer}`);
+  }
+  return selected.value;
+}
+
+async function promptText(rl, label, fallback = "") {
+  const answer = await rl.question(`${label}\n> `);
+  const trimmed = answer.trim();
+  return trimmed || fallback;
+}
+
+async function promptRequiredText(rl, label) {
+  const answer = await promptText(rl, label);
+  if (!answer) {
+    throw new Error(`${label} is required`);
+  }
+  return answer;
+}
+
+async function promptMultiline(rl, label) {
+  process.stdout.write(`${label}\n`);
+  const lines = [];
+  while (true) {
+    const line = await rl.question("");
+    if (line === "END") break;
+    lines.push(line);
+  }
+  return lines.join("\n");
 }
 
 function parseSanitizeOptions(argv) {
@@ -3187,8 +3600,46 @@ function isValidIranNationalId(value) {
   return (remainder < 2 && check === remainder) || (remainder >= 2 && check === 11 - remainder);
 }
 
+function isValidIranPhone(value) {
+  const digits = toAsciiDigits(value).replace(/[^0-9]/g, "");
+  return /^09\d{9}$/.test(digits) || /^(?:98|0098)9\d{9}$/.test(digits);
+}
+
+function isValidRussianPhone(value) {
+  const digits = toAsciiDigits(value).replace(/[^0-9]/g, "");
+  return /^(?:7|8)\d{10}$/.test(digits);
+}
+
+function isValidRussianInn(value) {
+  const digits = toAsciiDigits(value).replace(/[^0-9]/g, "");
+  if (!/^\d{10}(\d{2})?$/.test(digits)) return false;
+  if (digits.length === 10) {
+    return innChecksumCli(digits.slice(0, 9), [2, 4, 10, 3, 5, 9, 4, 6, 8]) === Number(digits[9]);
+  }
+  return innChecksumCli(digits.slice(0, 10), [7, 2, 4, 10, 3, 5, 9, 4, 6, 8]) === Number(digits[10])
+    && innChecksumCli(digits.slice(0, 11), [3, 7, 2, 4, 10, 3, 5, 9, 4, 6, 8]) === Number(digits[11]);
+}
+
+function isValidRussianSnils(value) {
+  const digits = toAsciiDigits(value).replace(/[^0-9]/g, "");
+  if (!/^\d{11}$/.test(digits)) return false;
+  const serial = digits.slice(0, 9);
+  const control = Number(digits.slice(9));
+  const sum = serial.split("").reduce((acc, ch, index) => acc + Number(ch) * (9 - index), 0);
+  let expected = 0;
+  if (sum < 100) expected = sum;
+  else if (sum === 100 || sum === 101) expected = 0;
+  else expected = sum % 101 === 100 ? 0 : sum % 101;
+  return expected === control;
+}
+
+function isLikelyPhone(value) {
+  const digits = toAsciiDigits(value).replace(/[^0-9]/g, "");
+  return digits.length >= 10 && digits.length <= 15;
+}
+
 function passesLuhn(value) {
-  const digits = value.replace(/[^0-9]/g, "");
+  const digits = toAsciiDigits(value).replace(/[^0-9]/g, "");
   if (digits.length < 12 || digits.length > 19) return false;
   let sum = 0;
   let shouldDouble = false;
@@ -3205,7 +3656,7 @@ function passesLuhn(value) {
 }
 
 function isValidIban(value) {
-  const trimmed = value.replace(/\s+/g, "").toUpperCase();
+  const trimmed = toAsciiDigits(value).replace(/\s+/g, "").toUpperCase();
   if (trimmed.length < 15 || trimmed.length > 34) return false;
   const rearranged = `${trimmed.slice(4)}${trimmed.slice(0, 4)}`;
   const converted = rearranged.replace(/[A-Z]/g, (ch) => `${ch.charCodeAt(0) - 55}`);
@@ -3222,25 +3673,57 @@ function toAsciiDigits(value) {
     .replace(/[٠-٩]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 1584));
 }
 
+function innChecksumCli(value, weights) {
+  const sum = value.split("").reduce((acc, ch, index) => acc + Number(ch) * weights[index], 0);
+  return (sum % 11) % 10;
+}
+
 function buildRedactDetectors() {
   return [
-    { key: "email", label: "Email", regex: /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, severity: "medium", mask: "[email]" },
-    { key: "phone", label: "Phone", regex: /\b(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4}\b/g, severity: "low", mask: "[phone]" },
+    { key: "email", label: "Email", regex: /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, severity: "medium", mask: "[email]", ruleSet: "general" },
+    {
+      key: "phone",
+      label: "Phone",
+      regex: /(?:\+|00)?[0-9\u06F0-\u06F9\u0660-\u0669][0-9\u06F0-\u06F9\u0660-\u0669().\-\s]{7,18}[0-9\u06F0-\u06F9\u0660-\u0669]/g,
+      severity: "low",
+      mask: "[phone]",
+      ruleSet: "general",
+      validate: isLikelyPhone,
+    },
+    { key: "url", label: "URL", regex: /\b(?:https?:\/\/|www\.)[^\s<>()\[\]{}"'`]+/gi, severity: "medium", mask: "[url]", ruleSet: "general" },
     {
       key: "token",
       label: "Bearer / token",
       regex: /\b(?:authorization[:=]\s*)?(?:bearer\s+)?[A-Za-z0-9._-]{20,}\b/gi,
       severity: "high",
       mask: "[token]",
+      ruleSet: "general",
     },
-    { key: "ip", label: "IP", regex: /\b(?:\d{1,3}\.){3}\d{1,3}\b/g, severity: "medium", mask: "[ip]" },
-    { key: "id", label: "ID", regex: /\b\d{3}-\d{2}-\d{4}\b/g, severity: "high", mask: "[id]" },
+    { key: "ip", label: "IP", regex: /\b(?:\d{1,3}\.){3}\d{1,3}\b/g, severity: "medium", mask: "[ip]", ruleSet: "general" },
+    { key: "ssn", label: "Generic ID", regex: /\b\d{3}-\d{2}-\d{4}\b/g, severity: "high", mask: "[id]", ruleSet: "general" },
+    {
+      key: "uuid",
+      label: "Generic ID",
+      regex: /\b[0-9A-F]{8}-[0-9A-F]{4}-[1-5][0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}\b/gi,
+      severity: "high",
+      mask: "[id]",
+      ruleSet: "general",
+    },
+    {
+      key: "generic-id-context",
+      label: "Generic ID",
+      regex: /\b(?:id|identifier|account|acct|customer|passport|license|employee|record|tax\s*id|national\s*id)\s*[:#=-]?\s*[A-Z0-9-]{5,24}\b/gi,
+      severity: "high",
+      mask: "[id]",
+      ruleSet: "general",
+    },
     {
       key: "iban",
       label: "IBAN",
       regex: /\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/gi,
       severity: "high",
       mask: "[iban]",
+      ruleSet: "general",
       validate: isValidIban,
     },
     {
@@ -3249,16 +3732,18 @@ function buildRedactDetectors() {
       regex: /\b(?:\d[ -]?){12,19}\b/g,
       severity: "high",
       mask: "[card]",
+      ruleSet: "general",
       validate: passesLuhn,
     },
-    { key: "ipv6", label: "IPv6", regex: /\b(?:[A-F0-9]{1,4}:){2,7}[A-F0-9]{1,4}\b/gi, severity: "medium", mask: "[ipv6]" },
-    { key: "awskey", label: "AWS key", regex: /\bAKIA[0-9A-Z]{16}\b/g, severity: "high", mask: "[aws-key]" },
+    { key: "ipv6", label: "IPv6", regex: /\b(?:[A-F0-9]{1,4}:){2,7}[A-F0-9]{1,4}\b/gi, severity: "medium", mask: "[ipv6]", ruleSet: "general" },
+    { key: "awskey", label: "AWS key", regex: /\bAKIA[0-9A-Z]{16}\b/g, severity: "high", mask: "[aws-key]", ruleSet: "general" },
     {
       key: "awssecret",
       label: "AWS secret",
       regex: /\baws_secret_access_key\s*[:=]\s*[A-Za-z0-9/+=]{40}\b/gi,
       severity: "high",
       mask: "[aws-secret]",
+      ruleSet: "general",
     },
     {
       key: "github",
@@ -3266,6 +3751,7 @@ function buildRedactDetectors() {
       regex: /\b(?:ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{20,})\b/g,
       severity: "high",
       mask: "[github-token]",
+      ruleSet: "general",
     },
     {
       key: "slack",
@@ -3273,6 +3759,7 @@ function buildRedactDetectors() {
       regex: /\bxox(?:b|p|a|r|s)-[A-Za-z0-9-]{10,}\b/g,
       severity: "high",
       mask: "[slack-token]",
+      ruleSet: "general",
     },
     {
       key: "privatekey",
@@ -3280,13 +3767,65 @@ function buildRedactDetectors() {
       regex: /-----BEGIN (?:[A-Z0-9 ]*?)PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9 ]*?)PRIVATE KEY-----/g,
       severity: "high",
       mask: "[private-key]",
+      ruleSet: "general",
+    },
+    {
+      key: "iran-id",
+      label: "Iran national ID",
+      regex: /(?<![0-9\u06F0-\u06F9\u0660-\u0669])[0-9\u06F0-\u06F9\u0660-\u0669]{10}(?![0-9\u06F0-\u06F9\u0660-\u0669])/g,
+      severity: "high",
+      mask: "[iran-id]",
+      ruleSet: "iran",
+      validate: isValidIranNationalId,
+    },
+    {
+      key: "iran-phone",
+      label: "Iran phone",
+      regex: /(?:\+98|0098|98|0)?[\s()-]*9[0-9\u06F0-\u06F9\u0660-\u0669][0-9\u06F0-\u06F9\u0660-\u0669()\-\s]{7,12}/g,
+      severity: "medium",
+      mask: "[iran-phone]",
+      ruleSet: "iran",
+      validate: isValidIranPhone,
+    },
+    {
+      key: "persian-name",
+      label: "Persian name",
+      regex: /(?:نام(?:\s+و\s+نام\s+خانوادگی)?|گیرنده|مخاطب)\s*[:：-]\s*[\u0600-\u06FF]{2,}(?:\s+[\u0600-\u06FF]{2,}){0,3}/g,
+      severity: "medium",
+      mask: "[persian-name]",
+      ruleSet: "iran",
+    },
+    {
+      key: "ru-phone",
+      label: "Russia phone",
+      regex: /(?:\+7|8)[\s(-]*[0-9\u06F0-\u06F9\u0660-\u0669]{3}[\s)-]*[0-9\u06F0-\u06F9\u0660-\u0669]{3}[\s-]*[0-9\u06F0-\u06F9\u0660-\u0669]{2}[\s-]*[0-9\u06F0-\u06F9\u0660-\u0669]{2}/g,
+      severity: "medium",
+      mask: "[ru-phone]",
+      ruleSet: "russia",
+      validate: isValidRussianPhone,
+    },
+    {
+      key: "ru-inn",
+      label: "Russia INN",
+      regex: /(?<!\d)\d{10}(?:\d{2})?(?!\d)/g,
+      severity: "high",
+      mask: "[ru-inn]",
+      ruleSet: "russia",
+      validate: isValidRussianInn,
+    },
+    {
+      key: "ru-snils",
+      label: "Russia SNILS",
+      regex: /(?<!\d)\d{3}-\d{3}-\d{3}\s?\d{2}(?!\d)|(?<!\d)\d{11}(?!\d)/g,
+      severity: "high",
+      mask: "[ru-snils]",
+      ruleSet: "russia",
+      validate: isValidRussianSnils,
     },
   ];
 }
 
 function scanRedaction(text, detectors) {
-  const counts = {};
-  const severityMap = {};
   const matches = [];
 
   detectors.forEach((detector) => {
@@ -3299,21 +3838,31 @@ function scanRedaction(text, detectors) {
         if (!regex.global) break;
         continue;
       }
-      counts[detector.label] = (counts[detector.label] || 0) + 1;
-      severityMap[detector.label] = detector.severity;
       matches.push({
         start: match.index,
         end: match.index + value.length,
+        key: detector.key,
         label: detector.label,
         severity: detector.severity,
         mask: detector.mask,
+        ruleSet: detector.ruleSet,
       });
       if (!regex.global) break;
     }
   });
 
   const resolved = resolveOverlaps(matches);
-  const total = Object.values(counts).reduce((sum, value) => sum + Number(value || 0), 0);
+  const counts = resolved.reduce((acc, match) => {
+    acc[match.label] = (acc[match.label] || 0) + 1;
+    return acc;
+  }, {});
+  const severityMap = resolved.reduce((acc, match) => {
+    acc[match.label] = acc[match.label] && severityRank(acc[match.label]) >= severityRank(match.severity)
+      ? acc[match.label]
+      : match.severity;
+    return acc;
+  }, {});
+  const total = resolved.length;
   const overall =
     resolved
       .map((match) => match.severity)

@@ -32,8 +32,13 @@ import {
 } from "./utils/sharedPassphraseTrustState";
 
 const HashView = lazy(() => import("./views/HashView").then((module) => ({ default: module.HashView })));
+const BatchReviewView = lazy(() => import("./views/BatchReviewView").then((module) => ({ default: module.BatchReviewView })));
 const SafeShareView = lazy(() => import("./views/SafeShareView").then((module) => ({ default: module.SafeShareView })));
 const IncidentWorkflowView = lazy(() => import("./views/IncidentWorkflowView").then((module) => ({ default: module.IncidentWorkflowView })));
+const SecretScannerView = lazy(() => import("./views/SecretScannerView").then((module) => ({ default: module.SecretScannerView })));
+const StructuredTextAnalyzerView = lazy(() => import("./views/StructuredTextAnalyzerView").then((module) => ({ default: module.StructuredTextAnalyzerView })));
+const FinancialReviewView = lazy(() => import("./views/FinancialReviewView").then((module) => ({ default: module.FinancialReviewView })));
+const PathPrivacyView = lazy(() => import("./views/PathPrivacyView").then((module) => ({ default: module.PathPrivacyView })));
 const RedactView = lazy(() => import("./views/RedactView").then((module) => ({ default: module.RedactView })));
 const SanitizeView = lazy(() => import("./views/SanitizeView").then((module) => ({ default: module.SanitizeView })));
 const VerifyPackageView = lazy(() => import("./views/VerifyPackageView").then((module) => ({ default: module.VerifyPackageView })));
@@ -51,15 +56,21 @@ interface WorkspaceViewProps {
   onRegisterHashActions?: (actions: HashViewActions | null) => void;
   onStatus?: (message: string, tone?: StatusTone) => void;
   onOpenGuide?: (key?: ModuleKey) => void;
+  onSelectModule?: (key: ModuleKey) => void;
 }
 
-function WorkspaceView({ active, onRegisterHashActions, onStatus, onOpenGuide }: WorkspaceViewProps) {
+function WorkspaceView({ active, onRegisterHashActions, onStatus, onOpenGuide, onSelectModule }: WorkspaceViewProps) {
   const { tr } = useI18n();
   return (
     <Suspense fallback={<div className="workspace-loading">{tr("loading module...")}</div>}>
       {active === "hash" ? <HashView onRegisterActions={onRegisterHashActions} onStatus={onStatus} onOpenGuide={onOpenGuide} /> : null}
+      {active === "batch" ? <BatchReviewView onOpenGuide={onOpenGuide} onSelectModule={onSelectModule} /> : null}
       {active === "share" ? <SafeShareView onOpenGuide={onOpenGuide} /> : null}
       {active === "incident" ? <IncidentWorkflowView onOpenGuide={onOpenGuide} /> : null}
+      {active === "secret" ? <SecretScannerView onOpenGuide={onOpenGuide} onSelectModule={onSelectModule} /> : null}
+      {active === "analyze" ? <StructuredTextAnalyzerView onOpenGuide={onOpenGuide} onSelectModule={onSelectModule} /> : null}
+      {active === "finance" ? <FinancialReviewView onOpenGuide={onOpenGuide} onSelectModule={onSelectModule} /> : null}
+      {active === "paths" ? <PathPrivacyView onOpenGuide={onOpenGuide} /> : null}
       {active === "redact" ? <RedactView onOpenGuide={onOpenGuide} /> : null}
       {active === "sanitize" ? <SanitizeView onOpenGuide={onOpenGuide} /> : null}
       {active === "verify" ? <VerifyPackageView onOpenGuide={onOpenGuide} /> : null}
@@ -109,8 +120,13 @@ function AppShell() {
   const modules = useMemo<ModuleDefinition[]>(
     () => [
       { key: "hash", title: t("module.hash.title"), subtitle: t("module.hash.subtitle") },
+      { key: "batch", title: t("module.batch.title"), subtitle: t("module.batch.subtitle") },
       { key: "share", title: t("module.share.title"), subtitle: t("module.share.subtitle") },
       { key: "incident", title: t("module.incident.title"), subtitle: t("module.incident.subtitle") },
+      { key: "secret", title: t("module.secret.title"), subtitle: t("module.secret.subtitle") },
+      { key: "analyze", title: t("module.analyze.title"), subtitle: t("module.analyze.subtitle") },
+      { key: "finance", title: t("module.finance.title"), subtitle: t("module.finance.subtitle") },
+      { key: "paths", title: t("module.paths.title"), subtitle: t("module.paths.subtitle") },
       { key: "verify", title: t("module.verify.title"), subtitle: t("module.verify.subtitle") },
       { key: "redact", title: t("module.redact.title"), subtitle: t("module.redact.subtitle") },
       { key: "sanitize", title: t("module.sanitize.title"), subtitle: t("module.sanitize.subtitle") },
@@ -652,6 +668,7 @@ function AppShell() {
               onRegisterHashActions={setHashActions}
               onStatus={handleStatus}
               onOpenGuide={goToGuide}
+              onSelectModule={handleSelectModule}
             />
           </div>
         }

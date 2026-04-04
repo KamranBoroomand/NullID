@@ -1,140 +1,29 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import "./styles.css";
 import { Chip } from "../components/Chip";
 import { useToast } from "../components/ToastHost";
 import { usePersistentState } from "../hooks/usePersistentState";
-import { resolveOverlaps, type RedactionMatch } from "../utils/redaction";
+import {
+  applyRedaction,
+  buildRedactionChanges,
+  defaultRuleSetState,
+  getRedactionDetectors,
+  isOptionalRuleSet,
+  resolveOverlaps,
+  scanRedaction,
+  type RedactionCustomRule,
+  type RedactionMaskMode,
+  type RedactionMatch,
+  type RedactionRuleSet,
+  type RedactionSeverity,
+} from "../utils/redaction";
 import { useClipboardPrefs, writeClipboard } from "../utils/clipboard";
 import type { ModuleKey } from "../components/ModuleList";
 import { useI18n } from "../i18n";
+import { consumeRedactionDraft as takeQueuedRedactionDraft } from "../utils/redactionTransfer.js";
 
-type MaskMode = "full" | "partial";
-type SeverityThreshold = "low" | "medium" | "high";
-
-type Detector = {
-  key: string;
-  label: string;
-  regex: RegExp;
-  severity: "low" | "medium" | "high";
-  mask: string;
-  validate?: (value: string) => boolean;
-};
-
-type CustomRule = { label: string; regex: RegExp };
-
-const detectors: Detector[] = [
-  {
-    key: "email",
-    label: "Email",
-    regex: /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,
-    severity: "medium",
-    mask: "[email]",
-  },
-  {
-    key: "phone",
-    label: "Phone",
-    regex: /(?:\+|00)?[0-9\u06F0-\u06F9\u0660-\u0669][0-9\u06F0-\u06F9\u0660-\u0669().\-\s]{7,18}[0-9\u06F0-\u06F9\u0660-\u0669]/g,
-    severity: "low",
-    mask: "[phone]",
-    validate: isLikelyPhone,
-  },
-  {
-    key: "iran-id",
-    label: "Iran national ID",
-    regex: /(?<![0-9\u06F0-\u06F9\u0660-\u0669])[0-9\u06F0-\u06F9\u0660-\u0669]{10}(?![0-9\u06F0-\u06F9\u0660-\u0669])/g,
-    severity: "high",
-    mask: "[iran-id]",
-    validate: isValidIranNationalId,
-  },
-  {
-    key: "ru-phone",
-    label: "Russia phone",
-    regex: /(?:\+7|8)[\s(-]*[0-9\u06F0-\u06F9\u0660-\u0669]{3}[\s)-]*[0-9\u06F0-\u06F9\u0660-\u0669]{3}[\s-]*[0-9\u06F0-\u06F9\u0660-\u0669]{2}[\s-]*[0-9\u06F0-\u06F9\u0660-\u0669]{2}/g,
-    severity: "medium",
-    mask: "[ru-phone]",
-    validate: isLikelyPhone,
-  },
-  {
-    key: "token",
-    label: "Bearer / token",
-    regex: /\b(?:authorization[:=]\s*)?(?:bearer\s+)?[A-Za-z0-9._-]{20,}\b/gi,
-    severity: "high",
-    mask: "[token]",
-  },
-  {
-    key: "ip",
-    label: "IP",
-    regex: /(?<![0-9\u06F0-\u06F9\u0660-\u0669])(?:[0-9\u06F0-\u06F9\u0660-\u0669]{1,3}\.){3}[0-9\u06F0-\u06F9\u0660-\u0669]{1,3}(?![0-9\u06F0-\u06F9\u0660-\u0669])/g,
-    severity: "medium",
-    mask: "[ip]",
-    validate: isValidIpv4,
-  },
-  {
-    key: "id",
-    label: "ID",
-    regex: /\b\d{3}-\d{2}-\d{4}\b/g,
-    severity: "high",
-    mask: "[id]",
-  },
-  {
-    key: "iban",
-    label: "IBAN",
-    regex: /(?<![A-Z0-9\u06F0-\u06F9\u0660-\u0669])[A-Z]{2}[0-9\u06F0-\u06F9\u0660-\u0669]{2}[A-Z0-9\u06F0-\u06F9\u0660-\u0669]{11,30}(?![A-Z0-9\u06F0-\u06F9\u0660-\u0669])/gi,
-    severity: "high",
-    mask: "[iban]",
-    validate: isValidIban,
-  },
-  {
-    key: "card",
-    label: "Credit card",
-    regex: /(?:[0-9\u06F0-\u06F9\u0660-\u0669][ -]?){12,19}/g,
-    severity: "high",
-    mask: "[card]",
-    validate: passesLuhn,
-  },
-  {
-    key: "ipv6",
-    label: "IPv6",
-    regex: /\b(?:[A-F0-9]{1,4}:){2,7}[A-F0-9]{1,4}\b/gi,
-    severity: "medium",
-    mask: "[ipv6]",
-  },
-  {
-    key: "awskey",
-    label: "AWS key",
-    regex: /\bAKIA[0-9A-Z]{16}\b/g,
-    severity: "high",
-    mask: "[aws-key]",
-  },
-  {
-    key: "awssecret",
-    label: "AWS secret",
-    regex: /\baws_secret_access_key\s*[:=]\s*[A-Za-z0-9/+=]{40}\b/gi,
-    severity: "high",
-    mask: "[aws-secret]",
-  },
-  {
-    key: "github",
-    label: "GitHub token",
-    regex: /\b(?:ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{20,})\b/g,
-    severity: "high",
-    mask: "[github-token]",
-  },
-  {
-    key: "slack",
-    label: "Slack token",
-    regex: /\bxox(?:b|p|a|r|s)-[A-Za-z0-9-]{10,}\b/g,
-    severity: "high",
-    mask: "[slack-token]",
-  },
-  {
-    key: "privatekey",
-    label: "Private key block",
-    regex: /-----BEGIN (?:[A-Z0-9 ]*?)PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9 ]*?)PRIVATE KEY-----/g,
-    severity: "high",
-    mask: "[private-key]",
-  },
-];
+type MaskMode = RedactionMaskMode;
+type SeverityThreshold = RedactionSeverity;
 
 interface RedactViewProps {
   onOpenGuide?: (key?: ModuleKey) => void;
@@ -144,6 +33,7 @@ export function RedactView({ onOpenGuide }: RedactViewProps) {
   const { push } = useToast();
   const { t, tr, formatNumber } = useI18n();
   const [clipboardPrefs] = useClipboardPrefs();
+  const detectors = useMemo(() => getRedactionDetectors(), []);
   const [input, setInput] = useState("");
   const [maskMode, setMaskMode] = usePersistentState<MaskMode>("nullid:redact:mask", "full");
   const [minimumSeverity, setMinimumSeverity] = usePersistentState<SeverityThreshold>("nullid:redact:min-severity", "low");
@@ -151,38 +41,88 @@ export function RedactView({ onOpenGuide }: RedactViewProps) {
   const [preserveLength, setPreserveLength] = usePersistentState<boolean>("nullid:redact:preserve-length", false);
   const [customPattern, setCustomPattern] = useState("");
   const [customLabel, setCustomLabel] = useState("custom");
-  const [customRules, setCustomRules] = useState<CustomRule[]>([]);
+  const [customRules, setCustomRules] = useState<RedactionCustomRule[]>([]);
   const [output, setOutput] = useState("");
+  const [queuedMatches, setQueuedMatches] = useState<RedactionMatch[]>([]);
+  const [queuedSourceText, setQueuedSourceText] = useState("");
+  const [ruleSetState, setRuleSetState] = usePersistentState<Record<Exclude<RedactionRuleSet, "general">, boolean>>(
+    "nullid:redact:rule-sets",
+    defaultRuleSetState(),
+  );
   const [detectorState, setDetectorState] = usePersistentState<Record<string, boolean>>(
     "nullid:redact:detectors",
     Object.fromEntries(detectors.map((detector) => [detector.key, true])) as Record<string, boolean>,
   );
 
   const activeDetectors = useMemo(
-    () => detectors.filter((detector) => detectorState[detector.key] ?? true),
-    [detectorState],
+    () =>
+      detectors.filter((detector) => {
+        if (!(detectorState[detector.key] ?? true)) return false;
+        if (!isOptionalRuleSet(detector.ruleSet)) return true;
+        return ruleSetState[detector.ruleSet];
+      }),
+    [detectorState, detectors, ruleSetState],
   );
 
   const findings = useMemo(
-    () => scan(input, activeDetectors, customRules, { minimumSeverity, minTokenLength }),
+    () => scanRedaction(input, activeDetectors, customRules, { minimumSeverity, minTokenLength }),
     [activeDetectors, customRules, input, minTokenLength, minimumSeverity],
   );
+  const combinedMatches = useMemo(
+    () => resolveOverlaps([...findings.matches, ...queuedMatches]),
+    [findings.matches, queuedMatches],
+  );
+  const combinedCounts = useMemo(() => {
+    return combinedMatches.reduce<Record<string, number>>((acc, match) => {
+      acc[match.label] = (acc[match.label] || 0) + 1;
+      return acc;
+    }, {});
+  }, [combinedMatches]);
+  const combinedSeverityMap = useMemo(() => {
+    return combinedMatches.reduce<Record<string, RedactionSeverity>>((acc, match) => {
+      acc[match.label] = acc[match.label]
+        ? (acc[match.label] === "high" || match.severity === "low" ? acc[match.label] : match.severity)
+        : match.severity;
+      return acc;
+    }, {});
+  }, [combinedMatches]);
 
-  const redacted = useMemo(() => redact(input, findings.matches, maskMode, preserveLength), [findings.matches, input, maskMode, preserveLength]);
+  const previewChanges = useMemo(
+    () => buildRedactionChanges(input, combinedMatches, maskMode, preserveLength),
+    [combinedMatches, input, maskMode, preserveLength],
+  );
+  const redacted = useMemo(() => applyRedaction(input, combinedMatches, maskMode, preserveLength), [combinedMatches, input, maskMode, preserveLength]);
   const severityCounts = useMemo(() => {
-    return findings.matches.reduce(
+    return combinedMatches.reduce(
       (acc, match) => {
         acc[match.severity] += 1;
         return acc;
       },
       { high: 0, medium: 0, low: 0 },
     );
-  }, [findings.matches]);
+  }, [combinedMatches]);
   const coverage = useMemo(() => {
-    if (!input.length || findings.matches.length === 0) return 0;
-    const maskedChars = findings.matches.reduce((sum, match) => sum + (match.end - match.start), 0);
+    if (!input.length || combinedMatches.length === 0) return 0;
+    const maskedChars = combinedMatches.reduce((sum, match) => sum + (match.end - match.start), 0);
     return Math.min(100, Math.round((maskedChars / Math.max(1, input.length)) * 100));
-  }, [findings.matches, input.length]);
+  }, [combinedMatches, input.length]);
+
+  useEffect(() => {
+    const draft = takeQueuedRedactionDraft();
+    if (!draft) return;
+    setInput(draft.text);
+    setOutput("");
+    setQueuedMatches(draft.matches ?? []);
+    setQueuedSourceText(draft.text);
+    push(draft.message ?? "text queued for redaction review", "accent");
+  }, [push]);
+
+  useEffect(() => {
+    if (queuedSourceText && input !== queuedSourceText) {
+      setQueuedMatches([]);
+      setQueuedSourceText("");
+    }
+  }, [input, queuedSourceText]);
 
   const applyCustomRule = () => {
     if (!customPattern.trim()) return;
@@ -231,21 +171,31 @@ export function RedactView({ onOpenGuide }: RedactViewProps) {
         minimumSeverity,
         minTokenLength,
         preserveLength,
+        enabledRuleSets: Object.entries(ruleSetState)
+          .filter(([, enabled]) => enabled)
+          .map(([key]) => key),
         enabledDetectors: activeDetectors.map((detector) => detector.key),
       },
       summary: {
-        totalFindings: findings.total,
-        overallSeverity: findings.overall,
+        totalFindings: combinedMatches.length,
+        overallSeverity: combinedMatches.some((match) => match.severity === "high")
+          ? "high"
+          : combinedMatches.some((match) => match.severity === "medium")
+            ? "medium"
+            : "low",
         coveragePercent: coverage,
         severityCounts,
       },
-      byType: findings.counts,
-      matches: findings.matches.slice(0, 400).map((match) => ({
-        label: match.label,
-        severity: match.severity,
-        start: match.start,
-        end: match.end,
-        preview: input.slice(Math.max(0, match.start - 8), Math.min(input.length, match.end + 8)),
+      byType: combinedCounts,
+      matches: previewChanges.slice(0, 400).map((change) => ({
+        key: change.key,
+        label: change.label,
+        severity: change.severity,
+        ruleSet: change.ruleSet,
+        start: change.start,
+        end: change.end,
+        original: change.original,
+        replacement: change.replacement,
       })),
     };
     const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" });
@@ -326,6 +276,23 @@ export function RedactView({ onOpenGuide }: RedactViewProps) {
               {tr("preserve length in full mask")}
             </label>
           </div>
+          <div className="controls-row">
+            <span className="section-title">{tr("Regional rule sets")}</span>
+            {(["iran", "russia"] as Array<Exclude<RedactionRuleSet, "general">>).map((ruleSet) => (
+              <label key={ruleSet} className="microcopy" style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                <input
+                  type="checkbox"
+                  checked={ruleSetState[ruleSet]}
+                  onChange={(event) => setRuleSetState((prev) => ({ ...prev, [ruleSet]: event.target.checked }))}
+                  aria-label={`${tr("Toggle")} ${formatRuleSetLabel(ruleSet)}`}
+                />
+                {formatRuleSetLabel(ruleSet)}
+              </label>
+            ))}
+          </div>
+          <div className="microcopy">
+            {tr("Regional detectors stay off until you enable them. NullID only applies the optional Iran/Persian or Russia rule sets when you choose them explicitly.")}
+          </div>
         </div>
         <div className="panel" aria-label={tr("Redaction output")}>
           <div className="panel-heading">
@@ -333,7 +300,10 @@ export function RedactView({ onOpenGuide }: RedactViewProps) {
             <span className="panel-subtext">{tr("preview + apply")}</span>
           </div>
           <div className="redact-preview" aria-label={tr("Highlight view")}>
-            {highlight(input, findings.matches, tr("No findings yet."))}
+            {highlight(input, combinedMatches, tr("No findings yet."))}
+          </div>
+          <div className="microcopy">
+            {tr("Preview updates immediately. Apply writes the current transform result into the output box without hiding what was changed.")}
           </div>
           <textarea className="textarea" readOnly value={output || redacted} aria-label={tr("Redacted output")} />
           <div className="controls-row">
@@ -352,8 +322,11 @@ export function RedactView({ onOpenGuide }: RedactViewProps) {
           </div>
           <div className="status-line">
             <span>{tr("severity")}</span>
-            <Chip label={tr(findings.overall)} tone={findings.overall === "high" ? "danger" : "accent"} />
-            <span className="microcopy">{formatNumber(findings.total)} {tr("findings")}</span>
+            <Chip
+              label={tr(combinedMatches.some((match) => match.severity === "high") ? "high" : combinedMatches.some((match) => match.severity === "medium") ? "medium" : "low")}
+              tone={combinedMatches.some((match) => match.severity === "high") ? "danger" : "accent"}
+            />
+            <span className="microcopy">{formatNumber(combinedMatches.length)} {tr("findings")}</span>
           </div>
           <div className="status-line">
             <span>{tr("coverage")}</span>
@@ -379,6 +352,7 @@ export function RedactView({ onOpenGuide }: RedactViewProps) {
                 aria-label={`${tr("Toggle")} ${tr(detector.label)}`}
               />
               {tr(detector.label)}
+              {isOptionalRuleSet(detector.ruleSet) ? <span className="muted">({formatRuleSetLabel(detector.ruleSet)})</span> : null}
             </label>
           ))}
         </div>
@@ -391,23 +365,60 @@ export function RedactView({ onOpenGuide }: RedactViewProps) {
             </tr>
           </thead>
           <tbody>
-            {Object.entries(findings.counts).map(([key, count]) => (
+            {Object.entries(combinedCounts).map(([key, count]) => (
               <tr key={key}>
                 <td>{tr(key)}</td>
                 <td>{formatNumber(count)}</td>
                 <td>
-                  <span className={`tag ${findings.severityMap[key] === "high" ? "tag-danger" : "tag-accent"}`}>
-                    {tr(findings.severityMap[key])}
+                  <span className={`tag ${combinedSeverityMap[key] === "high" ? "tag-danger" : "tag-accent"}`}>
+                    {tr(combinedSeverityMap[key])}
                   </span>
                 </td>
               </tr>
             ))}
-            {findings.total === 0 && (
+            {combinedMatches.length === 0 && (
               <tr>
                 <td colSpan={3} className="muted">
                   {tr("no findings detected")}
                 </td>
               </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <div className="panel" aria-label={tr("Replacement preview")}>
+        <div className="panel-heading">
+          <span>{tr("Replacement preview")}</span>
+          <span className="panel-subtext">{tr("exact before / after")}</span>
+        </div>
+        <table className="table">
+          <thead>
+            <tr>
+              <th>{tr("type")}</th>
+              <th>{tr("severity")}</th>
+              <th>{tr("Original")}</th>
+              <th>{tr("Replacement")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {previewChanges.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="muted">
+                  {tr("No findings yet.")}
+                </td>
+              </tr>
+            ) : (
+              previewChanges.slice(0, 120).map((change) => (
+                <tr key={`${change.start}:${change.end}:${change.key}`}>
+                  <td>
+                    {tr(change.label)}
+                    {isOptionalRuleSet(change.ruleSet) ? <div className="microcopy">{formatRuleSetLabel(change.ruleSet)}</div> : null}
+                  </td>
+                  <td>{tr(change.severity)}</td>
+                  <td>{renderInlineSample(change.original)}</td>
+                  <td>{renderInlineSample(change.replacement)}</td>
+                </tr>
+              ))
             )}
           </tbody>
         </table>
@@ -446,145 +457,6 @@ export function RedactView({ onOpenGuide }: RedactViewProps) {
 
 type Match = RedactionMatch;
 
-function scan(
-  text: string,
-  rules: Detector[],
-  custom: CustomRule[],
-  options: { minimumSeverity: SeverityThreshold; minTokenLength: number },
-) {
-  const counts: Record<string, number> = {};
-  const severityMap: Record<string, Detector["severity"]> = {};
-  const matches: Match[] = [];
-  const minimumRank = rank(options.minimumSeverity);
-
-  const applyRule = (rule: Detector) => {
-    if (rank(rule.severity) < minimumRank) return;
-    const regex = new RegExp(rule.regex, rule.regex.flags);
-    regex.lastIndex = 0;
-    let match: RegExpExecArray | null;
-    while ((match = regex.exec(text)) !== null) {
-      const value = match[0];
-      if (rule.key === "token" && value.length < options.minTokenLength) {
-        if (!regex.global) break;
-        continue;
-      }
-      if (rule.validate && !rule.validate(value)) {
-        if (!regex.global) break;
-        continue;
-      }
-      counts[rule.label] = (counts[rule.label] || 0) + 1;
-      severityMap[rule.label] = rule.severity;
-      matches.push({ start: match.index, end: match.index + value.length, label: rule.label, severity: rule.severity });
-      if (!regex.global) break;
-    }
-  };
-
-  rules.forEach((rule) => applyRule(rule));
-  custom.forEach((rule) =>
-    applyRule({
-      key: rule.label,
-      label: rule.label,
-      regex: new RegExp(rule.regex, rule.regex.flags),
-      severity: minimumRank > rank("medium") ? "low" : "medium",
-      mask: `[${rule.label}]`,
-    }),
-  );
-
-  const resolved = resolveOverlaps(matches);
-  const total = Object.values(counts).reduce((a, b) => a + (b || 0), 0);
-  const worst =
-    (resolved
-      .map((match) => match.severity)
-      .sort((a, b) => rank(b) - rank(a))[0] as "high" | "medium" | "low" | undefined) || "low";
-
-  return { counts, total, overall: worst, matches: resolved, severityMap };
-}
-
-function redact(text: string, matches: Match[], mode: MaskMode, preserveLength = false) {
-  if (!matches.length) return text;
-  const sorted = [...matches].sort((a, b) => a.start - b.start);
-  let cursor = 0;
-  let output = "";
-  sorted.forEach((m) => {
-    output += text.slice(cursor, m.start);
-    const source = text.slice(m.start, m.end);
-    output += mode === "full" ? (preserveLength ? preserveMask(source, m.label) : `[${m.label}]`) : partialMask(source);
-    cursor = m.end;
-  });
-  output += text.slice(cursor);
-  return output;
-}
-
-function partialMask(value: string) {
-  if (value.length <= 4) return "*".repeat(value.length);
-  return "*".repeat(Math.max(0, value.length - 4)) + value.slice(-4);
-}
-
-function passesLuhn(value: string) {
-  const digits = toAsciiDigits(value).replace(/[^0-9]/g, "");
-  if (digits.length < 12 || digits.length > 19) return false;
-  let sum = 0;
-  let shouldDouble = false;
-  for (let i = digits.length - 1; i >= 0; i -= 1) {
-    let digit = Number(digits[i]);
-    if (shouldDouble) {
-      digit *= 2;
-      if (digit > 9) digit -= 9;
-    }
-    sum += digit;
-    shouldDouble = !shouldDouble;
-  }
-  return sum % 10 === 0;
-}
-
-function isLikelyPhone(value: string) {
-  const digits = toAsciiDigits(value).replace(/[^0-9]/g, "");
-  return digits.length >= 10 && digits.length <= 15;
-}
-
-function isValidIranNationalId(value: string) {
-  const digits = toAsciiDigits(value).replace(/[^0-9]/g, "");
-  if (!/^\d{10}$/.test(digits)) return false;
-  if (/^(\d)\1{9}$/.test(digits)) return false;
-  const check = Number(digits[9]);
-  const sum = digits
-    .slice(0, 9)
-    .split("")
-    .reduce((acc, ch, index) => acc + Number(ch) * (10 - index), 0);
-  const remainder = sum % 11;
-  return (remainder < 2 && check === remainder) || (remainder >= 2 && check === 11 - remainder);
-}
-
-function toAsciiDigits(value: string) {
-  return value
-    .replace(/[۰-۹]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 1728))
-    .replace(/[٠-٩]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 1584));
-}
-
-function isValidIban(value: string) {
-  const trimmed = toAsciiDigits(value).replace(/\s+/g, "").toUpperCase();
-  if (trimmed.length < 15 || trimmed.length > 34) return false;
-  const rearranged = `${trimmed.slice(4)}${trimmed.slice(0, 4)}`;
-  const converted = rearranged.replace(/[A-Z]/g, (ch) => `${ch.charCodeAt(0) - 55}`);
-  let remainder = 0;
-  for (let i = 0; i < converted.length; i += 1) {
-    const char = converted[i];
-    remainder = (remainder * 10 + Number(char)) % 97;
-  }
-  return remainder === 1;
-}
-
-function isValidIpv4(value: string) {
-  const normalized = toAsciiDigits(value);
-  const parts = normalized.split(".");
-  if (parts.length !== 4) return false;
-  return parts.every((part) => {
-    if (!/^\d{1,3}$/.test(part)) return false;
-    const num = Number(part);
-    return num >= 0 && num <= 255;
-  });
-}
-
 function highlight(text: string, matches: Match[], emptyLabel: string) {
   if (!matches.length) return <span className="muted">{emptyLabel}</span>;
   const sorted = [...matches].sort((a, b) => a.start - b.start);
@@ -603,14 +475,13 @@ function highlight(text: string, matches: Match[], emptyLabel: string) {
   return <div className="highlight-view">{parts}</div>;
 }
 
-function rank(value: "high" | "medium" | "low") {
-  return value === "high" ? 3 : value === "medium" ? 2 : 1;
+function renderInlineSample(value: string) {
+  return <code>{value.length > 48 ? `${value.slice(0, 45)}...` : value}</code>;
 }
 
-function preserveMask(value: string, label: string) {
-  const base = `[${label}]`;
-  if (value.length <= base.length) return "*".repeat(value.length);
-  return `${base}${"*".repeat(value.length - base.length)}`;
+function formatRuleSetLabel(ruleSet: Exclude<RedactionRuleSet, "general">) {
+  if (ruleSet === "iran") return "Iran / Persian rules";
+  return "Russia rules";
 }
 
 function clamp(value: number, min: number, max: number) {

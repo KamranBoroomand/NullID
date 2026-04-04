@@ -43,6 +43,82 @@ function runCliRaw(args: string[], env: Record<string, string> = {}) {
   });
 }
 
+async function sha256Buffer(value: Uint8Array) {
+  const digest = new Uint8Array(
+    await globalThis.crypto.subtle.digest("SHA-256", Uint8Array.from(value).buffer),
+  );
+  return Array.from(digest)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function createStoredZip(entries: Array<{ path: string; content: Uint8Array }>) {
+  const localParts: Uint8Array[] = [];
+  const centralParts: Uint8Array[] = [];
+  let offset = 0;
+
+  entries.forEach((entry) => {
+    const name = Buffer.from(entry.path, "utf8");
+    const size = entry.content.length;
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(0, 6);
+    local.writeUInt16LE(0, 8);
+    local.writeUInt32LE(0, 10);
+    local.writeUInt32LE(0, 14);
+    local.writeUInt32LE(size, 18);
+    local.writeUInt32LE(size, 22);
+    local.writeUInt16LE(name.length, 26);
+    local.writeUInt16LE(0, 28);
+    localParts.push(local, name, entry.content);
+
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt16LE(0, 8);
+    central.writeUInt16LE(0, 10);
+    central.writeUInt32LE(0, 12);
+    central.writeUInt32LE(0, 16);
+    central.writeUInt32LE(size, 20);
+    central.writeUInt32LE(size, 24);
+    central.writeUInt16LE(name.length, 28);
+    central.writeUInt16LE(0, 30);
+    central.writeUInt16LE(0, 32);
+    central.writeUInt16LE(0, 34);
+    central.writeUInt16LE(0, 36);
+    central.writeUInt32LE(0, 38);
+    central.writeUInt32LE(offset, 42);
+    centralParts.push(central, name);
+
+    offset += local.length + name.length + entry.content.length;
+  });
+
+  const centralDirectory = concatBytes(centralParts);
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(0, 4);
+  eocd.writeUInt16LE(0, 6);
+  eocd.writeUInt16LE(entries.length, 8);
+  eocd.writeUInt16LE(entries.length, 10);
+  eocd.writeUInt32LE(centralDirectory.length, 12);
+  eocd.writeUInt32LE(offset, 16);
+  eocd.writeUInt16LE(0, 20);
+  return concatBytes([...localParts, centralDirectory, eocd]);
+}
+
+function concatBytes(parts: Uint8Array[]) {
+  const total = parts.reduce((sum, part) => sum + part.length, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  parts.forEach((part) => {
+    out.set(part, offset);
+    offset += part.length;
+  });
+  return out;
+}
+
 describe("nullid local cli password hashing", () => {
   it("generates and verifies PBKDF2 password hash records", () => {
     const hashed = runCli(
@@ -288,6 +364,50 @@ describe("nullid local cli workflow packages", () => {
     }
   });
 
+  it("inspects zip archives locally and verifies them against an archive manifest", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "nullid-cli-archive-"));
+    try {
+      const zipPath = path.join(tempDir, "evidence.zip");
+      const manifestPath = path.join(tempDir, "manifest.json");
+      const entries = [
+        { path: "docs/readme.txt", content: Buffer.from("hello archive") },
+        { path: "logs/app.log", content: Buffer.from("token=[redacted]") },
+      ];
+
+      fs.writeFileSync(zipPath, Buffer.from(createStoredZip(entries)).toString("binary"), "binary");
+      const manifestFiles = await Promise.all(
+        entries.map(async (entry) => ({
+          path: entry.path,
+          sha256After: await sha256Buffer(entry.content),
+        })),
+      );
+      fs.writeFileSync(
+        manifestPath,
+        JSON.stringify(
+          {
+            kind: "nullid-archive-manifest",
+            files: manifestFiles,
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+
+      const inspected = runCli(["archive-inspect", zipPath, "--manifest", manifestPath]);
+      const inspection = inspected.inspection as Record<string, unknown>;
+      const verification = inspected.verification as Record<string, unknown>;
+
+      assert.equal(inspection.kind, "nullid-archive-inspection");
+      assert.equal(inspection.entryCount, 2);
+      assert.equal(verification.matched, 2);
+      assert.equal(verification.mismatched, 0);
+      assert.equal(verification.missingFromArchive, 0);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("inspects encrypted workflow package envelopes when a passphrase is provided", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "nullid-cli-envelope-"));
     try {
@@ -382,6 +502,51 @@ describe("nullid local cli workflow packages", () => {
       assert.equal(invalid.artifactType, "workflow-package");
       assert.equal(invalid.verificationState, "invalid");
       assert.match(String(invalid.failure), /unsupported workflow package schema: 99/i);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("nullid local cli wizard", () => {
+  it("walks through workflow selection, transform preview, and export", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "nullid-cli-wizard-"));
+    try {
+      const outputPath = path.join(tempDir, "wizard-bundle.json");
+      const result = spawnSync(process.execPath, [
+        cliPath,
+        "wizard",
+        "--workflow",
+        "support-ticket",
+        "--input-mode",
+        "text",
+        "--preset",
+        "nginx",
+        "--text",
+        "token=abcdefghijklmnopqrstuvwxyz12345 alice@example.com",
+        "--output",
+        outputPath,
+        "--yes",
+      ], {
+        cwd: process.cwd(),
+        encoding: "utf8",
+      });
+
+      assert.equal(result.status, 0);
+      assert.match(result.stdout, /Preview transforms:/);
+      assert.match(fs.readFileSync(outputPath, "utf8"), /workflowPackage/);
+
+      const payload = JSON.parse(fs.readFileSync(outputPath, "utf8")) as Record<string, unknown>;
+      const workflowPackage = payload.workflowPackage as Record<string, unknown>;
+      const workflowPreset = workflowPackage.workflowPreset as Record<string, unknown>;
+      const transforms = workflowPackage.transforms as Array<Record<string, unknown>>;
+
+      assert.equal(workflowPackage.workflowType, "safe-share-assistant");
+      assert.equal(workflowPreset.id, "support-ticket");
+      assert.equal(
+        transforms.some((transform) => transform.label === "Sanitize transformation"),
+        true,
+      );
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
