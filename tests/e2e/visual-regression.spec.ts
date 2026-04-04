@@ -37,7 +37,20 @@ for (const moduleEntry of coreModules) {
 
 async function openApp(page: import("@playwright/test").Page, theme: ThemeMode) {
   await page.addInitScript((themeMode) => {
+    let seed = 0x12345678;
+    const nextByte = () => {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      return seed & 0xff;
+    };
+
     Math.random = () => 0.123456789;
+    globalThis.crypto.getRandomValues = (typedArray) => {
+      const bytes = new Uint8Array(typedArray.buffer, typedArray.byteOffset, typedArray.byteLength);
+      for (let index = 0; index < bytes.length; index += 1) {
+        bytes[index] = nextByte();
+      }
+      return typedArray;
+    };
     window.localStorage.setItem("nullid:onboarding-complete", "true");
     window.localStorage.setItem("nullid:onboarding-step", "0");
     window.localStorage.setItem("nullid:theme", JSON.stringify(themeMode));

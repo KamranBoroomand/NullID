@@ -26,8 +26,12 @@ This document tracks what is already at release-candidate quality and what is st
 - Security and release checks:
   - Replaced regex-only offline-policy lint with AST-based source scanning.
   - Hardened security-header audit to strict directive/value checks.
+  - `Quality Gates` is now the default `pull_request` + `push` to `main` workflow and runs the documented validation path (`npm run validate`) plus guide assertion.
   - Standard browser validation now runs through the default `npm run e2e` Playwright path, with the same config also backing `npm run test:visual`.
-  - GitHub Pages deployment is now a manual-only workflow so `push`/`pull_request` quality gates stay separate from static-host publishing.
+  - `Visual Regression Gate` remains PR/manual-only and only runs when visual surfaces or baselines changed, so snapshot review stays meaningful instead of acting like default CI.
+  - `Release Dry-Run Gate` remains PR/manual-only and now only runs for release/deploy surface changes.
+  - GitHub Pages deployment is manual-only so `push`/`pull_request` quality gates stay separate from static-host publishing.
+  - Dependabot now ignores the current major Vite / React plugin / TypeScript migrations until they are scheduled as deliberate upgrade work.
   - Visual snapshots updated for intentional UI changes.
 
 ## Quality Gate Status

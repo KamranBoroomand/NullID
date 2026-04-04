@@ -3,12 +3,14 @@ name: Release Dry-Run Gate
 on:
   pull_request:
     branches: ["main"]
-  push:
-    branches: ["main"]
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: release-dry-run-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   dry-run:
@@ -18,45 +20,101 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect release-path changes
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "reason=manual-dispatch" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          changed_files="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")"
+          printf '%s\n' "$changed_files"
+
+          should_run=false
+          while IFS= read -r file; do
+            case "$file" in
+              .github/workflows/release-dry-run.yml|\
+              .github/workflows/release-signed.yml|\
+              .github/workflows/pages.yml|\
+              .github/workflows/reproducibility.yml|\
+              docs/release-readiness.md|\
+              scripts/release-dry-run.mjs|\
+              scripts/package-release.mjs|\
+              scripts/verify-release-bundle.mjs|\
+              scripts/generate-build-manifest.mjs|\
+              scripts/generate-sbom.mjs|\
+              scripts/verify-build-manifest.mjs)
+                should_run=true
+                ;;
+            esac
+          done <<< "$changed_files"
+
+          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
+          echo "reason=release-path-filter" >> "$GITHUB_OUTPUT"
+
+      - name: Skip non-release changes
+        if: steps.scope.outputs.should_run != 'true'
+        run: echo "Release dry-run skipped because this change did not touch release/deploy surfaces."
 
       - name: Setup Node
+        if: steps.scope.outputs.should_run == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
       - name: Install dependencies
+        if: steps.scope.outputs.should_run == 'true'
         run: npm ci
 
       - name: Install Playwright browser
+        if: steps.scope.outputs.should_run == 'true'
         run: npm run e2e:install
 
       - name: Typecheck
+        if: steps.scope.outputs.should_run == 'true'
         run: npm run typecheck
 
       - name: i18n coverage
+        if: steps.scope.outputs.should_run == 'true'
         run: npm run i18n:check
 
       - name: Lint
+        if: steps.scope.outputs.should_run == 'true'
         run: npm run lint
 
       - name: Unit tests
+        if: steps.scope.outputs.should_run == 'true'
         run: npm run test
 
       - name: Browser e2e
+        if: steps.scope.outputs.should_run == 'true'
         run: CI=1 npm run e2e
 
       - name: Build reproducible artifacts
+        if: steps.scope.outputs.should_run == 'true'
         run: npm run build:repro
 
       - name: Resolve dry-run tag
+        if: steps.scope.outputs.should_run == 'true'
         id: release_tag
         run: echo "tag=dryrun-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
 
       - name: Run release dry-run checks
+        if: steps.scope.outputs.should_run == 'true'
         run: npm run release:dry-run -- --tag "${{ steps.release_tag.outputs.tag }}"
 
       - name: Upload dry-run bundle artifact
+        if: steps.scope.outputs.should_run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: release-dry-run-${{ steps.release_tag.outputs.tag }}
