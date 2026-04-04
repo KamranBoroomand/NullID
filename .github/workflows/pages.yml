@@ -1,10 +1,6 @@
-name: Deploy NullID to GitHub Pages
+name: Deploy NullID to GitHub Pages (Manual)
 
 on:
-  pull_request:
-    branches: ["main"]
-  push:
-    branches: ["main"]
   workflow_dispatch:
 
 permissions:
@@ -18,13 +14,13 @@ concurrency:
 
 jobs:
   build:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Pages
-        if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v5
 
       - name: Setup Node
@@ -73,13 +69,12 @@ jobs:
           STAMP
 
       - name: Upload artifact
-        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist
 
   deploy:
-    if: github.event_name != 'pull_request'
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     needs: build
     runs-on: ubuntu-latest
     environment:

@@ -249,16 +249,16 @@ Primary npm scripts:
 | `npm run audit:deps` | `npm audit --audit-level=high` | Run dependency vulnerability audit (network required). |
 | `npm run security:check` | `npm run audit:headers && npm run lint && npm run test` | Run local security checks (header baseline + no-network policy + unit tests). |
 | `npm run test` | `tsc -p tsconfig.test.json && node --test build-test/__tests__/*.js` | Compile and run utility tests. |
-| `npm run e2e` | `playwright test tests/e2e/app.spec.ts tests/e2e/i18n-layout.spec.ts tests/e2e/i18n-switching.spec.ts` | Run Playwright behavior plus locale layout and locale-switching suites. |
-| `npm run test:visual` | `playwright test tests/e2e/visual-regression.spec.ts` | Run desktop visual regression matrix (core modules × light/dark themes). |
-| `npm run test:visual:update` | `playwright test tests/e2e/visual-regression.spec.ts --update-snapshots` | Refresh visual snapshot baselines after intentional UI changes. |
+| `npm run e2e` | `node scripts/run-e2e.mjs tests/e2e/app.spec.ts tests/e2e/i18n-layout.spec.ts tests/e2e/i18n-switching.spec.ts` | Run the standard Playwright behavior plus locale layout and locale-switching suites. |
+| `npm run test:visual` | `node scripts/run-e2e.mjs tests/e2e/visual-regression.spec.ts` | Run desktop visual regression matrix (core modules × light/dark themes). |
+| `npm run test:visual:update` | `node scripts/run-e2e.mjs tests/e2e/visual-regression.spec.ts --update-snapshots` | Refresh visual snapshot baselines after intentional UI changes. |
 | `npm run visual:drift-report` | `node scripts/collect-visual-drift.mjs` | Build drift summary artifacts (`json` + markdown) from Playwright diff output. |
 | `npm run test:e2e:i18n-layout` | `playwright test tests/e2e/i18n-layout.spec.ts` | Run EN/RU/FA layout integrity tests. |
 | `npm run validate` | `npm run typecheck && npm run i18n:check && npm run lint && npm run test && npm run e2e && npm run build && npm run verify:build` | Full local quality pipeline. |
 
 Team references:
 - CI templates: `.github/workflow-templates/nullid-pr-sanitize.yml`, `.github/workflow-templates/nullid-artifact-checks.yml`
-- Pages workflow: `.github/workflows/pages.yml`
+- Pages workflow (manual deploy only): `.github/workflows/pages.yml`
 - Reproducibility workflow: `.github/workflows/reproducibility.yml`
 - Visual regression workflow: `.github/workflows/visual-regression.yml`
 - Desktop Tauri smoke workflow: `.github/workflows/desktop-tauri-smoke.yml`
@@ -287,6 +287,7 @@ NullID deploys as static files.
    npm run verify:build
    ```
 3. Publish `dist/` to any static host (GitHub Pages, Netlify, Vercel static, S3 + CDN, etc.).
+   - The repo's GitHub Pages workflow is manual-only (`workflow_dispatch`) so normal pushes do not trigger deploy attempts.
 4. Serve over HTTPS so service workers and install prompts work correctly.
 5. Apply security headers (`Content-Security-Policy`, `X-Content-Type-Options`, etc.) using `public/_headers` or `vercel.json`.
 6. For server-backed deployments, set session cookies server-side with `HttpOnly`, `Secure`, and `SameSite=Strict`.

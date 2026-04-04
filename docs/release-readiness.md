@@ -27,6 +27,7 @@ This document tracks what is already at release-candidate quality and what is st
   - Replaced regex-only offline-policy lint with AST-based source scanning.
   - Hardened security-header audit to strict directive/value checks.
   - Standard browser validation now runs through the default `npm run e2e` Playwright path, with the same config also backing `npm run test:visual`.
+  - GitHub Pages deployment is now a manual-only workflow so `push`/`pull_request` quality gates stay separate from static-host publishing.
   - Visual snapshots updated for intentional UI changes.
 
 ## Quality Gate Status
