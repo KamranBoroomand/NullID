@@ -16,6 +16,8 @@ import { OnboardingStep, OnboardingTour } from "./components/OnboardingTour";
 import type { HashViewActions } from "./views/HashView";
 import { ActionDialog } from "./components/ActionDialog";
 import { I18nProvider, useI18n } from "./i18n";
+import { resolveMotionMode } from "./motion/config";
+import { usePrefersReducedMotion } from "./hooks/usePrefersReducedMotion";
 import {
   SHARED_KEY_HINT_PROFILE_KEY,
   readLegacyProfiles,
@@ -30,6 +32,14 @@ import {
   sharedPassphraseTrustTagClass,
   type SharedPassphraseTrustState,
 } from "./utils/sharedPassphraseTrustState";
+
+function readViewport() {
+  const visualViewport = window.visualViewport;
+  return {
+    width: Math.round(visualViewport?.width ?? window.innerWidth),
+    height: Math.round(visualViewport?.height ?? window.innerHeight),
+  };
+}
 
 const HashView = lazy(() => import("./views/HashView").then((module) => ({ default: module.HashView })));
 const BatchReviewView = lazy(() => import("./views/BatchReviewView").then((module) => ({ default: module.BatchReviewView })));
@@ -79,7 +89,7 @@ function WorkspaceView({ active, onRegisterHashActions, onStatus, onOpenGuide, o
       {active === "pw" ? <PwView onOpenGuide={onOpenGuide} /> : null}
       {active === "vault" ? <VaultView onOpenGuide={onOpenGuide} /> : null}
       {active === "selftest" ? <SelfTestView onOpenGuide={onOpenGuide} /> : null}
-      {active === "guide" ? <GuideView /> : null}
+      {active === "guide" ? <GuideView onOpenModule={onSelectModule} /> : null}
     </Suspense>
   );
 }
@@ -87,17 +97,19 @@ function WorkspaceView({ active, onRegisterHashActions, onStatus, onOpenGuide, o
 function AppShell() {
   const { push } = useToast();
   const { locale, setLocale, t, tr } = useI18n();
+  const prefersReducedMotion = usePrefersReducedMotion();
   const buildId = import.meta.env.VITE_BUILD_ID?.trim();
   const buildMarker = buildId ? `${tr("Version")}: ${buildId.slice(0, 7)}` : import.meta.env.PROD ? tr("Version: Release") : tr("Version: Local");
   const [activeModule, setActiveModule] = usePersistentState<ModuleKey>("nullid:last-module", "hash");
   const [status, setStatus] = useState({ message: "ready", tone: "neutral" as StatusTone });
-  const [theme, setTheme] = usePersistentState<ThemeMode>("nullid:theme", "light");
+  const [theme, setTheme] = usePersistentState<ThemeMode>("nullid:theme", "dark");
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   const [onboardingComplete, setOnboardingComplete] = usePersistentState<boolean>("nullid:onboarding-complete", false);
   const [tourStepIndex, setTourStepIndex] = usePersistentState<number>("nullid:onboarding-step", 0);
   const [tourOpen, setTourOpen] = useState(!onboardingComplete);
   const [hashActions, setHashActions] = useState<HashViewActions | null>(null);
-  const [viewport, setViewport] = useState({ width: window.innerWidth, height: window.innerHeight });
+  const [viewport, setViewport] = useState(() => readViewport());
   const [keyHintProfiles, setKeyHintProfiles] = usePersistentState<KeyHintProfile[]>(SHARED_KEY_HINT_PROFILE_KEY, []);
   const [selectedKeyHintProfileId, setSelectedKeyHintProfileId] = usePersistentState<string>("nullid:profile:key-hint-selected", "");
   const [keyHintProfileName, setKeyHintProfileName] = useState("");
@@ -147,6 +159,7 @@ function AppShell() {
     () => keyHintProfiles.find((profile) => profile.id === selectedKeyHintProfileId) ?? null,
     [keyHintProfiles, selectedKeyHintProfileId],
   );
+  const motionMode = useMemo(() => resolveMotionMode(prefersReducedMotion), [prefersReducedMotion]);
   const profileExportTrustState = useMemo<SharedPassphraseTrustState>(
     () =>
       getSharedPassphraseExportTrustState({
@@ -199,6 +212,14 @@ function AppShell() {
   }, [theme]);
 
   useEffect(() => {
+    document.documentElement.dataset.motionMode = motionMode;
+
+    return () => {
+      delete document.documentElement.dataset.motionMode;
+    };
+  }, [motionMode]);
+
+  useEffect(() => {
     const handleError = (event: ErrorEvent) => {
       console.error("window error", event.error || event.message);
       push(`runtime error: ${event.message}`, "danger");
@@ -229,6 +250,7 @@ function AppShell() {
       setActiveModule(key);
       setStatus({ message: `:${key} ready`, tone: "neutral" });
       push(`module :: ${key}`, "accent");
+      setNavOpen(false);
       setPaletteOpen(false);
     },
     [push, setActiveModule],
@@ -507,9 +529,26 @@ function AppShell() {
   }, [activeModule]);
 
   useEffect(() => {
-    const handleResize = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    const rootStyle = document.documentElement.style;
+    const syncViewport = () => {
+      const next = readViewport();
+      setViewport((prev) => (prev.width === next.width && prev.height === next.height ? prev : next));
+      rootStyle.setProperty("--app-viewport-width", `${next.width}px`);
+      rootStyle.setProperty("--app-viewport-height", `${next.height}px`);
+    };
+
+    syncViewport();
+    window.addEventListener("resize", syncViewport);
+    window.visualViewport?.addEventListener("resize", syncViewport);
+    window.visualViewport?.addEventListener("scroll", syncViewport);
+
+    return () => {
+      window.removeEventListener("resize", syncViewport);
+      window.visualViewport?.removeEventListener("resize", syncViewport);
+      window.visualViewport?.removeEventListener("scroll", syncViewport);
+      rootStyle.removeProperty("--app-viewport-width");
+      rootStyle.removeProperty("--app-viewport-height");
+    };
   }, []);
 
   useEffect(() => {
@@ -559,8 +598,13 @@ function AppShell() {
     [closePalette, push],
   );
 
-  const isStacked = viewport.width < 1100;
-  const isCompact = viewport.width < 960 || viewport.height < 820;
+  const useNavDrawer = viewport.width < 1040;
+  const isCompact = viewport.width < 840;
+  const isShort = viewport.height < 780;
+
+  useEffect(() => {
+    setNavOpen(false);
+  }, [useNavDrawer, resolvedActiveModule]);
 
   const goToGuide = useCallback(
     (key?: ModuleKey) => {
@@ -628,7 +672,7 @@ function AppShell() {
   );
 
   return (
-    <div className={`app-surface ${isCompact ? "is-compact" : ""}`}>
+    <div className={`app-surface ${isCompact ? "is-compact" : ""} ${isShort ? "is-short" : ""}`} data-motion-mode={motionMode}>
       <input
         ref={importProfileInputRef}
         type="file"
@@ -642,20 +686,33 @@ function AppShell() {
         }}
       />
       <Frame
-        stacked={isStacked}
-        compact={isCompact}
-        buildMarker={buildMarker}
-        modulePane={<ModuleList modules={modules} active={resolvedActiveModule} onSelect={handleSelectModule} />}
+        showNavDrawer={useNavDrawer}
+        navDrawerOpen={navOpen}
+        onCloseNavDrawer={() => setNavOpen(false)}
+        modulePane={
+          <ModuleList
+            modules={modules}
+            active={resolvedActiveModule}
+            onSelect={handleSelectModule}
+            buildMarker={buildMarker}
+            mode={useNavDrawer ? "drawer" : "rail"}
+            theme={theme}
+          />
+        }
         header={
           <GlobalHeader
             brand="NullID"
             pageTitle={moduleLookup[resolvedActiveModule].title}
+            pageSubtitle={moduleLookup[resolvedActiveModule].subtitle}
             pageToken={`:${resolvedActiveModule}`}
             status={status}
             theme={theme}
             locale={locale}
-            compact={isCompact}
+            compact={isCompact || isShort}
+            showNavToggle={useNavDrawer}
+            navOpen={navOpen}
             onToggleTheme={toggleTheme}
+            onToggleNav={() => setNavOpen((open) => !open)}
             onLocaleChange={setLocale}
             onOpenCommands={openPalette}
             onWipe={openWipeDialog}
@@ -765,7 +822,7 @@ function AppShell() {
           <>
             <div className="status-line">
               <span>{tr("trust state")}</span>
-              <span className={sharedPassphraseTrustTagClass(profileExportTrustState)}>
+              <span className={`${sharedPassphraseTrustTagClass(profileExportTrustState)} motion-trust-tag`}>
                 {tr(formatSharedPassphraseTrustState(profileExportTrustState))}
               </span>
               {profileExportKeyHint.trim() ? <span className="microcopy">{tr("hint")}: {profileExportKeyHint.trim()}</span> : null}
@@ -858,7 +915,7 @@ function AppShell() {
           <>
             <div className="status-line">
               <span>{tr("trust state")}</span>
-              <span className={sharedPassphraseTrustTagClass(profileImportTrustState)}>
+              <span className={`${sharedPassphraseTrustTagClass(profileImportTrustState)} motion-trust-tag`}>
                 {tr(formatSharedPassphraseTrustState(profileImportTrustState))}
               </span>
               {profileImportDescriptor.keyHint ? <span className="microcopy">{tr("hint")}: {profileImportDescriptor.keyHint}</span> : null}

@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v4";
 const CACHE_NAME = `nullid-cache-${CACHE_VERSION}`;
 const APP_SHELL_FILES = [
   ".",
@@ -6,6 +6,10 @@ const APP_SHELL_FILES = [
   "manifest.webmanifest",
   "nullid-preview.png",
   "favicon.svg",
+  "brand/nullid-mark-dark.svg",
+  "brand/nullid-mark-light.svg",
+  "brand/nullid-wordmark-dark.svg",
+  "brand/nullid-wordmark-light.svg",
   "icons/favicon-16.png",
   "icons/favicon-32.png",
   "icons/icon-192.png",

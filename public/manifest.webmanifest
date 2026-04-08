@@ -1,14 +1,14 @@
 {
   "name": "NullID",
   "short_name": "NullID",
-  "description": "Offline-first security toolbox for hashing, redaction, sanitization, encryption, and secure local notes.",
+  "description": "Offline-first brutalist security workbench for hashing, redaction, sanitization, encryption, and secure local notes.",
   "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#111111",
-  "theme_color": "#111111",
+  "background_color": "#020304",
+  "theme_color": "#020304",
   "icons": [
     {
       "src": "./icons/icon-192.png",

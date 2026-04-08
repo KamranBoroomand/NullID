@@ -1,7 +1,7 @@
 # NullID
-Offline-first security toolbox for hashing, redaction, sanitization, encryption, secure local notes, and password storage hashing, with a browser-first UI, a local Node CLI for supported automation workflows, and no external services.
+Offline-first security workbench for hashing, redaction, sanitization, encryption, secure local notes, and password storage hashing, with a browser-first UI, a local Node CLI for supported automation workflows, and no external services.
 
-![NullID preview](./nullid-preview.png)
+![NullID current operator shell preview](./nullid-preview.png)
 
 ## Table of Contents
 1. [Overview](#overview)
@@ -257,7 +257,7 @@ Primary npm scripts:
 | `npm run release:verify` | `node scripts/verify-release-bundle.mjs` | Verify packaged release artifacts/checksums. |
 | `npm run release:dry-run` | `node scripts/release-dry-run.mjs` | Run release bundle + checksum verification gate before publish. |
 | `npm run desktop:init` | `node scripts/tauri-init.mjs` | Bootstrap desktop packaging path (`desktop/tauri`). |
-| `npm run desktop:smoke` | `node scripts/desktop-smoke.mjs` | Validate desktop Tauri packaging inputs and compile smoke checks. |
+| `npm run desktop:smoke` | `node scripts/desktop-smoke.mjs` | Validate desktop Tauri packaging inputs and run cargo smoke checks (requires Rust toolchain). |
 | `npm run assets:brand` | `node scripts/generate-brand-assets.mjs` | Regenerate social/app icon assets from template. |
 | `npm run preview` | `vite preview` | Preview production build locally. |
 | `npm run typecheck` | `tsc -b` | Run TypeScript project checks. |

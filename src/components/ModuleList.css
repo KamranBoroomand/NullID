@@ -1,66 +1,170 @@
 .module-list {
-  padding: 1.25rem 1rem 1.5rem;
+  padding: clamp(0.75rem, 1.6vh, 1rem);
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  min-height: 100%;
+  gap: clamp(0.75rem, 1.6vh, 1rem);
+  height: 100%;
+  min-height: 0;
   background: var(--surface-0);
-  border-inline-end: 1px solid var(--border-subtle);
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable both-edges;
+  scroll-padding-bottom: max(1rem, calc(var(--app-safe-bottom) + 0.6rem));
 }
 
-/* Mobile / stacked layout: render modules as a horizontal scroller.
-   This prevents the navigation pane from consuming the full viewport height
-   and makes it usable on small screens. */
+.module-intro {
+  padding: 0 0 1rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.module-kicker {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.module-brand {
+  margin: 0;
+  font-size: 1.55rem;
+  line-height: 1.02;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+}
+
+.module-blurb {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  max-width: 24ch;
+}
+
 .frame-content.is-stacked .module-list {
   padding: 0.75rem 0.85rem;
   gap: 0.65rem;
 }
 
-.frame-content.is-stacked .module-list nav ul {
-  flex-direction: row;
-  gap: 0.5rem;
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
-  padding-bottom: 0.25rem;
-  scroll-snap-type: x proximity;
-}
-
-.frame-content.is-stacked .module-list nav ul::-webkit-scrollbar {
-  height: 6px;
-}
-
-.frame-content.is-stacked .module-list li {
-  flex: 0 0 auto;
-  scroll-snap-align: start;
-}
-
-.frame-content.is-stacked .module-button {
-  width: auto;
-  min-width: 13.25rem;
-}
-
 .module-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  row-gap: 0.2rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  font-family: var(--font-sans);
+  display: grid;
+  gap: 0.35rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--border-strong);
 }
 
-.module-title {
-  font-weight: 800;
-  font-size: 1.3rem;
+.module-header-copy {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.module-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.module-brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.module-brand-wordmark {
+  width: clamp(5.1rem, 9vw, 6.6rem);
+  height: auto;
+  flex: 0 0 auto;
+}
+
+.module-count {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 2px;
+  background: var(--token-bg);
+  font-family: var(--font-mono);
 }
 
 .module-subtitle {
-  font-size: 0.85rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.module-count-value {
+  color: var(--accent);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.module-count-label {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.module-focus {
+  padding: 0 0 0.95rem;
+  display: grid;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.module-focus-label,
+.module-group-label,
+.module-footer {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.module-focus-label,
+.module-group-label {
+  color: var(--text-muted);
+}
+
+.module-focus-title {
+  font-size: 1.02rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.module-focus-copy {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.module-list nav {
+  display: grid;
+  gap: 0.9rem;
+  flex: 1;
+  min-height: 0;
+  align-content: start;
+}
+
+.module-group {
+  padding-top: 0.85rem;
+  display: grid;
+  gap: 0.55rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.module-group-label {
+  color: var(--accent);
 }
 
 .module-list ul {
@@ -75,52 +179,49 @@
 .module-button {
   width: 100%;
   border: 1px solid var(--border-subtle);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(0, 0, 0, 0.02));
+  background: var(--control-bg);
   color: var(--text-primary);
-  border-radius: 0.7rem;
-  padding: 0.8rem 0.9rem;
+  border-radius: 2px;
+  padding: 0.75rem 0.8rem;
   display: grid;
   grid-template-columns: auto 1fr auto;
-  gap: 0.75rem;
+  gap: 0.65rem;
   align-items: center;
   text-align: start;
   cursor: pointer;
-  transition: border-color 180ms ease, background 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+  transition: border-color 120ms linear, background-color 120ms linear, color 120ms linear;
   position: relative;
 }
 
 .module-button:hover {
-  border-color: var(--border-strong);
-  transform: translateY(-1px);
-  background: var(--surface-1);
-  color: var(--text-secondary);
-  box-shadow: var(--shadow-soft);
+  border-color: var(--accent);
+  color: var(--text-primary);
+  background: var(--control-bg-hover);
 }
 
 .module-button:focus-visible {
   outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
+  outline-offset: 1px;
 }
 
 .module-button.active {
   border-color: var(--accent);
-  background: linear-gradient(150deg, var(--surface-1), var(--surface-2));
+  background: color-mix(in srgb, var(--accent-soft) 42%, var(--control-bg));
   color: var(--text-primary);
-  box-shadow: var(--shadow-soft);
 }
 
 .module-key {
   font-family: var(--font-mono);
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   color: var(--text-muted);
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
-  min-width: 8ch;
-  padding: 0.25rem 0.65rem;
-  border-radius: 0.5rem;
+  min-width: 7.2ch;
+  padding: 0.24rem 0.42rem;
+  border-radius: 2px;
   border: 1px solid var(--border-subtle);
-  background: var(--surface-1);
+  background: var(--token-bg);
 }
 
 .module-copy {
@@ -133,17 +234,23 @@
 }
 
 .module-name {
-  font-weight: 700;
+  font-weight: 800;
   font-family: var(--font-sans);
+  text-transform: uppercase;
+  font-size: 0.92rem;
+  letter-spacing: -0.01em;
   white-space: normal;
   overflow-wrap: anywhere;
-  line-height: 1.25;
+  line-height: 1.15;
 }
 
 .module-sub {
-  font-size: 0.85rem;
+  font-size: 0.76rem;
   color: var(--text-muted);
   line-height: 1.3;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   min-width: 0;
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -151,13 +258,72 @@
 
 .module-indicator {
   color: var(--accent);
-  font-size: 1rem;
+  font-size: 0.95rem;
   opacity: 0;
   display: inline-flex;
   justify-content: center;
   min-width: 1.25rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
 }
 
 .module-button.active .module-indicator {
   opacity: 1;
+}
+
+.module-footer {
+  margin-top: auto;
+  padding: 0.9rem 0 max(0.2rem, var(--app-safe-bottom));
+  display: grid;
+  gap: 0.25rem;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border-strong);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.module-list-drawer {
+  height: 100%;
+  min-height: 0;
+}
+
+.module-list-drawer .module-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-0);
+}
+
+.module-list-drawer .module-footer {
+  padding-bottom: 1rem;
+}
+
+@media (max-height: 820px) {
+  .module-list {
+    padding: 0.75rem;
+    gap: 0.72rem;
+  }
+
+  .module-header {
+    padding-bottom: 0.75rem;
+  }
+
+  .module-brand-wordmark {
+    width: clamp(4.8rem, 8vw, 6rem);
+  }
+
+  .module-focus {
+    padding-bottom: 0.75rem;
+    gap: 0.2rem;
+  }
+
+  .module-group {
+    padding-top: 0.72rem;
+  }
+
+  .module-button {
+    padding: 0.62rem 0.72rem;
+  }
 }

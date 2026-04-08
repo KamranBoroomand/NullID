@@ -101,6 +101,7 @@ export const messages: Record<AppLocale, Record<string, string>> = {
     "app.commandsList": "Commands",
     "app.noCommands": "No commands",
     "app.closeCommandPalette": "Close command palette",
+    "app.close": "Close",
 
     "app.confirm": "confirm",
     "app.cancel": "cancel",
@@ -263,6 +264,7 @@ export const messages: Record<AppLocale, Record<string, string>> = {
     "app.commandsList": "فرمان‌ها",
     "app.noCommands": "فرمانی یافت نشد",
     "app.closeCommandPalette": "بستن پالت فرمان",
+    "app.close": "بستن",
 
     "app.confirm": "تایید",
     "app.cancel": "لغو",
@@ -425,6 +427,7 @@ export const messages: Record<AppLocale, Record<string, string>> = {
     "app.commandsList": "Команды",
     "app.noCommands": "Команды не найдены",
     "app.closeCommandPalette": "Закрыть палитру команд",
+    "app.close": "Закрыть",
 
     "app.confirm": "подтвердить",
     "app.cancel": "отмена",

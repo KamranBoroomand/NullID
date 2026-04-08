@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 320" role="img" aria-label="NullID lockup">
+  <rect width="1440" height="320" fill="transparent" />
+  <g transform="translate(18 40) scale(0.2)">
+    
+    <g transform="translate(14 16)">
+      <path fill="rgba(22, 19, 16, 0.12)" fill-rule="evenodd" d="M188 128H648L792 272V896H188V128ZM264 204V820H716V308L612 204H264Z" />
+      <rect x="188" y="164" width="248" height="44" fill="rgba(22, 19, 16, 0.12)" />
+      <rect x="320" y="414" width="292" height="54" fill="rgba(22, 19, 16, 0.12)" />
+      <rect x="320" y="530" width="216" height="48" fill="rgba(22, 19, 16, 0.12)" />
+      <rect x="320" y="644" width="144" height="42" fill="rgba(22, 19, 16, 0.12)" />
+    </g>
+    <path fill="#161310" fill-rule="evenodd" d="M188 128H648L792 272V896H188V128ZM264 204V820H716V308L612 204H264Z" />
+    <rect x="188" y="164" width="248" height="44" fill="#5f7712" />
+    <rect x="320" y="414" width="292" height="54" fill="#161310" />
+    <rect x="320" y="530" width="216" height="48" fill="#161310" />
+    <rect x="320" y="644" width="144" height="42" fill="#161310" />
+  
+  </g>
+  <g transform="translate(264 56)">
+    
+    <g transform="translate(12 12)">
+      
+    <g fill="rgba(22, 19, 16, 0.12)">
+      <rect x="28" y="20" width="30" height="152" />
+      <rect x="103" y="20" width="30" height="152" />
+      <polygon points="52,20 82,20 108,172 78,172" />
+
+      <rect x="152" y="68" width="26" height="104" />
+      <rect x="218" y="68" width="26" height="104" />
+      <rect x="178" y="144" width="40" height="28" />
+
+      <rect x="274" y="26" width="22" height="146" />
+      <rect x="320" y="26" width="22" height="146" />
+
+      <rect x="378" y="20" width="66" height="20" />
+      <rect x="400" y="20" width="22" height="152" />
+      <rect x="378" y="152" width="66" height="20" />
+
+      <path fill-rule="evenodd" d="M468 20H558C602 20 624 46 624 96C624 146 602 172 558 172H468V20ZM502 52V140H548C576 140 590 126 590 96C590 66 576 52 548 52H502Z" />
+    </g>
+  
+    </g>
+    
+    <g fill="#161310">
+      <rect x="28" y="20" width="30" height="152" />
+      <rect x="103" y="20" width="30" height="152" />
+      <polygon points="52,20 82,20 108,172 78,172" />
+
+      <rect x="152" y="68" width="26" height="104" />
+      <rect x="218" y="68" width="26" height="104" />
+      <rect x="178" y="144" width="40" height="28" />
+
+      <rect x="274" y="26" width="22" height="146" />
+      <rect x="320" y="26" width="22" height="146" />
+
+      <rect x="378" y="20" width="66" height="20" />
+      <rect x="400" y="20" width="22" height="152" />
+      <rect x="378" y="152" width="66" height="20" />
+
+      <path fill-rule="evenodd" d="M468 20H558C602 20 624 46 624 96C624 146 602 172 558 172H468V20ZM502 52V140H548C576 140 590 126 590 96C590 66 576 52 548 52H502Z" />
+    </g>
+  
+    <rect x="250" y="14" width="192" height="12" fill="#5f7712" />
+    <rect x="318" y="178" width="126" height="10" fill="#5f7712" />
+  
+  </g>
+  <text x="270" y="258" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="28" letter-spacing="8" fill="#62584d">LOCAL TRUST TOOLING</text>
+</svg>

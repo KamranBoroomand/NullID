@@ -424,8 +424,9 @@ test("mobile navigation scrolls and allows selection", async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
   await openApp(page);
+  await page.getByRole("button", { name: /Module list/i }).click();
   await page.getByRole("button", { name: /Encrypt \/ Decrypt/i }).click();
-  await expect(page.getByText("Encrypt").first()).toBeVisible();
+  await expect(page.getByLabel("Encrypt panel")).toBeVisible();
   await context.close();
 });
 
@@ -489,6 +490,7 @@ test("mobile secure notes flow supports create and render", async ({ browser }) 
   const context = await browser.newContext({ viewport: { width: 375, height: 812 } });
   const page = await context.newPage();
   await openApp(page);
+  await page.getByRole("button", { name: /Module list/i }).click();
   await page.getByRole("button", { name: /Secure Notes/i }).click();
   await page.getByLabel("Vault key").fill("mobile-pass");
   await page.getByRole("button", { name: /^unlock$/i }).click();
@@ -522,6 +524,7 @@ async function expectMobileModuleSnapshot(
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
   await openApp(page);
+  await page.getByRole("button", { name: /Module list/i }).click();
   await page.getByRole("button", { name: moduleButton }).click();
   await expect(page.locator(".workspace")).toHaveScreenshot(snapshotName, {
     animations: "disabled",

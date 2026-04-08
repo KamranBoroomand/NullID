@@ -1,0 +1,123 @@
+.panel-overlay {
+  --panel-overlay-padding: clamp(0.75rem, 2vh, 1rem);
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay, 1200);
+  display: grid;
+  place-items: center;
+  padding-top: max(var(--panel-overlay-padding), calc(var(--app-safe-top) + 0.5rem));
+  padding-right: max(var(--panel-overlay-padding), calc(var(--app-safe-right) + 0.5rem));
+  padding-bottom: max(var(--panel-overlay-padding), calc(var(--app-safe-bottom) + 0.5rem));
+  padding-left: max(var(--panel-overlay-padding), calc(var(--app-safe-left) + 0.5rem));
+  background: var(--overlay-backdrop);
+}
+
+.panel-overlay-surface {
+  width: min(980px, calc(var(--app-viewport-width, 100vw) - (var(--panel-overlay-padding) * 2)));
+  max-height: min(980px, calc(var(--app-viewport-height, 100vh) - (var(--panel-overlay-padding) * 2)));
+  min-height: min(34rem, calc(var(--app-viewport-height, 100vh) - (var(--panel-overlay-padding) * 2)));
+  border: 1px solid var(--border-strong);
+  border-radius: 2px;
+  background: var(--surface-0);
+  box-shadow: var(--shadow-strong);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.panel-overlay-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.9rem;
+  align-items: start;
+  padding: 1rem 1rem 0.95rem;
+  border-bottom: 1px solid var(--border-strong);
+  background: var(--panel-alt);
+}
+
+.panel-overlay-heading {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.panel-overlay-kicker {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.panel-overlay-title {
+  margin: 0;
+  font-size: clamp(1.3rem, 2vw, 1.8rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.panel-overlay-summary {
+  margin: 0;
+  max-width: 68ch;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.panel-overlay-toolbar,
+.panel-overlay-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.panel-overlay-close {
+  white-space: nowrap;
+}
+
+.panel-overlay-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 1rem;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-0) 92%, transparent), transparent 5rem),
+    var(--surface-0);
+}
+
+@media (max-width: 960px), (max-height: 820px) {
+  .panel-overlay {
+    --panel-overlay-padding: 0.75rem;
+  }
+
+  .panel-overlay-surface {
+    width: 100%;
+    max-height: 100%;
+    min-height: min(28rem, calc(var(--app-viewport-height, 100vh) - (var(--panel-overlay-padding) * 2)));
+  }
+
+  .panel-overlay-header {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-overlay-toolbar {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-height: 720px) {
+  .panel-overlay {
+    --panel-overlay-padding: 0.85rem;
+  }
+
+  .panel-overlay-header,
+  .panel-overlay-body {
+    padding: 0.8rem;
+  }
+}

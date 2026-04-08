@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Chip } from "./Chip";
 import { Popover } from "./Overlay/Popover";
 import { AppLocale, useI18n } from "../i18n";
+import { BrandMark } from "./BrandMark";
 import "./GlobalHeader.css";
 
 type StatusTone = "neutral" | "accent" | "danger";
@@ -10,12 +11,16 @@ type ThemeMode = "light" | "dark";
 interface GlobalHeaderProps {
   brand: string;
   pageTitle: string;
+  pageSubtitle: string;
   pageToken: string;
   status?: { message: string; tone?: StatusTone };
   theme: ThemeMode;
   locale: AppLocale;
   compact?: boolean;
+  showNavToggle?: boolean;
+  navOpen?: boolean;
   onToggleTheme: () => void;
+  onToggleNav?: () => void;
   onLocaleChange: (next: AppLocale) => void;
   onOpenCommands: () => void;
   onWipe: () => void;
@@ -24,12 +29,16 @@ interface GlobalHeaderProps {
 export function GlobalHeader({
   brand,
   pageTitle,
+  pageSubtitle,
   pageToken,
   status,
   theme,
   locale,
   compact = false,
+  showNavToggle = false,
+  navOpen = false,
   onToggleTheme,
+  onToggleNav,
   onLocaleChange,
   onOpenCommands,
   onWipe,
@@ -42,23 +51,44 @@ export function GlobalHeader({
   return (
     <header className={`global-header ${compact ? "is-compact" : ""}`}>
       <div className="header-cluster">
+        {showNavToggle ? (
+          <button
+            type="button"
+            className="ghost-button nav-toggle-button"
+            onClick={onToggleNav}
+            aria-expanded={navOpen}
+            aria-label={t("app.moduleList")}
+          >
+            {t("app.tools")}
+          </button>
+        ) : null}
         <div className="brand-mark">
-          <span className="brand-name">{brand}</span>
+          <span className="brand-kicker">{tr("Local security workbench")}</span>
+          <div className="brand-row">
+            <BrandMark theme={theme} variant="wordmark" className="brand-mark-wordmark" decorative={false} label={brand} />
+            <span className="page-token">{pageToken}</span>
+          </div>
+        </div>
+        <div className="page-meta">
+          <span className="page-title">{pageTitle}</span>
+          <span className="page-subtitle">{pageSubtitle}</span>
         </div>
       </div>
       <div className="header-center">
-        <div className="page-meta">
-          <span className="page-title">{pageTitle}</span>
-          <span className="page-token">{pageToken}</span>
+        <div className="status-block">
+          <span className="status-label">{t("app.status")}</span>
+          <div className="status-row">
+            {status?.message ? <Chip label={tr(status.message)} tone={chipTone} ariaLabel={t("app.status")} /> : null}
+            <span className="status-copy">{tr("Local execution only")}</span>
+            <div className="indicator-row" aria-label={t("app.connectionIndicators")}>
+              <Chip label={t("app.local")} tone="muted" />
+              <Chip label={t("app.offline")} tone="muted" />
+              <Chip label={t("app.noNet")} tone="muted" />
+            </div>
+          </div>
         </div>
-        {status?.message && <Chip label={tr(status.message)} tone={chipTone} ariaLabel={t("app.status")} />}
       </div>
       <div className="header-actions">
-        <div className="indicator-row" aria-label={t("app.connectionIndicators")}>
-          <Chip label={t("app.local")} tone="muted" />
-          <Chip label={t("app.offline")} tone="muted" />
-          <Chip label={t("app.noNet")} tone="muted" />
-        </div>
         {compact ? (
           <div className="compact-actions">
             <button
@@ -146,10 +176,10 @@ export function GlobalHeader({
               aria-label={t("app.command.toggleTheme")}
               aria-live="polite"
             >
-              {t("app.themeLabel")}: {theme === "dark" ? t("app.theme.dark") : t("app.theme.light")}
+              {theme === "dark" ? t("app.theme.dark") : t("app.theme.light")}
             </button>
             <label className="header-locale-label">
-              {t("app.language")}
+              <span className="visually-hidden">{t("app.language")}</span>
               <select
                 className="header-locale-select"
                 value={locale}

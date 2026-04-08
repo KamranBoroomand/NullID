@@ -1,31 +1,40 @@
 import { ReactNode } from "react";
-import { useI18n } from "../i18n";
 import "./Frame.css";
 
 interface FrameProps {
   modulePane: ReactNode;
   workspace: ReactNode;
   header?: ReactNode;
-  buildMarker?: string;
-  stacked?: boolean;
-  compact?: boolean;
+  showNavDrawer?: boolean;
+  navDrawerOpen?: boolean;
+  onCloseNavDrawer?: () => void;
 }
 
-export function Frame({ modulePane, workspace, header, buildMarker = "Version: Local", stacked, compact }: FrameProps) {
-  const { t } = useI18n();
-
+export function Frame({ modulePane, workspace, header, showNavDrawer = false, navDrawerOpen = false, onCloseNavDrawer }: FrameProps) {
   return (
-    <div className={`frame ${compact ? "frame-compact" : ""}`}>
+    <div className="frame">
       <div className="frame-shell">
-        <div className={`frame-content ${stacked ? "is-stacked" : ""}`}>
-          <aside className="frame-pane">{modulePane}</aside>
+        <div className="frame-ambient frame-ambient-primary" aria-hidden="true" />
+        <div className="frame-ambient frame-ambient-secondary" aria-hidden="true" />
+        {showNavDrawer ? (
+          <div
+            className={`frame-drawer-backdrop ${navDrawerOpen ? "is-open" : ""}`}
+            aria-hidden={!navDrawerOpen}
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) {
+                onCloseNavDrawer?.();
+              }
+            }}
+          >
+            <aside className="frame-drawer-panel">{modulePane}</aside>
+          </div>
+        ) : null}
+        <div className="frame-content">
+          {!showNavDrawer ? <aside className="frame-pane">{modulePane}</aside> : null}
           <section className="frame-workspace">
             {header}
             {workspace}
           </section>
-        </div>
-        <div className="frame-footer" aria-label={t("app.buildMarker")}>
-          <span>{buildMarker}</span>
         </div>
       </div>
     </div>

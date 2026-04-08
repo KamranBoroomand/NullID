@@ -55,6 +55,9 @@ test-results/
 build-test/
 output/playwright/
 output/visual-drift-*
+design-review/
+public/brand-backups/
+public/brand/review/
 
 # Snowpack dependency directory (https://snowpack.dev/)
 web_modules/

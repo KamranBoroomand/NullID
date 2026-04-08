@@ -161,7 +161,7 @@ function previewPageMarkup() {
         <div class="icon">${iconSvg}</div>
         <div class="text">
           <h1>NullID</h1>
-          <p>Offline-first security toolbox for privacy and cryptography workflows.</p>
+          <p>Offline-first security workbench for privacy and cryptography workflows.</p>
           <div class="pills">
             <div class="pill highlight">Installable Web App</div>
             <div class="pill">Works Offline</div>

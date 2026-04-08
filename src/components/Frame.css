@@ -1,79 +1,110 @@
 .frame {
   display: flex;
   flex-direction: column;
-  min-height: 100svh;
-  height: auto;
-  background: var(--background);
+  height: 100%;
+  min-height: 0;
   color: var(--text-primary);
-  overflow: hidden;
 }
 
 .frame-shell {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 0;
-  min-height: 0;
   flex: 1;
-  border: 1px solid var(--border-subtle);
-  border-radius: 1rem;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-shell);
   overflow: hidden;
-  box-shadow: var(--shadow-soft);
   background: var(--surface-0);
+  box-shadow: var(--shadow-soft);
+}
+
+.frame-ambient {
+  position: absolute;
+  pointer-events: none;
+  background: var(--accent);
+  opacity: 0.8;
+  z-index: 0;
+}
+
+.frame-ambient-primary {
+  inset: 0 auto auto 0;
+  width: 9rem;
+  height: 2px;
+}
+
+.frame-ambient-secondary {
+  inset: 0 0 auto auto;
+  width: 2px;
+  height: 4.5rem;
 }
 
 .frame-content {
+  position: relative;
+  z-index: 1;
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: minmax(17rem, clamp(17rem, 24vw, 20.75rem)) minmax(0, 1fr);
+  height: 100%;
   min-height: 0;
   flex: 1;
   overflow: hidden;
 }
 
 .frame-pane {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 70%, transparent), var(--surface-0));
-  border-inline-end: 1px solid var(--border-subtle);
-  position: relative;
-}
-
-.frame-workspace {
-  background: var(--surface-0);
-  position: relative;
   display: flex;
   flex-direction: column;
+  background: var(--surface-0);
+  border-inline-end: 1px solid var(--border-subtle);
+  position: relative;
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
 }
 
-.frame-footer {
-  padding: 0.5rem 0.75rem;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-muted);
+.frame-drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  display: none;
+  z-index: 6;
+  background: rgba(3, 4, 6, 0.82);
+}
+
+.frame-drawer-backdrop.is-open {
+  display: block;
+}
+
+.frame-drawer-panel {
+  width: min(23rem, calc(var(--app-viewport-width, 100vw) - 2rem));
+  max-width: 100%;
+  height: 100%;
+  min-height: 0;
   display: flex;
-  justify-content: flex-end;
-  border-top: 1px solid var(--border-subtle);
-  background: color-mix(in srgb, var(--surface-1) 85%, transparent);
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--border-strong);
+  background: var(--surface-0);
 }
 
-.frame-content.is-stacked {
-  grid-template-columns: 1fr;
-  grid-template-rows: auto 1fr;
+.frame-workspace {
+  background: var(--background);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
-.frame-content.is-stacked .frame-pane {
-  /* Keep navigation usable without consuming the whole viewport. */
-  max-height: 40svh;
-  overflow: auto;
-  -webkit-overflow-scrolling: touch;
+@media (max-width: 1200px) {
+  .frame-content {
+    grid-template-columns: minmax(16rem, clamp(16rem, 23vw, 18.75rem)) minmax(0, 1fr);
+  }
 }
 
-.frame-content.is-stacked .frame-pane {
-  border-inline-end: none;
-  border-block-end: 1px solid var(--border-subtle);
-}
-
-.frame-compact .frame-shell {
-  gap: 0.5rem;
+@media (max-height: 820px) {
+  .frame-content {
+    grid-template-columns: minmax(15.5rem, clamp(15.5rem, 22vw, 18.5rem)) minmax(0, 1fr);
+  }
 }
