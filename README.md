@@ -25,7 +25,7 @@ Offline-first security toolbox for hashing, redaction, sanitization, encryption,
 NullID is a Vite + React + TypeScript single-page app designed as a local security workbench. It also ships a local Node CLI (`scripts/nullid-local.mjs`) so browser usage and automation-friendly offline workflows stay aligned for the tools the CLI exposes.
 
 Current release line:
-- `0.1.0` (release-candidate baseline)
+- `0.1.0` (repo-side GA prep complete; final operator sign-off still required)
 
 Shared workflow artifact contract:
 - `nullid-workflow-package` is the versioned local JSON contract for inspectable workflow bundles and reports with artifact-manifest integrity metadata.
@@ -63,6 +63,8 @@ CLI commands include:
 - `pdf-clean`
 - `office-clean`
 - `archive-sanitize`
+- `archive-inspect`
+- `wizard`
 - `precommit`
 - `policy-init`
 
@@ -87,7 +89,7 @@ CLI commands include:
 - Installable PWA: desktop/mobile support with offline app-shell caching.
 
 ## Tech Stack
-- Frontend: React 18, TypeScript 5, Vite 5
+- Frontend: React 18, TypeScript 5.9, Vite 5.4
 - Cryptography: WebCrypto (`PBKDF2`, `AES-GCM`, runtime-dependent `Argon2id`) and `@noble/hashes`
 - Storage: IndexedDB with localStorage fallback for vault data when restricted runtimes block IndexedDB
 - Testing: Node test runner + Playwright end-to-end coverage
@@ -95,7 +97,7 @@ CLI commands include:
 
 ## Quick Start
 Requirements:
-- Node.js 18+ (newer LTS recommended)
+- Node.js 20+ (current or newer LTS recommended)
 - npm
 
 Install dependencies:
@@ -152,7 +154,19 @@ npm run cli -- bundle ./raw.log ./nullid-safe-share-bundle.json --preset nginx -
 npm run cli -- bundle ./raw.log ./nullid-safe-share-bundle.json --preset nginx --workflow internal-investigation --title "Incident 2026-03-18" --purpose "Prepare an internal responder package." --case-ref CASE-142 --recipient "internal responders"
 npm run cli -- package-inspect ./nullid-safe-share-bundle.json
 npm run cli -- package-inspect ./nullid-safe-share-bundle.nullid --pass-env NULLID_PASSPHRASE
-npm run cli -- package-inspect ./signed-policy.json --verify-pass-env NULLID_VERIFY_PASSPHRASE
+npm run cli -- package-inspect ./hmac-policy-pack.json --verify-pass-env NULLID_VERIFY_PASSPHRASE
+```
+
+Inspect archive contents against an expected manifest:
+
+```bash
+npm run cli -- archive-inspect ./evidence.zip --manifest ./nullid-archive-manifest.json --output ./archive-report.json
+```
+
+Walk through the guided CLI workflow wizard:
+
+```bash
+npm run cli -- wizard --workflow support-ticket --input-mode text --preset nginx --text "token=abcdefghijklmnopqrstuvwxyz12345 alice@example.com" --output ./wizard-bundle.json --yes
 ```
 
 Encrypt and decrypt a file:
@@ -213,6 +227,10 @@ Local state behavior:
 - Workflow package/report contract notes live in [`docs/workflow-package-contract.md`](./docs/workflow-package-contract.md).
 - Receiver verification guidance and trust-label definitions live in [`docs/verify-package.md`](./docs/verify-package.md).
 - Workflow release notes and manual QA checklist live in [`docs/workflow-system-release.md`](./docs/workflow-system-release.md).
+- Release runbook lives in [`docs/release-runbook.md`](./docs/release-runbook.md).
+- Recovery runbook lives in [`docs/recovery-runbook.md`](./docs/recovery-runbook.md).
+- Deployment verification checklist lives in [`docs/deployment-verification-checklist.md`](./docs/deployment-verification-checklist.md).
+- GA operator checklist lives in [`docs/ga-operator-checklist.md`](./docs/ga-operator-checklist.md).
 
 ### Vault Storage Behavior
 
@@ -250,10 +268,11 @@ Primary npm scripts:
 | `npm run security:check` | `npm run audit:headers && npm run lint && npm run test` | Run local security checks (header baseline + no-network policy + unit tests). |
 | `npm run test` | `tsc -p tsconfig.test.json && node --test build-test/__tests__/*.js` | Compile and run utility tests. |
 | `npm run e2e` | `node scripts/run-e2e.mjs tests/e2e/app.spec.ts tests/e2e/i18n-layout.spec.ts tests/e2e/i18n-switching.spec.ts` | Run the standard Playwright behavior plus locale layout and locale-switching suites. |
+| `npm run e2e:install` | `npx playwright install --with-deps chromium` | Install the Chromium browser dependency used by Playwright e2e runs. |
 | `npm run test:visual` | `node scripts/run-e2e.mjs tests/e2e/visual-regression.spec.ts` | Run desktop visual regression matrix (core modules × light/dark themes). |
 | `npm run test:visual:update` | `node scripts/run-e2e.mjs tests/e2e/visual-regression.spec.ts --update-snapshots` | Refresh visual snapshot baselines after intentional UI changes. |
 | `npm run visual:drift-report` | `node scripts/collect-visual-drift.mjs` | Build drift summary artifacts (`json` + markdown) from Playwright diff output. |
-| `npm run test:e2e:i18n-layout` | `playwright test tests/e2e/i18n-layout.spec.ts` | Run EN/RU/FA layout integrity tests. |
+| `npm run test:e2e:i18n-layout` | `node scripts/run-e2e.mjs tests/e2e/i18n-layout.spec.ts` | Run EN/RU/FA layout integrity tests. |
 | `npm run validate` | `npm run typecheck && npm run i18n:check && npm run lint && npm run test && npm run e2e && npm run build && npm run verify:build` | Full local quality pipeline. |
 
 Team references:
@@ -266,8 +285,12 @@ Team references:
 - Signed release workflow: `.github/workflows/release-signed.yml`
 - Dependency monitoring: `.github/dependabot.yml`
 - Historical platform-breadth notes: `docs/phase3-workflows.md`
-- Signed workflow conventions: `docs/signed-workflow-conventions.md`
+- Shared-passphrase HMAC workflow conventions: `docs/signed-workflow-conventions.md`
 - Release checklist: `docs/release-security-checklist.md`
+- Release runbook: `docs/release-runbook.md`
+- Recovery runbook: `docs/recovery-runbook.md`
+- Deployment verification checklist: `docs/deployment-verification-checklist.md`
+- GA operator checklist: `docs/ga-operator-checklist.md`
 - Release readiness tracker: `docs/release-readiness.md`
 - Security policy: `SECURITY.md`
 - Contribution guide: `CONTRIBUTING.md`
@@ -277,21 +300,34 @@ Team references:
 ## Deployment
 NullID deploys as static files.
 
-1. Build with deterministic timestamp:
+Recommended release/deploy sequence:
+
+1. Install and validate the exact release commit:
    ```bash
    npm ci
-   SOURCE_DATE_EPOCH=1735689600 npm run build
+   npm run e2e:install
+   npm run validate
    ```
-2. Verify generated artifacts:
+2. If UI surfaces changed, run the visual gate locally:
    ```bash
-   npm run verify:build
+   npm run test:visual
    ```
-3. Publish `dist/` to any static host (GitHub Pages, Netlify, Vercel static, S3 + CDN, etc.).
+3. Build and verify deterministic artifacts:
+   ```bash
+   SOURCE_DATE_EPOCH=1735689600 npm run build:repro
+   npm run release:dry-run -- --tag vX.Y.Z
+   ```
+4. Deploy `dist/` to the intended static host.
    - The repo's GitHub Pages workflow is manual-only (`workflow_dispatch`) so normal pushes do not trigger deploy attempts.
-4. Serve over HTTPS so service workers and install prompts work correctly.
-5. Apply security headers (`Content-Security-Policy`, `X-Content-Type-Options`, etc.) using `public/_headers` or `vercel.json`.
-6. For server-backed deployments, set session cookies server-side with `HttpOnly`, `Secure`, and `SameSite=Strict`.
-7. For subpath hosting, set `VITE_BASE` at build time:
+5. Verify the real deployed site with `docs/deployment-verification-checklist.md` before tagging a GA release.
+6. Create and push the final tag only after the live deploy passes verification so `.github/workflows/release-signed.yml` runs on the intended bits.
+
+Operational notes:
+- Serve over HTTPS so service workers and install prompts work correctly.
+- Apply security headers (`Content-Security-Policy`, `X-Content-Type-Options`, etc.) at the real host. `public/_headers` and `vercel.json` are repo baselines, not universal host-side enforcement.
+- GitHub Pages does not apply `public/_headers` or `vercel.json` by itself; use an equivalent header-setting layer if Pages is the live host.
+- For server-backed deployments, set session cookies server-side with `HttpOnly`, `Secure`, and `SameSite=Strict`.
+- For subpath hosting, set `VITE_BASE` at build time:
    ```bash
    SOURCE_DATE_EPOCH=1735689600 VITE_BASE=/your-repo-name/ npm run build
    ```
@@ -313,7 +349,7 @@ Reproducibility notes:
 - Vault operations use passphrase-derived keys and canary verification.
 - Vault unlock can enforce local rate limiting, optional human checks, and optional local WebAuthn MFA.
 - Password storage records are one-way verifiers, not encrypted secrets. Verification is recomputation plus comparison, not decryption.
-- In-app profile/policy/vault "signed" exports use shared-passphrase HMAC metadata. They help detect tampering when both parties know the same passphrase; they are not public-key identity signatures.
+- In-app profile/policy/vault HMAC-protected exports use shared-passphrase HMAC metadata. They help detect tampering when both parties know the same passphrase; they are not public-key identity signatures.
 - Session cookie signaling is available in-app as a browser-visible presence hint with `SameSite=Strict` and `Secure` on HTTPS origins. It is not a server-side auth boundary.
 - Self-test is a local runtime diagnostic for the current browser/device. It does not certify deployed headers, hosting, or cryptographic review.
 - Build/release trust is reinforced by deterministic manifests, checksums, SBOM, and signed release provenance.
@@ -385,18 +421,21 @@ No runtime service integration is expected. Core processing is local, and lint c
 No. It uses standard primitives and includes integrity controls, but it is not presented as externally audited or formally certified.
 
 ## Current Status and Roadmap
-Status updated: April 1, 2026.
+Status updated: April 8, 2026.
 
-Current release-ready baseline:
+Current code-complete baseline:
 - [x] Trust-model, verification, CLI parity, and multilingual hardening are in place across the current app and CLI release surfaces.
 - [x] `npm run validate` now enforces strict i18n phrase coverage and includes locale-switching coverage in the default e2e path.
 - [x] Visual regression gating is active on GitHub Actions with drift reporting and current Darwin baselines for the desktop matrix.
+- [x] Release, recovery, deployment-verification, and operator runbooks now exist in-repo for the supported GA path.
 
-Remaining before production GA:
-- [ ] Validate deployed production-domain headers/CSP on the final host, not only local/static configs.
-- [ ] Publish the release key custody / rotation / revocation runbook.
-- [ ] Execute and document a full restore drill for shared-passphrase HMAC-protected profile, policy, and vault exports.
-- [ ] Finish the accessibility pass, browser/device support matrix, and final native-language RU/FA editorial review.
+Remaining before production GA sign-off:
+- [ ] Validate deployed production-domain headers/CSP on the real host, not only local/static configs.
+- [ ] Confirm maintainer-approved release key custody / rotation / revocation handling.
+- [ ] Execute and sign off a full restore drill for shared-passphrase HMAC-protected profile, policy, and vault exports.
+- [ ] Complete final maintainer sign-off using `docs/ga-operator-checklist.md`.
+
+Repo-side GA prep is complete; the remaining items are external-only operator tasks.
 
 Current release-priority tracking lives in `docs/release-readiness.md`.
 Phase-by-phase history and rationale live in `docs/complete-tool-roadmap.md`.

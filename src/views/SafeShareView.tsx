@@ -374,7 +374,7 @@ export function SafeShareView({ onOpenGuide }: SafeShareViewProps) {
               {tr("file")}
             </button>
           </div>
-          <Chip label={preset.label} tone="accent" />
+          <Chip label={tr(preset.label)} tone="accent" />
           <Chip label={tr(shareClass)} tone="muted" />
           {previewPackage ? <Chip label={protectAtExport ? tr("NULLID:ENC:1 at export") : tr("unsigned package")} tone={protectAtExport ? "accent" : "muted"} /> : null}
         </div>
@@ -436,7 +436,7 @@ export function SafeShareView({ onOpenGuide }: SafeShareViewProps) {
               >
                 {shareFile ? `${shareFile.name} · ${formatNumber(shareFile.size)} bytes` : tr("Choose a file to analyze locally before packaging")}
               </div>
-              <div className="microcopy">{fileMessage}</div>
+              <div className="microcopy">{tr(fileMessage)}</div>
               <div className="controls-row">
                 <button className="button" type="button" onClick={() => shareFileRef.current?.click()}>
                   {tr("load file")}
@@ -464,11 +464,11 @@ export function SafeShareView({ onOpenGuide }: SafeShareViewProps) {
           <div className="pill-buttons" role="group" aria-label={tr("Safe share preset chooser")}>
             {safeSharePresetIds.map((id) => (
               <button key={id} type="button" className={presetId === id ? "active" : ""} onClick={() => setPresetId(id)}>
-                {getSafeSharePreset(id).label}
+                {tr(getSafeSharePreset(id).label)}
               </button>
             ))}
           </div>
-          <div className="microcopy">{preset.description}</div>
+          <div className="microcopy">{tr(preset.description)}</div>
           <ul className="microcopy">
             {preset.guidance.map((line) => (
               <li key={line}>{tr(line)}</li>
@@ -478,7 +478,7 @@ export function SafeShareView({ onOpenGuide }: SafeShareViewProps) {
           <ul className="microcopy">
             <li>{tr("Active sanitize rules")}: {preset.sanitizeRules.join(", ")}</li>
             <li>{tr("Region detectors")}: {Object.entries(analysisRuleSets).filter(([, enabled]) => enabled).map(([key]) => key).join(", ") || tr("none")}</li>
-            <li>{tr("Checklist emphasis")}: {preset.reviewChecklistEmphasis.join(" | ")}</li>
+            <li>{tr("Checklist emphasis")}: {preset.reviewChecklistEmphasis.map((line) => tr(line)).join(" | ")}</li>
           </ul>
           {mode === "text" ? (
             <label className="microcopy" htmlFor="safe-share-policy-pack">
@@ -665,7 +665,7 @@ export function SafeShareView({ onOpenGuide }: SafeShareViewProps) {
             <>
               <div className="controls-row" style={{ alignItems: "center" }}>
                 <Chip label={previewPackage.workflowType} tone="muted" />
-                {previewPackage.workflowPreset ? <Chip label={previewPackage.workflowPreset.label} tone="accent" /> : null}
+                {previewPackage.workflowPreset ? <Chip label={tr(previewPackage.workflowPreset.label)} tone="accent" /> : null}
                 <Chip label={previewPackage.trust.packageSignature.method === "none" ? tr("unsigned") : tr(previewPackage.trust.packageSignature.method)} tone="muted" />
               </div>
               <div className="microcopy">{tr(previewPackage.summary.description)}</div>
@@ -698,7 +698,7 @@ export function SafeShareView({ onOpenGuide }: SafeShareViewProps) {
           ) : (
             <div className="microcopy">{isPreparingPreview ? tr("Preparing package preview...") : tr("Add input to prepare a workflow package preview.")}</div>
           )}
-          {previewError ? <div className="tag tag-danger">{previewError}</div> : null}
+          {previewError ? <div className="tag tag-danger">{tr(previewError)}</div> : null}
         </section>
 
         <section className="panel" aria-label={tr("Warnings and limitations")}>
@@ -753,7 +753,7 @@ export function SafeShareView({ onOpenGuide }: SafeShareViewProps) {
                 <div className="panel-subtext">{tr(section.label)}</div>
                 <ul className="microcopy">
                   {section.items.map((line) => (
-                    <li key={`${section.id}:${line}`}>{tr(line)}</li>
+                    <li key={`${section.id}:${line}`}>{localizeWorkflowLine(line, tr)}</li>
                   ))}
                 </ul>
               </div>
@@ -778,6 +778,32 @@ export function SafeShareView({ onOpenGuide }: SafeShareViewProps) {
       </section>
     </div>
   );
+}
+
+function localizeWorkflowLine(line: string, tr: (value: string) => string): string {
+  const trimmed = line.trim();
+  if (!trimmed) return trimmed;
+  if (trimmed.includes(" · ")) {
+    return trimmed
+      .split(" · ")
+      .map((part) => localizeWorkflowLine(part, tr))
+      .join(" · ");
+  }
+  const colonIndex = trimmed.indexOf(":");
+  if (colonIndex > 0 && colonIndex < trimmed.length - 1) {
+    const left = trimmed.slice(0, colonIndex).trim();
+    const right = trimmed.slice(colonIndex + 1).trim();
+    if (right) {
+      return `${localizeWorkflowLine(left, tr)}: ${localizeWorkflowLine(right, tr)}`;
+    }
+  }
+  const parenMatch = trimmed.match(/^(.*)\(([^()]*)\)$/u);
+  if (parenMatch) {
+    const prefix = parenMatch[1].trim();
+    const suffix = parenMatch[2].trim();
+    return `${localizeWorkflowLine(prefix, tr)} (${suffix})`;
+  }
+  return tr(trimmed);
 }
 
 function formatShareClassLabelForFile(analysis: MetadataAnalysisResult) {

@@ -1,5 +1,12 @@
 # NullID Workflow System Release Notes
 
+Operational GA runbooks now live in:
+
+- [`docs/release-runbook.md`](./release-runbook.md)
+- [`docs/recovery-runbook.md`](./recovery-runbook.md)
+- [`docs/deployment-verification-checklist.md`](./deployment-verification-checklist.md)
+- [`docs/ga-operator-checklist.md`](./ga-operator-checklist.md)
+
 This document covers the newly completed NullID workflow system:
 
 - shared workflow package/report contract
@@ -209,9 +216,14 @@ Use this short draft for a changelog entry or release announcement:
 
 ## What’s Next
 
-Potential next items after this release:
+GA-specific operator work now lives in:
 
-- fuller non-English localization for the new workflow surfaces
+- [`docs/release-readiness.md`](./release-readiness.md)
+- [`docs/deployment-verification-checklist.md`](./deployment-verification-checklist.md)
+- [`docs/ga-operator-checklist.md`](./ga-operator-checklist.md)
+
+Longer-range follow-ups after GA remain:
+
 - broader receiver inspection for additional archive-style workflow artifacts
 - future workflow-contract extensions for verifiable package signatures, if NullID later adopts an identity-bearing model
 - more operational polish around handoff/report templates and richer incident review flows

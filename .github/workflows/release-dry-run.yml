@@ -19,7 +19,7 @@ jobs:
       SOURCE_DATE_EPOCH: 1735689600
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -45,14 +45,28 @@ jobs:
               .github/workflows/release-dry-run.yml|\
               .github/workflows/release-signed.yml|\
               .github/workflows/pages.yml|\
+              .github/workflows/quality-gates.yml|\
               .github/workflows/reproducibility.yml|\
+              .github/workflows/visual-regression.yml|\
+              README.md|\
+              package.json|\
+              package-lock.json|\
               docs/release-readiness.md|\
+              docs/release-runbook.md|\
+              docs/recovery-runbook.md|\
+              docs/deployment-verification-checklist.md|\
+              docs/ga-operator-checklist.md|\
+              docs/release-security-checklist.md|\
+              docs/workflow-system-release.md|\
               scripts/release-dry-run.mjs|\
               scripts/package-release.mjs|\
               scripts/verify-release-bundle.mjs|\
               scripts/generate-build-manifest.mjs|\
               scripts/generate-sbom.mjs|\
-              scripts/verify-build-manifest.mjs)
+              scripts/verify-build-manifest.mjs|\
+              scripts/verify-security-headers.mjs|\
+              public/_headers|\
+              vercel.json)
                 should_run=true
                 ;;
             esac
@@ -67,7 +81,7 @@ jobs:
 
       - name: Setup Node
         if: steps.scope.outputs.should_run == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm

@@ -14,7 +14,7 @@ export interface WorkflowReviewDashboard {
 export function buildWorkflowReviewDashboard(workflowPackage: WorkflowPackage): WorkflowReviewDashboard {
   const includedArtifacts = workflowPackage.artifacts
     .filter((artifact) => artifact.included)
-    .map((artifact) => `${artifact.label} (${artifact.kind}${artifact.bytes ? `, ${artifact.bytes} bytes` : ""})`);
+    .map((artifact) => artifact.label);
   const transformSummaries = (workflowPackage.transforms ?? []).map((transform) => `${transform.label}: ${transform.summary}`);
   const metadataCleanup = (workflowPackage.transforms ?? [])
     .filter((transform) => /metadata/i.test(transform.type) || /metadata/i.test(transform.label))
@@ -24,7 +24,14 @@ export function buildWorkflowReviewDashboard(workflowPackage: WorkflowPackage): 
     .flatMap((transform) => flattenTransform(transform));
   const presetTransparency = (workflowPackage.transforms ?? [])
     .filter((transform) => /safe-share/i.test(transform.type) || /safe share/i.test(transform.label))
-    .flatMap((transform) => Object.entries(transform.metadata ?? {}).map(([key, value]) => `${transform.label} ${key}: ${String(value)}`));
+    .flatMap((transform) =>
+      Object.values(transform.metadata ?? {}).flatMap((value) =>
+        String(value)
+          .split(",")
+          .map((entry) => entry.trim())
+          .filter(Boolean),
+      ),
+    );
   const regionalDetections = (workflowPackage.transforms ?? [])
     .filter((transform) => /analysis/i.test(transform.type) || /analysis/i.test(transform.label))
     .flatMap((transform) => (transform.report ?? []).filter((line) => /^iran:|^russia:/i.test(line)));
@@ -47,7 +54,6 @@ export function buildWorkflowReviewDashboard(workflowPackage: WorkflowPackage): 
 function flattenTransform(transform: WorkflowPackageTransform) {
   return [
     transform.summary,
-    ...(transform.applied ?? []).map((line) => `${transform.label} applied: ${line}`),
-    ...(transform.report ?? []).map((line) => `${transform.label} reported: ${line}`),
+    ...(transform.applied ?? []),
   ];
 }

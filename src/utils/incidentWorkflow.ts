@@ -156,8 +156,17 @@ export function buildIncidentTemplateTitle(date = new Date()) {
 }
 
 export function buildDefaultIncidentPurpose(modeId: IncidentWorkflowModeId) {
-  const mode = getIncidentWorkflowMode(modeId);
-  return `Prepare a ${mode.label.toLowerCase()} package.`;
+  switch (modeId) {
+    case "evidence-archive":
+      return "Prepare an evidence archive package.";
+    case "minimal-disclosure-incident-share":
+      return "Prepare a minimal-disclosure incident package.";
+    case "internal-investigation":
+      return "Prepare an internal investigation package.";
+    case "incident-handoff":
+    default:
+      return "Prepare an incident handoff package.";
+  }
 }
 
 export async function createIncidentTextArtifactPackage(
@@ -307,10 +316,10 @@ export async function createIncidentWorkflowPackage(
       title: incidentTitle,
       description: "Incident Workflow export with case context, prepared artifacts, and receiver-facing reporting.",
       highlights: [
-        `Mode: ${mode.label}`,
-        `Prepared artifacts: ${preparedArtifacts.length}`,
-        ...(caseReference ? [`Case reference: ${caseReference}`] : []),
-        `Protection: ${input.protectAtExport ? "NULLID:ENC:1 at export" : "none"}`,
+        "Selected incident mode is recorded in the package metadata.",
+        "Prepared artifact count is recorded in the package metadata.",
+        caseReference ? "Case reference is recorded in the package metadata." : "Case reference is omitted from the package metadata.",
+        "Protection choice is recorded in the package metadata.",
       ],
     },
     report: {
@@ -352,7 +361,7 @@ export async function createIncidentWorkflowPackage(
         id: "incident-assembly",
         type: "incident",
         label: "Incident workflow assembly",
-        summary: `${mode.label} assembled ${preparedArtifacts.length} prepared artifact${preparedArtifacts.length === 1 ? "" : "s"} into one receiver-facing package.`,
+        summary: "Prepared artifacts were assembled into one receiver-facing incident package.",
         report: [
           `mode:${mode.id}`,
           `prepared-artifacts:${preparedArtifacts.length}`,

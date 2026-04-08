@@ -707,7 +707,7 @@ export async function createSafeShareTextWorkflowPackage(input: CreateSafeShareT
       id: "safe-share-review",
       type: "safe-share",
       label: "Safe Share review",
-      summary: `${preset.label} preset prepared a text safe-share package.`,
+      summary: "Selected workflow preset prepared a text safe-share package.",
       report: [
         `classification:${classification}`,
         `findings:${findings.length}`,
@@ -723,7 +723,7 @@ export async function createSafeShareTextWorkflowPackage(input: CreateSafeShareT
       id: "structured-analysis",
       type: "text-analysis",
       label: "Structured text analysis",
-      summary: `Local analysis grouped ${structuredAnalysis.total} finding${structuredAnalysis.total === 1 ? "" : "s"} across text categories.`,
+      summary: "Local structured-text analysis results were recorded before sharing.",
       applied: summarizeStructuredAnalysis(structuredAnalysis),
       report: [
         ...structuredAnalysis.regionGroups
@@ -743,7 +743,7 @@ export async function createSafeShareTextWorkflowPackage(input: CreateSafeShareT
       type: "financial-review",
       label: "Financial identifier review",
       summary: financialReview.total > 0
-        ? `${financialReview.total} financial identifier finding${financialReview.total === 1 ? "" : "s"} were reviewed locally before sharing.`
+        ? "Financial identifier review ran locally before sharing."
         : "No financial identifier findings were detected in the reviewed text.",
       applied: Object.entries(financialReview.countsByCategory)
         .filter(([, count]) => count > 0)
@@ -761,7 +761,7 @@ export async function createSafeShareTextWorkflowPackage(input: CreateSafeShareT
           id: "secret-scan",
           type: "secret-scan",
           label: "Secret scan",
-          summary: `${secretScan.total} pattern-based / likely secret finding${secretScan.total === 1 ? "" : "s"} detected locally before sharing.`,
+          summary: "Secret-scan findings were recorded locally before sharing.",
           applied: Object.entries(secretScan.byType).map(([label, count]) => `${label}: ${count}`),
           report: summarizeSecretFindings(secretScan.findings),
           metadata: {
@@ -773,7 +773,7 @@ export async function createSafeShareTextWorkflowPackage(input: CreateSafeShareT
       id: "sanitize-transform",
       type: "sanitize",
       label: "Sanitize transformation",
-      summary: `Sanitized output ready (${sanitize.linesAffected} line${sanitize.linesAffected === 1 ? "" : "s"} changed).`,
+      summary: "Sanitized output was prepared for sharing.",
       applied: sanitize.applied,
       report: sanitize.report,
       metadata: {
@@ -796,14 +796,14 @@ export async function createSafeShareTextWorkflowPackage(input: CreateSafeShareT
       title: `${preset.label} package`,
       description: "Safe Share Assistant export for text-based content.",
       highlights: [
-        `Share class: ${formatShareClassLabel(classification)}`,
-        `Applied rules: ${sanitize.applied.length}`,
-        `Region detectors: ${Object.entries(analysisRuleSets).filter(([, enabled]) => enabled).map(([key]) => key).join(", ") || "none"}`,
-        `Protection: ${input.protectAtExport ? "NULLID:ENC:1 at export" : "none"}`,
+        "Share class is recorded in the workflow metadata.",
+        "Applied sanitize rule count is recorded in the workflow metadata.",
+        "Enabled region detectors are recorded in the workflow metadata.",
+        "Protection choice is recorded in the workflow metadata.",
       ],
     },
     report: {
-      purpose: `Prepare text content for ${preset.label.toLowerCase()}.`,
+      purpose: "Prepare text content for safe sharing.",
       includedArtifacts: includedLabels,
       transformedArtifacts: [
         "Safe Share review",
@@ -963,7 +963,7 @@ export async function createSafeShareFileWorkflowPackage(input: CreateSafeShareF
       id: "safe-share-review",
       type: "safe-share",
       label: "Safe Share review",
-      summary: `${preset.label} preset prepared a file-oriented safe-share package.`,
+      summary: "Selected workflow preset prepared a file-oriented safe-share package.",
       report: [
         `classification:${classification}`,
         `risk:${input.analysis.risk}`,
@@ -979,7 +979,7 @@ export async function createSafeShareFileWorkflowPackage(input: CreateSafeShareF
       id: "metadata-analysis",
       type: "metadata",
       label: "Metadata analysis",
-      summary: `${input.analysis.format} analyzed locally with ${input.analysis.signals.length} metadata signal${input.analysis.signals.length === 1 ? "" : "s"}.`,
+      summary: "Local metadata analysis results were recorded before packaging.",
       applied: input.analysis.fields.map((field) => field.key),
       report: input.analysis.signals.map((signal) => `${signal.label}: ${signal.detail}`),
       metadata: {
@@ -1005,7 +1005,7 @@ export async function createSafeShareFileWorkflowPackage(input: CreateSafeShareF
       type: "path-privacy",
       label: "Filename / path privacy",
       summary: pathPrivacy.total > 0
-        ? `${pathPrivacy.total} filename/path privacy hint${pathPrivacy.total === 1 ? "" : "s"} were generated locally before export.`
+        ? "Filename and path privacy review was recorded before export."
         : "No filename/path privacy hints were generated from the current file label.",
       applied: pathPrivacy.suggestions.flatMap((suggestion) => suggestion.replacements.map((replacement) => `${replacement.segment} -> ${replacement.replacement}`)),
       report: summarizePathPrivacy(pathPrivacy),
@@ -1029,14 +1029,14 @@ export async function createSafeShareFileWorkflowPackage(input: CreateSafeShareF
       title: `${preset.label} package`,
       description: "Safe Share Assistant export for file-based content.",
       highlights: [
-        `Share class: ${formatShareClassLabel(classification)}`,
-        `Metadata risk: ${input.analysis.risk}`,
-        `Filename hints: ${pathPrivacy.total}`,
-        `Protection: ${input.protectAtExport ? "NULLID:ENC:1 at export" : "none"}`,
+        "Share class is recorded in the workflow metadata.",
+        "Metadata risk review is recorded in the workflow metadata.",
+        "Filename privacy review is recorded in the workflow metadata.",
+        "Protection choice is recorded in the workflow metadata.",
       ],
     },
     report: {
-      purpose: `Prepare a file artifact for ${preset.label.toLowerCase()}.`,
+      purpose: "Prepare a file artifact for safe sharing.",
       includedArtifacts: includedLabels,
       transformedArtifacts: [
         "Safe Share review",

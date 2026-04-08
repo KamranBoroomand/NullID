@@ -4,6 +4,7 @@ import { Chip } from "../components/Chip";
 import type { ModuleKey } from "../components/ModuleList";
 import { useToast } from "../components/ToastHost";
 import { usePersistentState } from "../hooks/usePersistentState";
+import { workflowPhraseTranslations } from "../content/workflowPhraseTranslations.js";
 import { useI18n } from "../i18n";
 import { encryptText } from "../utils/cryptoEnvelope.js";
 import {
@@ -137,6 +138,7 @@ export function IncidentWorkflowView({ onOpenGuide }: IncidentWorkflowViewProps)
     () => (previewPackage ? buildWorkflowReviewDashboard(previewPackage) : null),
     [previewPackage],
   );
+  const localizedDefaultIncidentPurpose = useCallback((id: IncidentWorkflowModeId) => tr(buildDefaultIncidentPurpose(id)), [tr]);
 
   useEffect(() => {
     setIncludeSourceReference(mode.includeSourceReferenceDefault);
@@ -144,12 +146,25 @@ export function IncidentWorkflowView({ onOpenGuide }: IncidentWorkflowViewProps)
     setPurpose((previous) => {
       const trimmed = previous.trim();
       if (!trimmed) {
-        return buildDefaultIncidentPurpose(mode.id);
+        return localizedDefaultIncidentPurpose(mode.id);
       }
-      const matchesKnownDefault = incidentWorkflowModeIds.some((candidate) => trimmed === buildDefaultIncidentPurpose(candidate));
-      return matchesKnownDefault ? buildDefaultIncidentPurpose(mode.id) : previous;
+      const matchesKnownDefault = incidentWorkflowModeIds.some((candidate) => {
+        const defaultPurpose = buildDefaultIncidentPurpose(candidate);
+        const translations = workflowPhraseTranslations[defaultPurpose];
+        return trimmed === defaultPurpose || trimmed === translations?.ru || trimmed === translations?.fa;
+      });
+      return matchesKnownDefault ? localizedDefaultIncidentPurpose(mode.id) : previous;
     });
-  }, [mode.defaultApplyMetadataClean, mode.id, mode.includeSourceReferenceDefault, setApplyMetadataClean, setIncludeSourceReference, setPurpose]);
+  }, [
+    localizedDefaultIncidentPurpose,
+    mode.defaultApplyMetadataClean,
+    mode.id,
+    mode.includeSourceReferenceDefault,
+    setApplyMetadataClean,
+    setIncludeSourceReference,
+    setPurpose,
+    tr,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -545,7 +560,7 @@ export function IncidentWorkflowView({ onOpenGuide }: IncidentWorkflowViewProps)
           <div className="pill-buttons" role="group" aria-label={tr("Incident workflow mode chooser")}>
             {incidentWorkflowModeIds.map((id) => (
               <button key={id} type="button" className={modeId === id ? "active" : ""} onClick={() => setModeId(id)}>
-                {getIncidentWorkflowMode(id).label}
+                {tr(getIncidentWorkflowMode(id).label)}
               </button>
             ))}
           </div>
@@ -746,7 +761,7 @@ export function IncidentWorkflowView({ onOpenGuide }: IncidentWorkflowViewProps)
           <ul className="microcopy">
             {draftAnalysis?.signals.length ? draftAnalysis.signals.map((signal) => (
               <li key={signal.id}>
-                {signal.label}: {signal.detail}
+                {tr(signal.label)}: {tr(signal.detail)}
               </li>
             )) : (
               <li>{draftAnalysis ? tr("No metadata risk signals were detected in the current scan window.") : tr("Load a file to inspect metadata signals.")}</li>
@@ -757,7 +772,7 @@ export function IncidentWorkflowView({ onOpenGuide }: IncidentWorkflowViewProps)
               <div className="panel-subtext">{tr("Local cleanup actions")}</div>
               <ul className="microcopy">
                 {draftCleanActions.map((line) => (
-                  <li key={line}>{line}</li>
+                  <li key={line}>{tr(line)}</li>
                 ))}
               </ul>
             </>
@@ -881,14 +896,14 @@ export function IncidentWorkflowView({ onOpenGuide }: IncidentWorkflowViewProps)
               </table>
               <ul className="microcopy">
                 {previewPackage.summary.highlights.map((line) => (
-                  <li key={line}>{line}</li>
+                  <li key={line}>{tr(line)}</li>
                 ))}
               </ul>
             </>
           ) : (
             <div className="microcopy">{isPreparingPreview ? tr("Preparing incident package preview...") : tr("Add notes or artifacts to prepare an incident package preview.")}</div>
           )}
-          {previewError ? <div className="tag tag-danger">{previewError}</div> : null}
+          {previewError ? <div className="tag tag-danger">{tr(previewError)}</div> : null}
         </section>
 
         <section className="panel" aria-label={tr("Incident explainability")}>
@@ -903,7 +918,7 @@ export function IncidentWorkflowView({ onOpenGuide }: IncidentWorkflowViewProps)
                   {previewPackage.report.purpose ? (
                     <tr>
                       <th>{tr("Purpose")}</th>
-                      <td>{previewPackage.report.purpose}</td>
+                      <td>{localizeWorkflowLine(previewPackage.report.purpose, tr)}</td>
                     </tr>
                   ) : null}
                   {previewPackage.report.audience ? (
@@ -917,19 +932,19 @@ export function IncidentWorkflowView({ onOpenGuide }: IncidentWorkflowViewProps)
               <div className="panel-subtext">{tr("Included artifacts")}</div>
               <ul className="microcopy">
                 {previewPackage.report.includedArtifacts.map((line) => (
-                  <li key={line}>{line}</li>
+                  <li key={line}>{localizeWorkflowLine(line, tr)}</li>
                 ))}
               </ul>
               <div className="panel-subtext">{tr("What the receiver can verify")}</div>
               <ul className="microcopy">
                 {previewPackage.report.receiverCanVerify.map((line) => (
-                  <li key={line}>{line}</li>
+                  <li key={line}>{localizeWorkflowLine(line, tr)}</li>
                 ))}
               </ul>
               <div className="panel-subtext">{tr("What the receiver cannot verify")}</div>
               <ul className="microcopy">
                 {previewPackage.report.receiverCannotVerify.map((line) => (
-                  <li key={line}>{line}</li>
+                  <li key={line}>{localizeWorkflowLine(line, tr)}</li>
                 ))}
               </ul>
             </>
@@ -947,7 +962,7 @@ export function IncidentWorkflowView({ onOpenGuide }: IncidentWorkflowViewProps)
           </div>
           <ul className="microcopy">
             {previewPackage ? (
-              [...previewPackage.warnings, ...previewPackage.limitations].map((line) => <li key={line}>{line}</li>)
+              [...previewPackage.warnings, ...previewPackage.limitations].map((line) => <li key={line}>{tr(line)}</li>)
             ) : (
               <li>{tr("Warnings and limitations appear after the incident package preview is ready.")}</li>
             )}
@@ -970,8 +985,8 @@ export function IncidentWorkflowView({ onOpenGuide }: IncidentWorkflowViewProps)
               <tbody>
                 {previewPackage.transforms.map((transform) => (
                   <tr key={transform.id}>
-                    <td>{transform.label}</td>
-                    <td>{transform.summary}</td>
+                    <td>{localizeWorkflowLine(transform.label, tr)}</td>
+                    <td>{localizeWorkflowLine(transform.summary, tr)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -994,7 +1009,7 @@ export function IncidentWorkflowView({ onOpenGuide }: IncidentWorkflowViewProps)
                 <div className="panel-subtext">{tr(section.label)}</div>
                 <ul className="microcopy">
                   {section.items.map((line) => (
-                    <li key={`${section.id}:${line}`}>{tr(line)}</li>
+                    <li key={`${section.id}:${line}`}>{localizeWorkflowLine(line, tr)}</li>
                   ))}
                 </ul>
               </div>
@@ -1019,6 +1034,32 @@ export function IncidentWorkflowView({ onOpenGuide }: IncidentWorkflowViewProps)
       </section>
     </div>
   );
+}
+
+function localizeWorkflowLine(line: string, tr: (value: string) => string): string {
+  const trimmed = line.trim();
+  if (!trimmed) return trimmed;
+  if (trimmed.includes(" · ")) {
+    return trimmed
+      .split(" · ")
+      .map((part) => localizeWorkflowLine(part, tr))
+      .join(" · ");
+  }
+  const colonIndex = trimmed.indexOf(":");
+  if (colonIndex > 0 && colonIndex < trimmed.length - 1) {
+    const left = trimmed.slice(0, colonIndex).trim();
+    const right = trimmed.slice(colonIndex + 1).trim();
+    if (right) {
+      return `${localizeWorkflowLine(left, tr)}: ${localizeWorkflowLine(right, tr)}`;
+    }
+  }
+  const parenMatch = trimmed.match(/^(.*)\(([^()]*)\)$/u);
+  if (parenMatch) {
+    const prefix = parenMatch[1].trim();
+    const suffix = parenMatch[2].trim();
+    return `${localizeWorkflowLine(prefix, tr)} (${suffix})`;
+  }
+  return tr(trimmed);
 }
 
 function formatSanitizerLabel(value: MetadataAnalysisResult["recommendedSanitizer"]) {

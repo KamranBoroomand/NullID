@@ -1,9 +1,9 @@
-# Signed Workflow Key-Hint Conventions
+# Shared-Passphrase HMAC Key-Hint Conventions
 
-This document defines operating conventions for saved key-hint profiles used in NullID signed exports/imports.
+This document defines operating conventions for saved key-hint profiles used in NullID shared-passphrase HMAC export/import flows.
 
 ## Scope
-- Applies to signed profile exports, signed sanitizer policy packs, and signed vault snapshots.
+- Applies to HMAC-protected profile exports, HMAC-protected sanitizer policy packs, and HMAC-protected vault snapshots.
 - Applies to both browser UI flows and imported payload verification.
 
 ## Core Rules
@@ -25,7 +25,7 @@ This document defines operating conventions for saved key-hint profiles used in 
 - Prefer explicit profile selection during export to avoid accidental drift.
 
 ## Verify-Before-Import Convention
-- If a payload includes signature metadata, require explicit verification dialog review before import.
+- If a payload includes shared-passphrase HMAC metadata, require explicit verification dialog review before import.
 - Confirm that the payload key hint matches the expected profile for the source workflow.
 - Treat mismatched or unknown key hints as high-risk and reject unless manually re-validated out of band.
 - Require verification secrets/passphrases only in local UI context; do not log or persist them.
@@ -35,5 +35,5 @@ This document defines operating conventions for saved key-hint profiles used in 
 - After migration, new profile management should use the shared key-hint catalog only.
 
 ## CI/Automation Notes
-- CI should validate signed payload integrity, but must not embed live signing secrets in workflows.
-- Use deterministic fixtures for signed import/export tests and tamper cases.
+- CI should validate HMAC-protected payload integrity, but must not embed live verification secrets in workflows.
+- Use deterministic fixtures for HMAC-protected import/export tests and tamper cases.

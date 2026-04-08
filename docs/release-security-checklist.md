@@ -1,6 +1,15 @@
 # NullID Release Security Checklist
 
+Last updated: 2026-04-08
+
 Use this checklist for every release candidate before tag publication.
+
+Companion runbooks:
+
+- [`docs/release-runbook.md`](./release-runbook.md)
+- [`docs/recovery-runbook.md`](./recovery-runbook.md)
+- [`docs/deployment-verification-checklist.md`](./deployment-verification-checklist.md)
+- [`docs/ga-operator-checklist.md`](./ga-operator-checklist.md)
 
 ## 1) Pre-tag gates
 - [ ] Threat model deltas reviewed in `docs/threat-model.md`.
@@ -28,9 +37,11 @@ Reference test corpus: `src/__tests__/adversarialCorpus.test.ts`.
 - [ ] Release dry-run gate passes from `.github/workflows/release-dry-run.yml`.
 - [ ] Signed release workflow runs `npm run release:dry-run` before signing/publish.
 - [ ] Release artifacts are packaged by `npm run release:bundle`.
-- [ ] Release checksums verify via `npm run release:verify`.
+- [ ] Release checksums verify via `npm run release:verify` or `node scripts/verify-release-bundle.mjs --dir ./release`.
 - [ ] Keyless signatures are generated (`*.sig` + `*.pem`) for each release artifact.
 - [ ] Provenance attestation is emitted via `actions/attest-build-provenance`.
+
+`npm run release:verify` confirms the local release bundle checksums. Signature and provenance verification remain separate consumer/operator checks.
 
 ## 4) Manual verification commands (consumer side)
 1. Verify release checksums:

@@ -10,7 +10,7 @@ const trustSignals = [
     detail: "No analytics, no network requests, and no cloud dependency for core tools.",
   },
   {
-    title: "Signed export verification",
+    title: "Shared-passphrase HMAC verification",
     detail: "Profiles, policy packs, and vault snapshots support optional shared-passphrase HMAC verification.",
   },
   {
@@ -26,7 +26,7 @@ const trustSignals = [
 const workflowNotes = [
   {
     role: "Incident workflow",
-    note: "Use :share for guided package prep, or :sanitize when you need lower-level policy control before sharing logs.",
+    note: "Use :incident for guided incident packages, or :sanitize when you need lower-level policy control before sharing logs.",
   },
   {
     role: "Artifact verification",

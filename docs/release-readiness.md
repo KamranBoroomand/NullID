@@ -1,93 +1,82 @@
 # NullID Release Readiness
 
-Last updated: 2026-04-04
+Last updated: 2026-04-08
 
-This document tracks what is already at release-candidate quality and what is still missing before a production GA cut.
+This document separates what is now complete inside the repository from the external operator work that still must happen before NullID should be called generally available.
 
-## Current Baseline (Done)
+## 1. Repo-Side GA Status
 
-- Design and UX:
-  - Destructive wipe flow now requires explicit confirmation (`WIPE`) and shows backup/export guidance.
-  - Redaction preview style token mismatch fixed (`--border-subtle`).
-  - Testimonial-style guide copy removed and replaced with operational guidance.
-- Data and detection coverage:
-  - Added built-in sanitization/redaction for GitHub tokens, Slack tokens, and private key blocks.
-  - Synced browser + CLI rule coverage and policy defaults (`nullid.policy.json`).
-  - Added regression tests for new token/key-block masking.
-- Docs and project information:
-  - Added `SECURITY.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `CODE_OF_CONDUCT.md`, `SUPPORT.md`.
-  - Added GitHub issue templates and PR template.
-  - README updated for current scripts, release references, and governance links.
-  - Workflow/safe-share verification docs now explicitly distinguish artifact/hash verification from package-declared workflow metadata and outer wrapper compatibility fields.
-- Internationalization:
-  - Added missing FA/RU strings for new and high-impact UI text.
-  - Added strict `npm run i18n:check` phrase coverage enforcement and integrated it into the default validation path.
-  - Added locale-switching e2e coverage to the default release validation path.
-- Security and release checks:
-  - Replaced regex-only offline-policy lint with AST-based source scanning.
-  - Hardened security-header audit to strict directive/value checks.
-  - `Quality Gates` is now the default `pull_request` + `push` to `main` workflow and runs the documented validation path (`npm run validate`) plus guide assertion.
-  - Standard browser validation now runs through the default `npm run e2e` Playwright path, with the same config also backing `npm run test:visual`.
-  - `Visual Regression Gate` remains PR/manual-only and only runs when visual surfaces or baselines changed, so snapshot review stays meaningful instead of acting like default CI.
-  - `Release Dry-Run Gate` remains PR/manual-only and now only runs for release/deploy surface changes.
-  - GitHub Pages deployment is manual-only so `push`/`pull_request` quality gates stay separate from static-host publishing.
-  - Dependabot now ignores the current major Vite / React plugin / TypeScript migrations until they are scheduled as deliberate upgrade work.
-  - Visual snapshots updated for intentional UI changes.
+Repo-side GA preparation is complete for the current codebase.
 
-## Quality Gate Status
+Completed inside the repo:
 
-Latest local validation run (`npm run validate`) passed end-to-end on 2026-04-04:
+- Validation path is documented and automated through `npm run validate`.
+- Release packaging, release verification, reproducible build, and signed-release workflows are implemented and aligned with the docs.
+- Manual-only deployment, release, recovery, and operator checklists now exist in-repo:
+  - [`docs/release-runbook.md`](./release-runbook.md)
+  - [`docs/recovery-runbook.md`](./recovery-runbook.md)
+  - [`docs/deployment-verification-checklist.md`](./deployment-verification-checklist.md)
+  - [`docs/ga-operator-checklist.md`](./ga-operator-checklist.md)
+- README and release docs now point at the actual supported release path instead of a partial or stale process description.
+- Product limitations remain explicit and unchanged: no new trust or identity claim was added for GA prep.
 
-- `typecheck` passed
-- `i18n:check` passed
-- `lint` passed
-- `test` passed (164/164)
-- `e2e` passed (36/36)
-- `build` passed
-- `verify:build` passed
+## 2. Latest Repo Validation Evidence
 
-## Remaining Gaps Before Production GA
+Latest local GA-prep validation on 2026-04-08:
 
-These are the highest-value missing items that should still be completed for full production readiness.
+- `npm run typecheck` passed
+- `npm run i18n:check` passed
+- `npm test` passed
+- `npm run e2e` passed
+- `npm run validate` passed
+- `SOURCE_DATE_EPOCH=1735689600 npm run build:repro` passed
+- `npm run release:dry-run -- --tag ga-prep-local` passed
 
-### P0 (Release-Blocking)
+## 3. External Operator Tasks Required Before GA
 
-- Workflow trust-surface limits:
-  - Current workflow packages remain unsigned and do not carry a verifiable package-level signature.
-  - Top-level workflow metadata is still package-declared unless separately hashed inside an artifact.
-  - Schema-2 safe-share wrapper fields are not cross-checked against the embedded workflow package.
-  - GA should keep these limits explicit in product/docs, or redesign the contract before claiming stronger workflow trust guarantees.
-- Final host validation:
-  - Verify real deployed headers/CSP on the production domain, not only local/static config checks.
-- Release key operations runbook:
-  - Document exact signing-key custody, rotation, revocation, and emergency replacement procedures.
-- Disaster recovery drill:
-  - Execute and document at least one full restore drill for shared-passphrase HMAC-protected profile/policy/vault export flows.
+These are still required before final GA sign-off and cannot be completed by repo edits alone:
 
-### P1 (Should Complete Before Wide Adoption)
+- Confirm branch protection and required-check settings on the real GitHub repository.
+- Verify the real deployed site headers/CSP and static-host behavior on the production domain.
+- If GitHub Pages is the live host, confirm an equivalent header-setting layer exists; Pages alone does not apply the repo header baseline.
+- Execute and sign off a real restore/recovery drill for shared-passphrase HMAC-protected profile, policy, and vault exports.
+- Confirm maintainer-approved release key custody, rotation, revocation, and emergency replacement procedures.
+- Complete final manual release/tag/deploy sign-off using [`docs/ga-operator-checklist.md`](./ga-operator-checklist.md).
 
-- Accessibility hardening:
-  - Run and fix full keyboard/screen-reader audit across all modules.
-- Browser/device coverage:
-  - Add explicit support matrix and smoke verification for target browsers/OS versions.
-- Localization QA:
-  - Native-language review pass for RU/FA copy quality and line-break/layout polish.
-- Operational support policy:
-  - Define triage labels, severity levels, and target response windows in issue workflow docs.
+Until those items are complete, NullID should be treated as:
 
-### P2 (Post-GA Hardening)
+- codebase-ready for GA
+- not fully GA-signed-off operationally
 
-- Formal compatibility policy:
-  - Publish deprecation/compatibility guarantees for envelope/profile/policy schemas.
-- Performance budgets:
-  - Add explicit bundle-size and startup-performance budgets with CI enforcement.
-- Privacy documentation:
-  - Add a dedicated privacy statement clarifying zero-runtime-network behavior and local storage boundaries.
+## 4. Intentional Product Limitations
 
-## Category Scorecard
+These are not GA blockers because they are intentional, documented limits of the current product:
 
-- Design: RC quality, with remaining accessibility/browser polish.
-- Data coverage: Strong baseline, now includes major token/key-block classes.
-- Guides and information: Good baseline, needs production ops runbooks and support policy detail.
-- README: Release-ready baseline with script and governance alignment.
-- Options and features: Broad and coherent; next priority is operational hardening rather than feature breadth.
+- Workflow packages are unsigned and do not prove sender identity.
+- Shared-passphrase HMAC remains tamper-detection for parties that already share a passphrase; it is not public-key identity.
+- Top-level workflow metadata remains package-declared unless the same content is also hashed inside an included artifact.
+- Schema-2 safe-share wrapper fields remain compatibility metadata and are not cross-checked against the embedded workflow package.
+- `NULLID:ENC:1` protects the optional outer exported file transport; it does not add sender identity to workflow packages.
+- Product behavior remains local-first and offline-first, with no required runtime backend.
+
+## 5. Deferred Technical Debt
+
+These are real follow-up items, but they are not required to call the current repo code-complete for GA:
+
+- Accessibility audit and remediation across the full module set
+- Explicit browser/device support matrix
+- Native-language RU/FA editorial review
+- Operational support/triage policy docs
+- Formal compatibility/deprecation policy for long-term schema support
+- Performance budgets and enforcement
+
+## 6. Bottom Line
+
+The repository is now code-complete for GA preparation.
+
+What remains is external-only:
+
+- operator confirmation
+- real-host verification
+- restore drill execution
+- final tag/release/deploy sign-off

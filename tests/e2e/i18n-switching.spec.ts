@@ -9,6 +9,12 @@ const expected = {
     commandPlaceholder: "Type a command or tool…",
     onboardingDialog: "Onboarding tour",
     onboardingSkip: "skip",
+    incidentPurposeLabel: "Incident purpose",
+    safeSharePreset: "General safe share",
+    safeSharePreview: "Safe Share Assistant export for text-based content.",
+    incidentMode: "Incident handoff",
+    incidentPreview: "Incident Workflow export with case context, prepared artifacts, and receiver-facing reporting.",
+    incidentPurpose: "Prepare an incident handoff package.",
     lang: "en-US",
     dir: "ltr",
   },
@@ -18,6 +24,12 @@ const expected = {
     commandPlaceholder: "Введите команду или инструмент…",
     onboardingDialog: "Тур онбординга",
     onboardingSkip: "пропустить",
+    incidentPurposeLabel: "Цель инцидента",
+    safeSharePreset: "Общая безопасная передача",
+    safeSharePreview: "Экспорт Safe Share Assistant для текстового контента.",
+    incidentMode: "Передача инцидента",
+    incidentPreview: "Экспорт Incident Workflow с контекстом кейса, подготовленными артефактами и отчетностью для получателя.",
+    incidentPurpose: "Подготовьте пакет передачи инцидента.",
     lang: "ru-RU",
     dir: "ltr",
   },
@@ -27,6 +39,12 @@ const expected = {
     commandPlaceholder: "یک فرمان یا ابزار بنویسید…",
     onboardingDialog: "راهنمای شروع",
     onboardingSkip: "رد کردن",
+    incidentPurposeLabel: "هدف رخداد",
+    safeSharePreset: "اشتراک امن عمومی",
+    safeSharePreview: "خروجی «دستیار اشتراک امن» برای محتوای متن‌محور.",
+    incidentMode: "تحویل رخداد",
+    incidentPreview: "خروجی «گردش‌کار رخداد» با زمینهٔ پرونده، اقلام آماده‌شده و گزارش رو‌به‌گیرنده.",
+    incidentPurpose: "یک بستهٔ تحویل رخداد آماده کنید.",
     lang: "fa-IR",
     dir: "rtl",
   },
@@ -84,6 +102,31 @@ async function assertLocaleSurface(page: Page, locale: AppLocale) {
   const verifyButton = page.locator("button.module-button").filter({ hasText: ":verify" }).first();
   await verifyButton.click();
   await expect(page.locator(".page-title")).toHaveText(spec.verifyTitle);
+
+  const shareButton = page.locator("button.module-button").filter({ hasText: ":share" }).first();
+  await shareButton.click();
+  await expect(page.getByRole("button", { name: spec.safeSharePreset, exact: true })).toBeVisible();
+  if (locale !== "en") {
+    await expect(page.getByRole("button", { name: expected.en.safeSharePreset, exact: true })).toHaveCount(0);
+  }
+  await page.locator("textarea").first().fill("token=abcdefghijklmnopqrstuvwxyz12345 alice@example.com");
+  await expect(page.getByText(spec.safeSharePreview, { exact: true })).toBeVisible();
+  if (locale !== "en") {
+    await expect(page.getByText(expected.en.safeSharePreview, { exact: true })).toHaveCount(0);
+  }
+
+  const incidentButton = page.locator("button.module-button").filter({ hasText: ":incident" }).first();
+  await incidentButton.click();
+  await expect(page.getByRole("button", { name: spec.incidentMode, exact: true })).toBeVisible();
+  if (locale !== "en") {
+    await expect(page.getByRole("button", { name: expected.en.incidentMode, exact: true })).toHaveCount(0);
+  }
+  await expect(page.getByText(spec.incidentPreview, { exact: true })).toBeVisible();
+  await expect(page.getByLabel(spec.incidentPurposeLabel)).toHaveValue(spec.incidentPurpose);
+  if (locale !== "en") {
+    await expect(page.getByText(expected.en.incidentPreview, { exact: true })).toHaveCount(0);
+    await expect(page.getByLabel(spec.incidentPurposeLabel)).not.toHaveValue(expected.en.incidentPurpose);
+  }
 }
 
 async function openApp(
