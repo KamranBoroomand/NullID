@@ -165,8 +165,9 @@ test("filename privacy analyzer flags sensitive path segments and exports a repo
   await openApp(page);
   await page.getByRole("button", { name: /Filename Privacy/i }).click();
   await page.getByRole("textbox", { name: "Filename / path privacy input" }).fill("/Users/alice/projects/zephyr/incident-4432/customer-cards.csv");
-  await expect(page.getByText("Username in path")).toBeVisible();
-  await expect(page.getByText("Case / ticket ID in filename/path")).toBeVisible();
+  const findingsRegion = page.getByRole("region", { name: "Filename / path privacy findings" });
+  await expect(findingsRegion).toContainText("Username in path");
+  await expect(findingsRegion).toContainText("Case / ticket ID in filename/path");
   const reportDownload = page.waitForEvent("download");
   await page.getByRole("button", { name: /export review report/i }).click();
   const report = await reportDownload;
@@ -323,9 +324,10 @@ test("safe share file mode surfaces filename privacy hints before export", async
     mimeType: "text/plain",
     buffer: Buffer.from("sample"),
   });
-  await expect(page.getByText("Filename / path privacy")).toBeVisible();
-  await expect(page.getByText("Employee ID in filename/path")).toBeVisible();
-  await expect(page.getByText("Case / ticket ID in filename/path")).toBeVisible();
+  const findingsRegion = page.getByRole("region", { name: "Filename / path privacy findings" });
+  await expect(findingsRegion).toContainText("Filename / path privacy");
+  await expect(findingsRegion).toContainText("Employee ID in filename/path");
+  await expect(findingsRegion).toContainText("Case / ticket ID in filename/path");
 });
 
 test("incident workflow exports a receiver-friendly incident package", async ({ page }) => {

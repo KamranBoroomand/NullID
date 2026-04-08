@@ -573,7 +573,7 @@ export function SafeShareView({ onOpenGuide }: SafeShareViewProps) {
                 </>
               ) : null}
               {filePathPrivacy ? (
-                <>
+                <section aria-label={tr("Filename / path privacy findings")}>
                   <div className="panel-subtext">{tr("Filename / path privacy")}</div>
                   <ul className="microcopy">
                     {filePathPrivacy.findings.length > 0 ? (
@@ -586,7 +586,7 @@ export function SafeShareView({ onOpenGuide }: SafeShareViewProps) {
                       <li>{tr("No filename/path privacy hints were generated for the current file name.")}</li>
                     )}
                   </ul>
-                </>
+                </section>
               ) : null}
               {cleanActions.length ? (
                 <>
