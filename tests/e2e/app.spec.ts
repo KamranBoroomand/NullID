@@ -2,6 +2,16 @@ import { test, expect } from "@playwright/test";
 import path from "node:path";
 import fs from "node:fs";
 
+const shellViewports = [
+  { label: "360x740", width: 360, height: 740 },
+  { label: "390x844", width: 390, height: 844 },
+  { label: "430x932", width: 430, height: 932 },
+  { label: "820x1180", width: 820, height: 1180 },
+  { label: "1366x900", width: 1366, height: 900 },
+] as const;
+
+const maxHorizontalOverflowPx = 2;
+
 async function openApp(page: import("@playwright/test").Page) {
   await page.addInitScript(() => {
     window.localStorage.setItem("nullid:onboarding-complete", "true");
@@ -430,6 +440,76 @@ test("mobile navigation scrolls and allows selection", async ({ browser }) => {
   await context.close();
 });
 
+for (const viewport of shellViewports) {
+  test(`responsive app shell layout :: ${viewport.label}`, async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
+    const page = await context.newPage();
+    await openApp(page);
+    await expect(page.locator(".frame-shell")).toBeVisible();
+    await expectNoHorizontalOverflow(page, viewport.label);
+    await expectWorkspaceUsable(page, viewport);
+
+    if (viewport.width >= 1040) {
+      await expectDesktopModuleFooterAnchored(page, viewport.label);
+    } else {
+      await expectMobileFeedbackClearance(page, viewport.label);
+      await page.getByRole("button", { name: /Module list/i }).click();
+      await expect(page.locator(".frame-drawer-backdrop.is-open")).toBeVisible();
+      await expectDrawerModuleFooterAnchored(page, viewport.label);
+      await page.getByRole("button", { name: /Encrypt \/ Decrypt/i }).click();
+      await expect(page.locator(".frame-drawer-backdrop.is-open")).toBeHidden();
+      await expect(page.getByLabel("Encrypt panel")).toBeVisible();
+      await expectNoHorizontalOverflow(page, `${viewport.label}/drawer-select`);
+      await expectFeedbackDoesNotOverlapPanelControls(page, `${viewport.label}/drawer-select`);
+    }
+
+    await waitForToastsToClear(page);
+    await expect(page).toHaveScreenshot(`app-shell-${viewport.label}.png`, {
+      animations: "disabled",
+      caret: "hide",
+      fullPage: false,
+      maxDiffPixelRatio: 0.025,
+    });
+    await context.close();
+  });
+}
+
+test("mobile command surfaces fit inside the viewport", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 360, height: 740 } });
+  const page = await context.newPage();
+  await openApp(page);
+
+  await page.keyboard.press("/");
+  await expect(page.locator(".command-surface")).toBeVisible();
+  await expectSurfaceWithinViewport(page, ".command-surface", "command palette");
+  await expect(page.locator(".command-results")).toHaveCSS("overflow-y", "auto");
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".command-surface")).toBeHidden();
+
+  await page.getByRole("button", { name: /Open quick actions/i }).click();
+  await page.getByRole("menuitem", { name: /feedback/i }).click();
+  await expect(page.locator(".feedback-panel")).toBeVisible();
+  await expectSurfaceWithinViewport(page, ".feedback-panel", "feedback panel");
+  await page.getByRole("button", { name: /^close$/i }).click();
+  await expect(page.locator(".feedback-panel")).toBeHidden();
+
+  await page.getByRole("button", { name: /Open quick actions/i }).click();
+  await page.getByRole("menuitem", { name: /wipe/i }).click();
+  await expect(page.locator(".action-dialog-panel")).toBeVisible();
+  await expectSurfaceWithinViewport(page, ".action-dialog-panel", "action dialog");
+  await expect(page.locator(".action-dialog-body")).toHaveCSS("overflow-y", "auto");
+  await page.getByRole("button", { name: /^cancel$/i }).click();
+  await expect(page.locator(".action-dialog-panel")).toBeHidden();
+
+  await page.getByRole("button", { name: /Module list/i }).click();
+  await page.getByRole("button", { name: /^:guide/i }).click();
+  await page.locator(".guide-open-briefing").first().click();
+  await expect(page.locator(".panel-overlay-surface")).toBeVisible();
+  await expectSurfaceWithinViewport(page, ".panel-overlay-surface", "panel overlay");
+  await expect(page.locator(".panel-overlay-body")).toHaveCSS("overflow-y", "auto");
+  await context.close();
+});
+
 function createStoredZip(entries: Array<{ name: string; content: Buffer }>) {
   const localParts: Uint8Array[] = [];
   const centralParts: Uint8Array[] = [];
@@ -537,4 +617,199 @@ function hasSnapshotBaseline(snapshotName: string) {
   const stem = snapshotName.replace(/\.png$/i, "");
   const file = path.join(process.cwd(), "tests/e2e/app.spec.ts-snapshots", `${stem}-${process.platform}.png`);
   return fs.existsSync(file);
+}
+
+async function expectNoHorizontalOverflow(page: import("@playwright/test").Page, scenario: string) {
+  const overflow = await page.evaluate(() => {
+    const measure = (element: Element | null) => {
+      if (!(element instanceof HTMLElement)) return 0;
+      return Math.max(0, Math.round(element.scrollWidth - element.clientWidth));
+    };
+
+    return {
+      document: measure(document.documentElement),
+      body: measure(document.body),
+    };
+  });
+
+  expect(overflow.document, `${scenario}: document horizontal overflow`).toBeLessThanOrEqual(maxHorizontalOverflowPx);
+  expect(overflow.body, `${scenario}: body horizontal overflow`).toBeLessThanOrEqual(maxHorizontalOverflowPx);
+}
+
+async function expectWorkspaceUsable(
+  page: import("@playwright/test").Page,
+  viewport: { label: string; width: number; height: number },
+) {
+  await expect(page.locator(".workspace-scroll")).toBeVisible();
+  const metrics = await page.evaluate(() => {
+    const header = document.querySelector(".global-header");
+    const workspaceScroll = document.querySelector(".workspace-scroll");
+    const headerRect = header instanceof HTMLElement ? header.getBoundingClientRect() : null;
+    const scrollStyle = workspaceScroll instanceof HTMLElement ? getComputedStyle(workspaceScroll) : null;
+    const scrollRect = workspaceScroll instanceof HTMLElement ? workspaceScroll.getBoundingClientRect() : null;
+
+    return {
+      headerHeight: Math.round(headerRect?.height ?? 0),
+      workspaceHeight: Math.round(scrollRect?.height ?? 0),
+      workspaceOverflowY: scrollStyle?.overflowY ?? "",
+      workspaceScrollHeight: workspaceScroll instanceof HTMLElement ? Math.round(workspaceScroll.scrollHeight) : 0,
+      workspaceClientHeight: workspaceScroll instanceof HTMLElement ? Math.round(workspaceScroll.clientHeight) : 0,
+    };
+  });
+
+  const maxHeaderHeight = viewport.width < 840 ? Math.min(176, viewport.height * 0.26) : viewport.height * 0.22;
+  expect(metrics.headerHeight, `${viewport.label}: compact header height`).toBeLessThanOrEqual(maxHeaderHeight);
+  expect(metrics.workspaceHeight, `${viewport.label}: workspace remains visible`).toBeGreaterThan(220);
+  expect(metrics.workspaceOverflowY, `${viewport.label}: workspace scroll container`).toBe("auto");
+  expect(metrics.workspaceScrollHeight, `${viewport.label}: workspace has measurable content`).toBeGreaterThanOrEqual(metrics.workspaceClientHeight);
+}
+
+async function expectDesktopModuleFooterAnchored(page: import("@playwright/test").Page, scenario: string) {
+  const metrics = await collectModuleFooterMetrics(page, ".frame-pane");
+  expect(metrics.listOverflowY, `${scenario}: module list should not own vertical scrolling`).toBe("hidden");
+  expect(metrics.navOverflowY, `${scenario}: module nav should own vertical scrolling`).toMatch(/auto|scroll/);
+  expect(metrics.footerFlexShrink, `${scenario}: footer should stay flex-stable`).toBe("0");
+  expect(metrics.footerBottomDelta, `${scenario}: footer bottom should align with rail bottom`).toBeLessThanOrEqual(24);
+  expect(metrics.footerTopRatio, `${scenario}: footer should sit low in rail`).toBeGreaterThan(0.72);
+  expect(metrics.overlappingButtons, `${scenario}: footer should not overlay module buttons`).toBe(0);
+}
+
+async function expectDrawerModuleFooterAnchored(page: import("@playwright/test").Page, scenario: string) {
+  const metrics = await collectModuleFooterMetrics(page, ".frame-drawer-panel");
+  expect(metrics.listOverflowY, `${scenario}: drawer module list should not own vertical scrolling`).toBe("hidden");
+  expect(metrics.navOverflowY, `${scenario}: drawer module nav should own vertical scrolling`).toMatch(/auto|scroll/);
+  expect(metrics.footerFlexShrink, `${scenario}: drawer footer should stay flex-stable`).toBe("0");
+  expect(metrics.footerBottomDelta, `${scenario}: drawer footer bottom should align with drawer bottom`).toBeLessThanOrEqual(24);
+  expect(metrics.footerTopRatio, `${scenario}: drawer footer should sit low in drawer`).toBeGreaterThan(0.72);
+  expect(metrics.overlappingButtons, `${scenario}: drawer footer should not overlay module buttons`).toBe(0);
+  expect(metrics.maxButtonOverflow, `${scenario}: drawer module buttons should not overflow`).toBeLessThanOrEqual(maxHorizontalOverflowPx);
+}
+
+async function collectModuleFooterMetrics(page: import("@playwright/test").Page, containerSelector: string) {
+  return page.evaluate((selector) => {
+    const container = document.querySelector(selector);
+    const list = container?.querySelector(".module-list");
+    const nav = container?.querySelector(".module-list nav");
+    const footer = container?.querySelector(".module-footer");
+    if (!(container instanceof HTMLElement) || !(list instanceof HTMLElement) || !(nav instanceof HTMLElement) || !(footer instanceof HTMLElement)) {
+      return {
+        listOverflowY: "",
+        navOverflowY: "",
+        footerFlexShrink: "",
+        footerBottomDelta: Number.POSITIVE_INFINITY,
+        footerTopRatio: 0,
+        overlappingButtons: Number.POSITIVE_INFINITY,
+        maxButtonOverflow: Number.POSITIVE_INFINITY,
+      };
+    }
+
+    const containerRect = container.getBoundingClientRect();
+    const navRect = nav.getBoundingClientRect();
+    const footerRect = footer.getBoundingClientRect();
+    const footerStyle = getComputedStyle(footer);
+    const visibleButtonRects = Array.from(container.querySelectorAll(".module-button"))
+      .map((button) => {
+        const rect = button.getBoundingClientRect();
+        return {
+          top: Math.max(rect.top, navRect.top),
+          right: Math.min(rect.right, navRect.right),
+          bottom: Math.min(rect.bottom, navRect.bottom),
+          left: Math.max(rect.left, navRect.left),
+        };
+      })
+      .filter((rect) => rect.right > rect.left && rect.bottom > rect.top);
+    const overlaps = visibleButtonRects.filter(
+      (rect) =>
+        rect.left < footerRect.right &&
+        rect.right > footerRect.left &&
+        rect.top < footerRect.bottom &&
+        rect.bottom > footerRect.top,
+    ).length;
+    const buttonOverflows = Array.from(container.querySelectorAll(".module-button")).map((button) =>
+      button instanceof HTMLElement ? Math.max(0, Math.round(button.scrollWidth - button.clientWidth)) : 0,
+    );
+
+    return {
+      listOverflowY: getComputedStyle(list).overflowY,
+      navOverflowY: getComputedStyle(nav).overflowY,
+      footerFlexShrink: footerStyle.flexShrink,
+      footerBottomDelta: Math.abs(Math.round(containerRect.bottom - footerRect.bottom)),
+      footerTopRatio: (footerRect.top - containerRect.top) / Math.max(1, containerRect.height),
+      overlappingButtons: overlaps,
+      maxButtonOverflow: Math.max(0, ...buttonOverflows),
+    };
+  }, containerSelector);
+}
+
+async function expectMobileFeedbackClearance(page: import("@playwright/test").Page, scenario: string) {
+  const metrics = await page.evaluate(() => {
+    const launcher = document.querySelector(".feedback-launcher");
+    const workspaceScroll = document.querySelector(".workspace-scroll");
+    const launcherStyle = launcher instanceof HTMLElement ? getComputedStyle(launcher) : null;
+    const launcherRect = launcher instanceof HTMLElement && launcherStyle?.display !== "none" ? launcher.getBoundingClientRect() : null;
+    const workspaceStyle = workspaceScroll instanceof HTMLElement ? getComputedStyle(workspaceScroll) : null;
+    return {
+      launcherVisible: Boolean(launcherRect),
+      launcherHeight: Math.round(launcherRect?.height ?? 0),
+      workspacePaddingBottom: Number.parseFloat(workspaceStyle?.paddingBottom ?? "0"),
+    };
+  });
+
+  if (!metrics.launcherVisible) return;
+  expect(metrics.launcherHeight, `${scenario}: feedback launcher should be measurable`).toBeGreaterThan(0);
+  expect(metrics.workspacePaddingBottom, `${scenario}: workspace bottom padding should clear feedback launcher`).toBeGreaterThanOrEqual(
+    metrics.launcherHeight + 12,
+  );
+}
+
+async function expectFeedbackDoesNotOverlapPanelControls(page: import("@playwright/test").Page, scenario: string) {
+  const overlaps = await page.evaluate(() => {
+    const launcher = document.querySelector(".feedback-launcher");
+    if (!(launcher instanceof HTMLElement) || getComputedStyle(launcher).display === "none") return [];
+    const launcherRect = launcher.getBoundingClientRect();
+    const controls = Array.from(
+      document.querySelectorAll(".workspace-scroll .panel button, .workspace-scroll .panel input, .workspace-scroll .panel textarea, .workspace-scroll .panel select"),
+    );
+
+    return controls
+      .filter((control): control is HTMLElement => control instanceof HTMLElement)
+      .filter((control) => {
+        const style = getComputedStyle(control);
+        const rect = control.getBoundingClientRect();
+        return style.visibility !== "hidden" && style.display !== "none" && rect.width > 0 && rect.height > 0;
+      })
+      .filter((control) => {
+        const rect = control.getBoundingClientRect();
+        return rect.left < launcherRect.right && rect.right > launcherRect.left && rect.top < launcherRect.bottom && rect.bottom > launcherRect.top;
+      })
+      .map((control) => control.getAttribute("aria-label") ?? control.textContent?.trim() ?? control.tagName);
+  });
+
+  expect(overlaps, `${scenario}: feedback launcher should not overlap visible panel controls`).toEqual([]);
+}
+
+async function expectSurfaceWithinViewport(page: import("@playwright/test").Page, selector: string, label: string) {
+  const metrics = await page.evaluate((surfaceSelector) => {
+    const surface = document.querySelector(surfaceSelector);
+    const rect = surface instanceof HTMLElement ? surface.getBoundingClientRect() : null;
+    return {
+      found: Boolean(rect),
+      top: Math.round(rect?.top ?? 0),
+      right: Math.round(rect?.right ?? 0),
+      bottom: Math.round(rect?.bottom ?? 0),
+      left: Math.round(rect?.left ?? 0),
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+    };
+  }, selector);
+
+  expect(metrics.found, `${label}: surface exists`).toBe(true);
+  expect(metrics.left, `${label}: left edge within viewport`).toBeGreaterThanOrEqual(0);
+  expect(metrics.top, `${label}: top edge within viewport`).toBeGreaterThanOrEqual(0);
+  expect(metrics.right, `${label}: right edge within viewport`).toBeLessThanOrEqual(metrics.viewportWidth);
+  expect(metrics.bottom, `${label}: bottom edge within viewport`).toBeLessThanOrEqual(metrics.viewportHeight);
+}
+
+async function waitForToastsToClear(page: import("@playwright/test").Page) {
+  await page.waitForFunction(() => document.querySelectorAll(".toast").length === 0, undefined, { timeout: 4_500 });
 }

@@ -29,7 +29,7 @@ export function Frame({ modulePane, workspace, header, showNavDrawer = false, na
             <aside className="frame-drawer-panel">{modulePane}</aside>
           </div>
         ) : null}
-        <div className="frame-content">
+        <div className={`frame-content ${showNavDrawer ? "is-stacked" : ""}`}>
           {!showNavDrawer ? <aside className="frame-pane">{modulePane}</aside> : null}
           <section className="frame-workspace">
             {header}

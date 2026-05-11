@@ -13,11 +13,11 @@
 }
 
 .app-surface.is-compact {
-  --app-shell-padding: 0.75rem;
+  --app-shell-padding: 0.55rem;
 }
 
 .app-surface.is-short {
-  --app-shell-padding: 0.65rem;
+  --app-shell-padding: 0.5rem;
 }
 
 .app-surface > .frame {
@@ -51,6 +51,12 @@
 
 @media (max-height: 820px) {
   .app-surface {
-    --app-shell-padding: 0.75rem;
+    --app-shell-padding: 0.5rem;
+  }
+}
+
+@media (max-width: 520px) {
+  .app-surface {
+    --app-shell-padding: 0px;
   }
 }

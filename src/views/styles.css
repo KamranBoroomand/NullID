@@ -17,7 +17,7 @@
 
 .app-surface.is-compact .workspace-scroll,
 .app-surface.is-short .workspace-scroll {
-  padding: 0.9rem;
+  padding: 0.75rem 0.75rem max(4.25rem, calc(var(--app-safe-bottom) + 3.8rem));
   gap: 0.75rem;
 }
 
@@ -126,8 +126,22 @@
 
 .table {
   width: 100%;
+  max-width: 100%;
   border-collapse: collapse;
   font-family: var(--font-mono);
+  display: block;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.table thead,
+.table tbody,
+.table tfoot {
+  display: table;
+  width: 100%;
+  min-width: min(100%, 36rem);
 }
 
 .table th,
@@ -136,6 +150,8 @@
   padding: 0.55rem;
   text-align: start;
   vertical-align: top;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .table th {
@@ -422,5 +438,49 @@
 
   .textarea {
     min-height: 120px;
+  }
+}
+
+@media (max-width: 520px) {
+  .workspace-scroll {
+    padding: 0.65rem 0.55rem max(4.5rem, calc(var(--app-safe-bottom) + 4rem));
+    gap: 0.65rem;
+  }
+
+  .app-surface.is-compact .workspace-scroll,
+  .app-surface.is-short .workspace-scroll {
+    padding: 0.65rem 0.55rem max(4.5rem, calc(var(--app-safe-bottom) + 4rem));
+  }
+
+  .panel {
+    padding: 0.72rem;
+    gap: 0.65rem;
+  }
+
+  .panel-heading,
+  .status-line,
+  .controls-row {
+    gap: 0.5rem;
+  }
+
+  .button {
+    padding: 0.52rem 0.68rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+  }
+
+  .input,
+  .textarea,
+  .select,
+  .dropzone,
+  .output {
+    padding: 0.65rem;
+    font-size: 0.86rem;
+  }
+
+  .table thead,
+  .table tbody,
+  .table tfoot {
+    min-width: 32rem;
   }
 }

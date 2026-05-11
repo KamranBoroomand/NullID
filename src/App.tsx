@@ -105,6 +105,7 @@ function AppShell() {
   const [theme, setTheme] = usePersistentState<ThemeMode>("nullid:theme", "dark");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [onboardingComplete, setOnboardingComplete] = usePersistentState<boolean>("nullid:onboarding-complete", false);
   const [tourStepIndex, setTourStepIndex] = usePersistentState<number>("nullid:onboarding-step", 0);
   const [tourOpen, setTourOpen] = useState(!onboardingComplete);
@@ -715,6 +716,7 @@ function AppShell() {
             onToggleNav={() => setNavOpen((open) => !open)}
             onLocaleChange={setLocale}
             onOpenCommands={openPalette}
+            onOpenFeedback={() => setFeedbackOpen(true)}
             onWipe={openWipeDialog}
           />
         }
@@ -951,7 +953,12 @@ function AppShell() {
         )}
         {profileImportError ? <p className="action-dialog-error">{profileImportError}</p> : null}
       </ActionDialog>
-      <FeedbackWidget activeModule={resolvedActiveModule} />
+      <FeedbackWidget
+        activeModule={resolvedActiveModule}
+        open={feedbackOpen}
+        compactLauncher={isCompact || isShort}
+        onOpenChange={setFeedbackOpen}
+      />
       <OnboardingTour
         open={tourOpen}
         stepIndex={tourStepIndex}

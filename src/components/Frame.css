@@ -52,6 +52,10 @@
   overflow: hidden;
 }
 
+.frame-content.is-stacked {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .frame-pane {
   display: flex;
   flex-direction: column;
@@ -95,6 +99,12 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+}
+
+@media (max-width: 520px) {
+  .frame-drawer-panel {
+    width: min(100%, var(--app-viewport-width, 100vw));
+  }
 }
 
 @media (max-width: 1200px) {
