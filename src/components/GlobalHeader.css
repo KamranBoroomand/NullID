@@ -210,33 +210,72 @@
 
 .global-header.is-compact {
   grid-template-columns: 1fr auto;
-  align-items: start;
-  gap: 0.75rem;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 0.65rem;
 }
 
-.global-header.is-compact .header-center {
-  grid-column: 1 / -1;
-  width: 100%;
-  gap: 0.55rem;
+.global-header.is-compact .header-cluster {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.global-header.is-compact .brand-mark,
+.global-header.is-compact .header-center,
+.global-header.is-compact .page-subtitle {
+  display: none;
+}
+
+.global-header.is-compact .nav-toggle-button {
+  min-height: 2.25rem;
+  padding: 0.46rem 0.62rem;
+}
+
+.global-header.is-compact .ghost-button,
+.global-header.is-compact .command-button {
+  min-height: 2.25rem;
+  padding: 0.46rem 0.62rem;
+  font-size: 0.72rem;
 }
 
 .global-header.is-compact .page-meta {
   width: 100%;
+  gap: 0;
 }
 
 .global-header.is-compact .page-title {
-  font-size: 1.08rem;
-  line-height: 1.2;
+  font-size: clamp(0.92rem, 4vw, 1.08rem);
+  line-height: 1.05;
   overflow-wrap: anywhere;
 }
 
 .global-header.is-compact .header-actions {
   justify-self: end;
-  align-items: flex-start;
+  align-items: center;
+  align-self: center;
 }
 
 .global-header.is-compact .compact-actions {
   position: relative;
+}
+
+@media (max-width: 420px) {
+  .global-header.is-compact {
+    gap: 0.4rem;
+    padding: 0.5rem;
+  }
+
+  .global-header.is-compact .header-cluster {
+    gap: 0.4rem;
+  }
+
+  .global-header.is-compact .ghost-button,
+  .global-header.is-compact .command-button {
+    padding-inline: 0.5rem;
+    letter-spacing: 0.08em;
+  }
 }
 
 @media (max-width: 1120px) {

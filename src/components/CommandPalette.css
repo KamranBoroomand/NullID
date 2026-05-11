@@ -53,6 +53,7 @@
 
 .command-field input {
   flex: 1;
+  min-width: 0;
   border: none;
   background: transparent;
   color: var(--text-primary);
@@ -176,7 +177,13 @@
 }
 
 @media (max-width: 720px) {
+  .command-overlay {
+    --command-overlay-padding: 0.65rem;
+  }
+
   .command-surface {
+    width: 100%;
+    max-height: 100%;
     padding: 0.8rem;
   }
 
@@ -189,6 +196,20 @@
     justify-content: flex-start;
     text-align: left;
     max-width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .command-overlay {
+    --command-overlay-padding: 0.5rem;
+  }
+
+  .command-field {
+    padding: 0.56rem 0.62rem;
+  }
+
+  .command-text {
+    font-size: 0.9rem;
   }
 }
 

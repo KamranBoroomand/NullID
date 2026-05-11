@@ -16,14 +16,19 @@ interface FeedbackEntry {
 
 interface FeedbackWidgetProps {
   activeModule: ModuleKey;
+  open?: boolean;
+  compactLauncher?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 const storageKey = "nullid:feedback-log";
 
-export function FeedbackWidget({ activeModule }: FeedbackWidgetProps) {
+export function FeedbackWidget({ activeModule, open: controlledOpen, compactLauncher = false, onOpenChange }: FeedbackWidgetProps) {
   const { push } = useToast();
   const { t } = useI18n();
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = onOpenChange ?? setUncontrolledOpen;
   const [category, setCategory] = usePersistentState<FeedbackEntry["category"]>("nullid:feedback-category", "idea");
   const [priority, setPriority] = usePersistentState<FeedbackEntry["priority"]>("nullid:feedback-priority", "medium");
   const [message, setMessage] = usePersistentState<string>("nullid:feedback-draft", "");
@@ -72,6 +77,8 @@ export function FeedbackWidget({ activeModule }: FeedbackWidgetProps) {
     URL.revokeObjectURL(url);
     push("feedback export ready", "accent");
   };
+
+  if (!open && compactLauncher) return null;
 
   return (
     <div className="feedback-widget">

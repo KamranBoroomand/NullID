@@ -23,6 +23,7 @@ interface GlobalHeaderProps {
   onToggleNav?: () => void;
   onLocaleChange: (next: AppLocale) => void;
   onOpenCommands: () => void;
+  onOpenFeedback?: () => void;
   onWipe: () => void;
 }
 
@@ -41,6 +42,7 @@ export function GlobalHeader({
   onToggleNav,
   onLocaleChange,
   onOpenCommands,
+  onOpenFeedback,
   onWipe,
 }: GlobalHeaderProps) {
   const { t, tr, availableLocales, localeMeta } = useI18n();
@@ -140,6 +142,18 @@ export function GlobalHeader({
                   ))}
                 </select>
               </label>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onOpenFeedback?.();
+                }}
+                aria-label={t("feedback.open")}
+                role="menuitem"
+              >
+                {t("feedback.launcher")}
+              </button>
               <button
                 type="button"
                 className="ghost-button"
