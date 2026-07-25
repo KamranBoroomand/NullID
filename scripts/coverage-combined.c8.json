@@ -1,0 +1,21 @@
+{
+  "all": true,
+  "reporter": ["text", "json-summary"],
+  "reports-dir": "coverage/combined",
+  "temp-directory": "coverage/tmp-combined",
+  "include": ["build-test/**/*.js", "scripts/**/*.js", "scripts/**/*.mjs"],
+  "exclude": [
+    "build-test/__tests__/**",
+    "build-test/App.js",
+    "build-test/components/**",
+    "build-test/hooks/useCommandHistory.js",
+    "build-test/hooks/usePrefersReducedMotion.js",
+    "build-test/main.js",
+    "build-test/motion/**",
+    "build-test/theme/**",
+    "build-test/views/**",
+    "scripts/coverage-evidence.mjs",
+    "scripts/desktop-smoke.mjs",
+    "scripts/tauri-init.mjs"
+  ]
+}

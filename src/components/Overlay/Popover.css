@@ -1,0 +1,10 @@
+.popover-surface {
+  position: fixed;
+  background: var(--surface-0);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.65rem;
+  box-shadow: var(--shadow-strong);
+  padding: 0.6rem;
+  z-index: var(--z-overlay, 1200);
+  min-width: 220px;
+}

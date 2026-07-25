@@ -1,0 +1,6 @@
+{
+  "name": "NullID Artifact Checks",
+  "description": "Runs reproducible build verification, guide assertion, and SBOM presence checks for pull requests.",
+  "iconName": "package",
+  "categories": ["Continuous integration", "Security"]
+}

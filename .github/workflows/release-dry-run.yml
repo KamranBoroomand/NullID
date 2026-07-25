@@ -1,0 +1,155 @@
+name: Release Dry-Run Gate
+
+on:
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-dry-run-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    env:
+      SOURCE_DATE_EPOCH: 1735689600
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          fetch-depth: 0
+
+      - name: Detect release-path changes
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "reason=manual-dispatch" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          changed_files="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")"
+          printf '%s\n' "$changed_files"
+
+          should_run=false
+          while IFS= read -r file; do
+            case "$file" in
+              .github/workflows/release-dry-run.yml|\
+              .github/workflows/release-signed.yml|\
+              .github/workflows/pages.yml|\
+              .github/workflows/quality-gates.yml|\
+              .github/workflows/reproducibility.yml|\
+              .github/workflows/visual-regression.yml|\
+              README.md|\
+              package.json|\
+              package-lock.json|\
+              docs/release-readiness.md|\
+              docs/release-runbook.md|\
+              docs/recovery-runbook.md|\
+              docs/deployment-verification-checklist.md|\
+              docs/threat-model.md|\
+              docs/signed-workflow-conventions.md|\
+              scripts/check-doc-links.mjs|\
+              scripts/release-dry-run.mjs|\
+              scripts/coverage-app.c8.json|\
+              scripts/coverage-scripts.c8.json|\
+              scripts/coverage-combined.c8.json|\
+              scripts/coverage-evidence.mjs|\
+              scripts/run-production-e2e.mjs|\
+              scripts/package-release.mjs|\
+              scripts/verify-release-bundle.mjs|\
+              scripts/artifact-safety.mjs|\
+              scripts/write-build-info.mjs|\
+              scripts/generate-precache-manifest.mjs|\
+              scripts/precache-manifest-utils.mjs|\
+              scripts/generate-build-manifest.mjs|\
+              scripts/generate-sbom.mjs|\
+              scripts/verify-build-manifest.mjs|\
+              scripts/verify-security-headers.mjs|\
+              tests/e2e/production-pwa.spec.ts|\
+              tests/e2e/offline-precache.spec.ts|\
+              public/_headers|\
+              public/sw.js|\
+              vercel.json)
+                should_run=true
+                ;;
+            esac
+          done <<< "$changed_files"
+
+          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
+          echo "reason=release-path-filter" >> "$GITHUB_OUTPUT"
+
+      - name: Skip non-release changes
+        if: steps.scope.outputs.should_run != 'true'
+        run: echo "Release dry-run skipped because this change did not touch release/deploy surfaces."
+
+      - name: Setup Node
+        if: steps.scope.outputs.should_run == 'true'
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 20.19.0
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.scope.outputs.should_run == 'true'
+        run: npm ci
+
+      - name: Install Playwright browser
+        if: steps.scope.outputs.should_run == 'true'
+        run: npm run e2e:install
+
+      - name: Typecheck
+        if: steps.scope.outputs.should_run == 'true'
+        run: npm run typecheck
+
+      - name: i18n coverage
+        if: steps.scope.outputs.should_run == 'true'
+        run: npm run i18n:check
+
+      - name: Documentation links
+        if: steps.scope.outputs.should_run == 'true'
+        run: npm run docs:links
+
+      - name: Lint
+        if: steps.scope.outputs.should_run == 'true'
+        run: npm run lint
+
+      - name: Unit tests
+        if: steps.scope.outputs.should_run == 'true'
+        run: npm run test
+
+      - name: Browser e2e
+        if: steps.scope.outputs.should_run == 'true'
+        run: CI=1 npm run e2e
+
+      - name: Build reproducible artifacts
+        if: steps.scope.outputs.should_run == 'true'
+        run: npm run build:repro
+
+      - name: Resolve dry-run tag
+        if: steps.scope.outputs.should_run == 'true'
+        id: release_tag
+        run: echo "tag=dryrun-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - name: Run release dry-run checks (includes test:e2e:production)
+        if: steps.scope.outputs.should_run == 'true'
+        run: npm run release:dry-run -- --tag "${{ steps.release_tag.outputs.tag }}"
+
+      - name: Assert canonical coverage runtime
+        if: steps.scope.outputs.should_run == 'true'
+        run: npm run coverage:assert-canonical
+
+      - name: Upload dry-run bundle artifact
+        if: steps.scope.outputs.should_run == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-dry-run-${{ steps.release_tag.outputs.tag }}
+          path: release/*

@@ -1,0 +1,6 @@
+{
+  "name": "NullID PR Sanitize Check",
+  "description": "Blocks PRs when changed files contain high-severity secrets according to NullID policy enforcement.",
+  "iconName": "shield",
+  "categories": ["Security", "Code Quality"]
+}

@@ -1,0 +1,1197 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import "./styles.css";
+import { usePersistentState } from "../hooks/usePersistentState";
+import { useToast } from "../components/ToastHost";
+import { ActionDialog } from "../components/ActionDialog";
+import { useClipboardPrefs, writeClipboard } from "../utils/clipboard";
+import { hashText } from "../utils/hash";
+import { encryptText } from "../utils/cryptoEnvelope";
+import { mergeSanitizePolicyConfig, normalizeWorkspacePolicyBaseline } from "../utils/policyBaseline";
+import {
+  createPolicyPackSnapshot,
+  describePolicyPackPayload,
+  importPolicyPackPayload,
+  mergePolicyPacks,
+  type PolicyPackDescriptor,
+} from "../utils/policyPack";
+import {
+  applySanitizeRules,
+  applySanitizeRulesAsync,
+  buildRulesState,
+  getRuleKeys,
+  getRuleLabel,
+  runBatchSanitize,
+  runBatchSanitizeAsync,
+  sanitizePresets,
+  type BatchOutput,
+  type CustomRule,
+  type CustomRuleScope,
+  type PresetKey,
+  type RulesState,
+  type PolicyPack,
+  type SanitizePolicyConfig,
+} from "../utils/sanitizeEngine";
+import { validateCustomRegexRule } from "../utils/customRegex.js";
+import type { ModuleKey } from "../components/ModuleList";
+import { useI18n } from "../i18n";
+import {
+  LEGACY_KEY_HINT_PROFILE_KEYS,
+  SHARED_KEY_HINT_PROFILE_KEY,
+  findKeyHintProfileById,
+  removeProfileHint,
+  rotateProfileHint,
+  sanitizeKeyHint,
+  upsertKeyHintProfile,
+  type KeyHintProfile,
+} from "../utils/keyHintProfiles";
+import { createSanitizeSafeShareBundle } from "../utils/workflowPackage.js";
+import {
+  formatPolicyPackTrustState,
+  getPolicyPackExportTrustState,
+  getPolicyPackImportTrustState,
+  policyPackTrustTagClass,
+} from "./sanitizePolicyTrustState";
+import { INPUT_LIMITS, assertFileBatchWithinLimit, readFileTextWithLimit } from "../utils/inputLimits";
+import { canonicalMachineIdentifier, canonicalSemanticIdentity, normalizeSemanticDisplayText } from "../utils/semanticIdentity.js";
+
+interface SanitizeViewProps {
+  onOpenGuide?: (key?: ModuleKey) => void;
+}
+
+const ruleKeys = getRuleKeys();
+const presetKeys = Object.keys(sanitizePresets) as PresetKey[];
+const defaultRules = Object.fromEntries(ruleKeys.map((key) => [key, true])) as RulesState;
+
+export function SanitizeView({ onOpenGuide }: SanitizeViewProps) {
+  const { push } = useToast();
+  const { t, tr, formatNumber } = useI18n();
+  const [clipboardPrefs] = useClipboardPrefs();
+  const [log, setLog] = useState(sanitizePresets.nginx.sample);
+  const [rulesState, setRulesState] = usePersistentState<RulesState>("nullid:sanitize:rules", defaultRules);
+  const [preset, setPreset] = usePersistentState<PresetKey>("nullid:sanitize:preset", "nginx");
+  const [wrapLines, setWrapLines] = usePersistentState<boolean>("nullid:sanitize:wrap", false);
+  const [jsonAware, setJsonAware] = usePersistentState<boolean>("nullid:sanitize:json", true);
+  const [customRules, setCustomRules] = usePersistentState<CustomRule[]>("nullid:sanitize:custom", []);
+  const [policyPacks, setPolicyPacks] = usePersistentState<PolicyPack[]>("nullid:sanitize:policy-packs", []);
+  const [keyHintProfiles, setKeyHintProfiles] = usePersistentState<KeyHintProfile[]>(
+    { key: SHARED_KEY_HINT_PROFILE_KEY, legacyKeys: [...LEGACY_KEY_HINT_PROFILE_KEYS] },
+    [],
+  );
+  const [selectedKeyHintProfileId, setSelectedKeyHintProfileId] = usePersistentState<string>("nullid:sanitize:key-hint-selected", "");
+  const [selectedPolicyId, setSelectedPolicyId] = useState("");
+  const [policyName, setPolicyName] = useState("");
+  const [keyProfileName, setKeyProfileName] = useState("");
+  const [keyProfileHint, setKeyProfileHint] = useState("");
+  const [policyExportDialogOpen, setPolicyExportDialogOpen] = useState(false);
+  const [policyExportTarget, setPolicyExportTarget] = useState<PolicyPack | null>(null);
+  const [policyExportSigned, setPolicyExportSigned] = useState(false);
+  const [policyExportPassphrase, setPolicyExportPassphrase] = useState("");
+  const [policyExportKeyHint, setPolicyExportKeyHint] = useState("");
+  const [policyExportError, setPolicyExportError] = useState<string | null>(null);
+  const [policyImportDialogOpen, setPolicyImportDialogOpen] = useState(false);
+  const [policyImportPassphrase, setPolicyImportPassphrase] = useState("");
+  const [policyImportError, setPolicyImportError] = useState<string | null>(null);
+  const [pendingPolicyImport, setPendingPolicyImport] = useState<{ payload: unknown; descriptor: PolicyPackDescriptor } | null>(null);
+  const [customRuleDraft, setCustomRuleDraft] = useState<CustomRule>({
+    id: "",
+    pattern: "",
+    replacement: "",
+    flags: "gi",
+    scope: "both",
+  });
+  const [customRuleError, setCustomRuleError] = useState<string | null>(null);
+  const [batchResults, setBatchResults] = useState<BatchOutput[]>([]);
+  const [bundlePassphrase, setBundlePassphrase] = useState("");
+  const [isBatching, setIsBatching] = useState(false);
+  const [isExportingBundle, setIsExportingBundle] = useState(false);
+  const batchFileInputRef = useRef<HTMLInputElement>(null);
+  const policyImportRef = useRef<HTMLInputElement>(null);
+  const baselineImportRef = useRef<HTMLInputElement>(null);
+  const batchAbortRef = useRef<AbortController | null>(null);
+
+  const [result, setResult] = useState(() => applySanitizeRules(log, rulesState, customRules, jsonAware));
+  useEffect(() => {
+    const controller = new AbortController();
+    setResult(applySanitizeRules(log, rulesState, customRules, jsonAware));
+    void applySanitizeRulesAsync(log, rulesState, customRules, jsonAware, { signal: controller.signal })
+      .then((next) => {
+        if (!controller.signal.aborted) setResult(next);
+      })
+      .catch((error) => {
+        if (controller.signal.aborted) return;
+        console.error(error);
+        setResult({
+          output: log,
+          applied: [],
+          report: [error instanceof Error ? error.message : "custom regex worker failed"],
+          linesAffected: 0,
+          customStatus: "failed",
+          customDiagnostics: [error instanceof Error ? error.message : "custom regex worker failed"],
+          commitAllowed: false,
+        });
+      });
+    return () => {
+      controller.abort();
+    };
+  }, [customRules, jsonAware, log, rulesState]);
+  const canCommitSanitized = result.commitAllowed && Boolean(result.output);
+  const ruleImpact = useMemo(() => {
+    return result.report
+      .map((line) => {
+        const match = line.match(/^(.*?):\s*(\d+)$/);
+        if (!match) return null;
+        return { label: match[1], count: Number(match[2]) };
+      })
+      .filter((entry): entry is { label: string; count: number } => Boolean(entry))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+  }, [result.report]);
+  const simulationRows = useMemo(() => {
+    const allRulesState = Object.fromEntries(ruleKeys.map((ruleKey) => [ruleKey, true])) as RulesState;
+    const presetRulesState = buildRulesState(sanitizePresets[preset].rules);
+    const variants = [
+      { id: "current", label: "current policy", rulesState, jsonAware, customRules },
+      { id: "strict", label: "strict all-rules", rulesState: allRulesState, jsonAware: true, customRules },
+      { id: "preset", label: `preset baseline (${sanitizePresets[preset].label})`, rulesState: presetRulesState, jsonAware: true, customRules: [] },
+      { id: "text", label: "text-only mode", rulesState, jsonAware: false, customRules },
+    ];
+    return variants.map((variant) => {
+      const simulated = applySanitizeRules(log, variant.rulesState, variant.customRules, variant.jsonAware);
+      return {
+        id: variant.id,
+        label: variant.label,
+        linesAffected: simulated.linesAffected,
+        outputChars: simulated.output.length,
+        appliedRules: simulated.applied.length,
+      };
+    });
+  }, [customRules, jsonAware, log, preset, rulesState]);
+
+  const selectedPolicy = useMemo(() => policyPacks.find((pack) => pack.id === selectedPolicyId) ?? null, [policyPacks, selectedPolicyId]);
+  const selectedKeyHintProfile = useMemo(
+    () => findKeyHintProfileById(keyHintProfiles, selectedKeyHintProfileId),
+    [keyHintProfiles, selectedKeyHintProfileId],
+  );
+  const policyExportTrustState = useMemo(
+    () =>
+      getPolicyPackExportTrustState({
+        signed: policyExportSigned,
+        hasPassphrase: Boolean(policyExportPassphrase.trim()),
+      }),
+    [policyExportPassphrase, policyExportSigned],
+  );
+  const policyImportTrustState = useMemo(
+    () =>
+      getPolicyPackImportTrustState({
+        signed: Boolean(pendingPolicyImport?.descriptor.signed),
+        hasPassphrase: Boolean(policyImportPassphrase.trim()),
+        error: policyImportError,
+      }),
+    [pendingPolicyImport?.descriptor.signed, policyImportError, policyImportPassphrase],
+  );
+
+  const applyPreset = (key: PresetKey) => {
+    setPreset(key);
+    setLog(sanitizePresets[key].sample);
+    setRulesState(buildRulesState(sanitizePresets[key].rules));
+    push(`${tr("preset loaded")}: ${tr(sanitizePresets[key].label)}`, "accent");
+  };
+
+  const addCustomRule = async () => {
+    if (!customRuleDraft.pattern.trim()) {
+      setCustomRuleError("Pattern is required");
+      return;
+    }
+    const validation = await validateCustomRegexRule(customRuleDraft);
+    if (!validation.ok) {
+      setCustomRuleError(validation.message);
+      return;
+    }
+    const next: CustomRule = { ...customRuleDraft, id: crypto.randomUUID() };
+    setCustomRules((prev) => [...prev, next]);
+    setCustomRuleDraft({ id: "", pattern: "", replacement: "", flags: "gi", scope: "both" });
+    setCustomRuleError(null);
+  };
+
+  const removeCustomRule = (id: string) => setCustomRules((prev) => prev.filter((rule) => rule.id !== id));
+
+  const savePolicyPack = () => {
+    const name = normalizeSemanticDisplayText(policyName);
+    if (!name) {
+      push("policy name required", "danger");
+      return;
+    }
+    const config = {
+      rulesState,
+      jsonAware,
+      customRules,
+    };
+    let savedId = "";
+    setPolicyPacks((prev) => {
+      const nameIdentity = canonicalSemanticIdentity(name);
+      const existing = prev.find((pack) => canonicalSemanticIdentity(pack.name) === nameIdentity);
+      if (existing) {
+        savedId = existing.id;
+        const idIdentity = canonicalMachineIdentifier(existing.id);
+        return prev.map((pack) => (canonicalMachineIdentifier(pack.id) === idIdentity ? { ...pack, config, createdAt: new Date().toISOString(), name } : pack));
+      }
+      const created: PolicyPack = {
+        id: crypto.randomUUID(),
+        name,
+        createdAt: new Date().toISOString(),
+        config,
+      };
+      savedId = created.id;
+      return [created, ...prev].slice(0, 30);
+    });
+    if (savedId) {
+      setSelectedPolicyId(savedId);
+    }
+    push("policy pack saved locally", "accent");
+  };
+
+  const applyPolicyPack = (pack: PolicyPack) => {
+    setRulesState(pack.config.rulesState);
+    setJsonAware(pack.config.jsonAware);
+    setCustomRules(pack.config.customRules);
+    setPolicyName(pack.name);
+    setSelectedPolicyId(pack.id);
+    push(`policy applied: ${pack.name}`, "accent");
+  };
+
+  const deletePolicyPack = () => {
+    if (!selectedPolicy) return;
+    setPolicyPacks((prev) => prev.filter((pack) => pack.id !== selectedPolicy.id));
+    setSelectedPolicyId("");
+    push("policy pack removed", "neutral");
+  };
+
+  const currentPolicyConfig: SanitizePolicyConfig = useMemo(
+    () => ({
+      rulesState,
+      jsonAware,
+      customRules,
+    }),
+    [customRules, jsonAware, rulesState],
+  );
+
+  const openPolicyExportDialog = (pack?: PolicyPack | null, forceSigned = false) => {
+    const sourcePacks = pack ? [pack] : policyPacks;
+    if (sourcePacks.length === 0) {
+      push("no policy packs to export", "danger");
+      return;
+    }
+    setPolicyExportTarget(pack ?? null);
+    setPolicyExportSigned(forceSigned);
+    setPolicyExportPassphrase("");
+    setPolicyExportKeyHint(selectedKeyHintProfile?.keyHint ?? "");
+    setPolicyExportError(null);
+    setPolicyExportDialogOpen(true);
+  };
+
+  const closePolicyExportDialog = () => {
+    setPolicyExportDialogOpen(false);
+    setPolicyExportPassphrase("");
+    setPolicyExportError(null);
+  };
+
+  const confirmPolicyExport = async () => {
+    const sourcePacks = policyExportTarget ? [policyExportTarget] : policyPacks;
+    if (sourcePacks.length === 0) {
+      setPolicyExportError("no policy packs to export");
+      return;
+    }
+    if (policyExportSigned && !policyExportPassphrase.trim()) {
+      setPolicyExportError("HMAC passphrase required");
+      return;
+    }
+    try {
+      const payload = await createPolicyPackSnapshot(sourcePacks, {
+        signingPassphrase: policyExportSigned ? policyExportPassphrase : undefined,
+        keyHint: policyExportSigned ? sanitizeKeyHint(policyExportKeyHint) || undefined : undefined,
+      });
+      const safe = sanitizeFileStem(policyExportTarget?.name ?? "sanitize-policy-packs");
+      const suffix = payload.signature ? "-signed" : "";
+      downloadBlob(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }), `${safe}${suffix}.json`);
+      push(
+        policyExportTarget
+          ? `policy exported${payload.signature ? " (HMAC metadata)" : ""}`
+          : `all policies exported${payload.signature ? " (HMAC metadata)" : ""}`,
+        "accent",
+      );
+      closePolicyExportDialog();
+    } catch (error) {
+      console.error(error);
+      setPolicyExportError(error instanceof Error ? error.message : "policy export failed");
+    }
+  };
+
+  const beginPolicyImport = async (file?: File | null) => {
+    if (!file) return;
+    try {
+      const text = await readFileTextWithLimit(file, { label: "Policy pack", maxBytes: INPUT_LIMITS.jsonImportBytes });
+      const payload = JSON.parse(text) as unknown;
+      const descriptor = describePolicyPackPayload(payload);
+      if (descriptor.kind !== "sanitize-policy-pack" || descriptor.packCount === 0) {
+        throw new Error("No valid policy packs found");
+      }
+      setPendingPolicyImport({ payload, descriptor });
+      setPolicyImportPassphrase("");
+      setPolicyImportError(null);
+      setPolicyImportDialogOpen(true);
+    } catch (error) {
+      console.error(error);
+      push("policy import failed", "danger");
+    }
+  };
+
+  const closePolicyImportDialog = () => {
+    setPolicyImportDialogOpen(false);
+    setPolicyImportPassphrase("");
+    setPolicyImportError(null);
+    setPendingPolicyImport(null);
+  };
+
+  const confirmPolicyImport = async () => {
+    if (!pendingPolicyImport) return;
+    if (pendingPolicyImport.descriptor.signed && !policyImportPassphrase.trim()) {
+      setPolicyImportError("verification passphrase required for HMAC-protected policy packs");
+      return;
+    }
+    try {
+      const imported = await importPolicyPackPayload(pendingPolicyImport.payload, {
+        verificationPassphrase: pendingPolicyImport.descriptor.signed ? policyImportPassphrase.trim() : undefined,
+        requireVerified: pendingPolicyImport.descriptor.signed,
+      });
+      setPolicyPacks((prev) => mergePolicyPacks(prev, imported.packs));
+      setSelectedPolicyId(imported.packs[0].id);
+      setPolicyName(imported.packs[0].name);
+      const suffix = imported.legacy
+        ? "legacy"
+        : formatPolicyPackTrustState(
+            getPolicyPackImportTrustState({
+              signed: imported.signed,
+              hasPassphrase: Boolean(policyImportPassphrase.trim()),
+              verificationSucceeded: imported.verified,
+            }),
+          );
+      push(`imported ${imported.packs.length} policy pack(s) :: ${suffix}`, "accent");
+      closePolicyImportDialog();
+    } catch (error) {
+      console.error(error);
+      setPolicyImportError(error instanceof Error ? error.message : "policy import failed");
+    }
+  };
+
+  const importWorkspaceBaseline = async (file?: File | null) => {
+    if (!file) return;
+    try {
+      const text = await readFileTextWithLimit(file, { label: "Workspace baseline", maxBytes: INPUT_LIMITS.jsonImportBytes });
+      const parsed = JSON.parse(text) as unknown;
+      const baseline = normalizeWorkspacePolicyBaseline(parsed);
+      if (!baseline) {
+        throw new Error("Invalid nullid.policy.json baseline file");
+      }
+
+      const merged = mergeSanitizePolicyConfig(currentPolicyConfig, baseline.sanitize.defaultConfig, baseline.sanitize.mergeMode);
+      setRulesState(merged.rulesState);
+      setJsonAware(merged.jsonAware);
+      setCustomRules(merged.customRules);
+      setPolicyPacks((prev) => mergePolicyPacks(prev, baseline.sanitize.packs));
+      if (baseline.sanitize.packs.length > 0) {
+        setSelectedPolicyId(baseline.sanitize.packs[0].id);
+        setPolicyName(baseline.sanitize.packs[0].name);
+      }
+      push(
+        `baseline merged (${baseline.sanitize.mergeMode})${baseline.sanitize.packs.length ? ` + ${baseline.sanitize.packs.length} pack(s)` : ""}`,
+        "accent",
+      );
+    } catch (error) {
+      console.error(error);
+      push("baseline import failed", "danger");
+    }
+  };
+
+  const saveKeyHintProfile = () => {
+    const result = upsertKeyHintProfile(keyHintProfiles, keyProfileName, keyProfileHint);
+    if (!result.ok) {
+      push(result.message, "danger");
+      return;
+    }
+    setKeyHintProfiles(result.profiles);
+    setSelectedKeyHintProfileId(result.selectedId);
+    setKeyProfileHint("");
+    setKeyProfileName("");
+    push("key hint profile saved", "accent");
+  };
+
+  const rotateSelectedKeyHintProfile = () => {
+    if (!selectedKeyHintProfile) return;
+    const result = rotateProfileHint(keyHintProfiles, selectedKeyHintProfile.id);
+    if (!result.ok) {
+      push(result.message, "danger");
+      return;
+    }
+    setKeyHintProfiles(result.profiles);
+    setPolicyExportKeyHint(result.hint);
+    push(`key hint rotated → ${result.hint}`, "accent");
+  };
+
+  const deleteSelectedKeyHintProfile = () => {
+    if (!selectedKeyHintProfile) return;
+    setKeyHintProfiles((prev) => removeProfileHint(prev, selectedKeyHintProfile.id));
+    setSelectedKeyHintProfileId("");
+    push("key hint profile removed", "neutral");
+  };
+
+  const runBatch = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setIsBatching(true);
+    try {
+      const fileList = Array.from(files);
+      assertFileBatchWithinLimit(fileList, {
+        label: "Sanitize batch",
+        maxBytes: INPUT_LIMITS.batchAggregateBytes,
+        maxFileBytes: INPUT_LIMITS.batchFileBytes,
+        maxFiles: 25,
+      });
+      const batchInputs = await Promise.all(
+        fileList.map(async (file) => ({
+          name: file.name,
+          text: await readFileTextWithLimit(file, {
+            label: file.name,
+            maxBytes: INPUT_LIMITS.batchFileBytes,
+            maxChars: INPUT_LIMITS.textInputChars,
+          }),
+        })),
+      );
+      batchAbortRef.current?.abort();
+      const controller = new AbortController();
+      batchAbortRef.current = controller;
+      const outputs = customRules.length > 0
+        ? await runBatchSanitizeAsync(batchInputs, { rulesState, jsonAware, customRules }, { signal: controller.signal })
+        : runBatchSanitize(batchInputs, { rulesState, jsonAware, customRules });
+      if (controller.signal.aborted) return;
+      setBatchResults(outputs);
+      const failed = outputs.filter((output) => !output.commitAllowed);
+      push(failed.length > 0 ? `batch blocked: ${failed.length} file(s) failed custom rules` : `batch processed: ${outputs.length} file(s)`, failed.length > 0 ? "danger" : "accent");
+    } catch (error) {
+      console.error(error);
+      push(error instanceof Error ? error.message : "batch processing failed", "danger");
+    } finally {
+      setIsBatching(false);
+    }
+  };
+
+  const downloadBatchOutputs = () => {
+    if (batchResults.length === 0 || batchResults.some((item) => !item.commitAllowed)) return;
+    batchResults.forEach((item, index) => {
+      const name = `${sanitizeFileStem(item.name)}-sanitized.log`;
+      window.setTimeout(() => {
+        downloadBlob(new Blob([item.output], { type: "text/plain" }), name);
+      }, index * 100);
+    });
+    push("batch downloads started", "accent");
+  };
+
+  const exportBatchReport = () => {
+    if (batchResults.length === 0 || batchResults.some((item) => !item.commitAllowed)) return;
+    const report = {
+      schemaVersion: 1,
+      kind: "sanitize-batch-report",
+      generatedAt: new Date().toISOString(),
+      policy: { rulesState, jsonAware, customRules },
+      files: batchResults.map((item) => ({
+        name: item.name,
+        inputChars: item.inputChars,
+        outputChars: item.outputChars,
+        linesAffected: item.linesAffected,
+        appliedRules: item.applied,
+        report: item.report,
+      })),
+    };
+    downloadBlob(new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }), "nullid-sanitize-batch-report.json");
+    push("batch report exported", "accent");
+  };
+
+  const exportShareBundle = async () => {
+    if (!result.commitAllowed) {
+      push("custom regex rules must complete before export", "danger");
+      return;
+    }
+    setIsExportingBundle(true);
+    try {
+      const [inputHash, outputHash] = await Promise.all([hashText(log, "SHA-256"), hashText(result.output, "SHA-256")]);
+      const buildId = typeof import.meta.env.VITE_BUILD_ID === "string" && import.meta.env.VITE_BUILD_ID.trim()
+        ? import.meta.env.VITE_BUILD_ID.trim()
+        : null;
+      const bundle = createSanitizeSafeShareBundle({
+        producer: {
+          app: "NullID",
+          surface: "web",
+          module: "sanitize",
+          buildId,
+        },
+        policy: {
+          rulesState,
+          jsonAware,
+          customRules,
+        },
+        input: {
+          bytes: new TextEncoder().encode(log).byteLength,
+          sha256: inputHash.hex,
+        },
+        output: {
+          bytes: new TextEncoder().encode(result.output).byteLength,
+          sha256: outputHash.hex,
+          text: result.output,
+        },
+        summary: {
+          linesAffected: result.linesAffected,
+          appliedRules: result.applied,
+          report: result.report,
+        },
+        preset,
+        policyPack: selectedPolicy,
+      });
+      const json = JSON.stringify(bundle, null, 2);
+      if (bundlePassphrase.trim()) {
+        const envelope = await encryptText(bundlePassphrase.trim(), json);
+        downloadBlob(new Blob([envelope], { type: "text/plain;charset=utf-8" }), "nullid-safe-share-bundle.nullid");
+        push("encrypted safe-share bundle exported", "accent");
+        return;
+      }
+      downloadBlob(new Blob([json], { type: "application/json" }), "nullid-safe-share-bundle.json");
+      push("safe-share bundle exported", "accent");
+    } catch (error) {
+      console.error(error);
+      push("safe-share export failed", "danger");
+    } finally {
+      setIsExportingBundle(false);
+    }
+  };
+
+  return (
+    <div className="workspace-scroll">
+      <div className="guide-link">
+        <button type="button" className="guide-link-button" onClick={() => onOpenGuide?.("sanitize")}>
+          {t("guide.link")}
+        </button>
+      </div>
+      <div className="grid-two">
+        <div className="panel" aria-label={tr("Sanitizer input")}>
+          <div className="panel-heading">
+            <span>{tr("Inbound log")}</span>
+            <span className="panel-subtext">{tr("raw")}</span>
+          </div>
+          <textarea
+            className="textarea"
+            value={log}
+            onChange={(event) => setLog(event.target.value)}
+            aria-label={tr("Log input")}
+          />
+          <div className="controls-row">
+            <span className="section-title">{tr("Presets")}</span>
+            <div className="pill-buttons" role="group" aria-label={tr("Log presets")}>
+              {presetKeys.map((key) => (
+                <button key={key} type="button" className={preset === key ? "active" : ""} onClick={() => applyPreset(key)}>
+                  {tr(sanitizePresets[key].label)}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="panel" aria-label={tr("Sanitized preview")}>
+          <div className="panel-heading">
+            <span>{tr("Preview")}</span>
+            <span className="panel-subtext">{tr("diff")}</span>
+          </div>
+          <div className="log-preview" role="presentation">
+            <div className="log-line">
+              <span className="log-marker">-</span>
+              <span className="diff-remove">{log}</span>
+            </div>
+            <div className="log-line">
+              <span className="log-marker">+</span>
+              <span className="diff-add" style={{ whiteSpace: wrapLines ? "pre-wrap" : "pre" }}>
+                {highlightDiff(log, result.output)}
+              </span>
+            </div>
+          </div>
+          <div className="controls-row">
+            <button
+              className="button"
+              type="button"
+              onClick={() =>
+                writeClipboard(
+                  result.output,
+                  clipboardPrefs,
+                  (message, tone) => push(message, tone === "danger" ? "danger" : tone === "accent" ? "accent" : "neutral"),
+                  "copied",
+                )
+              }
+              disabled={!canCommitSanitized}
+            >
+              {tr("copy sanitized")}
+            </button>
+            <button
+              className="button"
+              type="button"
+              onClick={() => downloadBlob(new Blob([result.output], { type: "text/plain" }), "nullid-sanitized.log")}
+              disabled={!canCommitSanitized}
+            >
+              {tr("download sanitized")}
+            </button>
+            <label className="microcopy" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <input
+                type="checkbox"
+                checked={wrapLines}
+                onChange={(event) => setWrapLines(event.target.checked)}
+                aria-label={tr("Wrap long lines")}
+              />
+              {tr("wrap long lines")}
+            </label>
+            <label className="microcopy" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <input
+                type="checkbox"
+                checked={jsonAware}
+                onChange={(event) => setJsonAware(event.target.checked)}
+                aria-label={tr("Enable JSON redaction")}
+              />
+              {tr("JSON-aware redaction")}
+            </label>
+          </div>
+          <div className="status-line">
+            <span>{tr("Rules applied")}</span>
+            <span className="tag tag-accent">{result.applied.length}</span>
+            <span className="microcopy">{tr("lines changed:")} {formatNumber(result.linesAffected)}</span>
+            <span className="microcopy">{tr("custom regex")} {tr(result.customStatus)}</span>
+          </div>
+        </div>
+      </div>
+      <div className="panel" aria-label={tr("Rule toggles")}>
+        <div className="panel-heading">
+          <span>{tr("Rules")}</span>
+          <span className="panel-subtext">{tr("toggle")}</span>
+        </div>
+        <div className="rule-grid">
+          {ruleKeys.map((ruleKey) => (
+            <label key={ruleKey} className="rule-tile">
+              <input
+                type="checkbox"
+                checked={rulesState[ruleKey]}
+                onChange={(event) => setRulesState((prev) => ({ ...prev, [ruleKey]: event.target.checked }))}
+                aria-label={tr(getRuleLabel(ruleKey))}
+              />
+              <span>{tr(getRuleLabel(ruleKey))}</span>
+            </label>
+          ))}
+        </div>
+        <div className="note-box">
+          <div className="section-title">{tr("Report")}</div>
+          <div className="microcopy">
+            {result.report.length === 0 ? tr("no replacements yet") : result.report.map((line) => <div key={line}>{line}</div>)}
+          </div>
+        </div>
+        <div className="note-box">
+          <div className="section-title">{tr("Rule impact ranking")}</div>
+          {ruleImpact.length === 0 ? (
+            <div className="microcopy">{tr("no replacements counted yet")}</div>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>{tr("rule")}</th>
+                  <th>{tr("count")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ruleImpact.map((entry) => (
+                  <tr key={entry.label}>
+                    <td>{entry.label}</td>
+                    <td>{entry.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <div className="note-box">
+          <div className="section-title">{tr("Custom rules")}</div>
+          <div className="controls-row" style={{ alignItems: "flex-end" }}>
+            <div style={{ flex: 1, minWidth: "180px" }}>
+              <label className="microcopy" htmlFor="custom-pattern">
+                {tr("Pattern (RegExp)")}
+              </label>
+              <input
+                id="custom-pattern"
+                className="input"
+                value={customRuleDraft.pattern}
+                onChange={(event) => setCustomRuleDraft((prev) => ({ ...prev, pattern: event.target.value }))}
+                placeholder={tr("token=([A-Za-z0-9._-]+)")}
+              />
+            </div>
+            <div style={{ minWidth: "140px" }}>
+              <label className="microcopy" htmlFor="custom-flags">
+                {tr("Flags")}
+              </label>
+              <input
+                id="custom-flags"
+                className="input"
+                value={customRuleDraft.flags}
+                onChange={(event) => setCustomRuleDraft((prev) => ({ ...prev, flags: event.target.value }))}
+                placeholder={tr("gi")}
+              />
+            </div>
+            <div style={{ flex: 1, minWidth: "160px" }}>
+              <label className="microcopy" htmlFor="custom-replacement">
+                {tr("Replacement")}
+              </label>
+              <input
+                id="custom-replacement"
+                className="input"
+                value={customRuleDraft.replacement}
+                onChange={(event) => setCustomRuleDraft((prev) => ({ ...prev, replacement: event.target.value }))}
+                placeholder={tr("[redacted]")}
+              />
+            </div>
+            <div style={{ minWidth: "150px" }}>
+              <label className="microcopy" htmlFor="custom-scope">
+                {tr("Scope")}
+              </label>
+              <select
+                id="custom-scope"
+                className="select"
+                value={customRuleDraft.scope}
+                onChange={(event) =>
+                  setCustomRuleDraft((prev) => ({ ...prev, scope: event.target.value as CustomRuleScope }))
+                }
+              >
+                <option value="both">{tr("text + json")}</option>
+                <option value="text">{tr("text only")}</option>
+                <option value="json">{tr("json only")}</option>
+              </select>
+            </div>
+            <button className="button" type="button" onClick={addCustomRule}>
+              {tr("add rule")}
+            </button>
+          </div>
+          {customRuleError && <div className="microcopy" style={{ color: "var(--danger)" }}>{customRuleError}</div>}
+          {customRules.length === 0 ? (
+            <div className="microcopy">{tr("no custom rules")}</div>
+          ) : (
+            <ul className="note-list">
+              {customRules.map((rule) => (
+                <li key={rule.id}>
+                  <div className="note-title">/{rule.pattern}/{rule.flags}</div>
+                  <div className="note-body">→ {rule.replacement || tr("[empty]")} ({tr(rule.scope)})</div>
+                  <button className="button" type="button" onClick={() => removeCustomRule(rule.id)}>
+                    {tr("remove")}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      <div className="panel" aria-label={tr("Policy simulation matrix")}>
+        <div className="panel-heading">
+          <span>{tr("Policy simulation matrix")}</span>
+          <span className="panel-subtext">{tr("compare policy outcomes")}</span>
+        </div>
+        <p className="microcopy">
+          {tr("Runs multiple policy variants against current input so you can compare redaction depth before sharing.")}
+        </p>
+        <table className="table">
+          <thead>
+            <tr>
+              <th>{tr("variant")}</th>
+              <th>{tr("rules applied")}</th>
+              <th>{tr("lines changed")}</th>
+              <th>{tr("output chars")}</th>
+            </tr>
+          </thead>
+          <tbody>
+                {simulationRows.map((row) => (
+                  <tr key={row.id}>
+                    <td>{tr(row.label)}</td>
+                    <td>{row.appliedRules}</td>
+                    <td>{row.linesAffected}</td>
+                    <td>{row.outputChars}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="grid-two">
+        <div className="panel" aria-label={tr("Policy packs")}>
+          <div className="panel-heading">
+            <span>{tr("Policy packs")}</span>
+            <span className="panel-subtext">{tr("local-only reusable configs")}</span>
+          </div>
+          <div className="controls-row">
+            <input
+              className="input"
+              placeholder={tr("policy name")}
+              value={policyName}
+              onChange={(event) => setPolicyName(event.target.value)}
+              aria-label={tr("Policy name")}
+            />
+            <button className="button" type="button" onClick={savePolicyPack}>
+              {tr("save")}
+            </button>
+          </div>
+          <div className="controls-row">
+            <select
+              className="select"
+              aria-label={tr("Saved policy packs")}
+              value={selectedPolicyId}
+              onChange={(event) => setSelectedPolicyId(event.target.value)}
+            >
+              <option value="">{tr("select policy...")}</option>
+              {policyPacks.map((pack) => (
+                <option key={pack.id} value={pack.id}>
+                  {pack.name}
+                </option>
+              ))}
+            </select>
+            <button className="button" type="button" onClick={() => selectedPolicy && applyPolicyPack(selectedPolicy)} disabled={!selectedPolicy}>
+              {tr("apply")}
+            </button>
+            <button className="button" type="button" onClick={deletePolicyPack} disabled={!selectedPolicy}>
+              {tr("delete")}
+            </button>
+          </div>
+          <div className="controls-row">
+            <button className="button" type="button" onClick={() => openPolicyExportDialog(selectedPolicy)} disabled={!selectedPolicy}>
+              {tr("export selected")}
+            </button>
+            <button className="button" type="button" onClick={() => openPolicyExportDialog(selectedPolicy, true)} disabled={!selectedPolicy}>
+              {tr("export with HMAC")}
+            </button>
+            <button className="button" type="button" onClick={() => openPolicyExportDialog(null)} disabled={policyPacks.length === 0}>
+              {tr("export all")}
+            </button>
+            <button className="button" type="button" onClick={() => policyImportRef.current?.click()}>
+              {tr("import")}
+            </button>
+            <button className="button" type="button" onClick={() => baselineImportRef.current?.click()}>
+              {tr("import baseline")}
+            </button>
+            <input
+              ref={policyImportRef}
+              type="file"
+              accept="application/json"
+              style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }}
+              tabIndex={-1}
+              onChange={(event) => {
+                void beginPolicyImport(event.target.files?.[0] ?? null);
+                event.target.value = "";
+              }}
+            />
+            <input
+              ref={baselineImportRef}
+              type="file"
+              accept="application/json"
+              style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }}
+              tabIndex={-1}
+              onChange={(event) => {
+                void importWorkspaceBaseline(event.target.files?.[0] ?? null);
+                event.target.value = "";
+              }}
+            />
+          </div>
+          <div className="microcopy">
+            {tr("Packs with HMAC metadata require verification before import. Baseline import accepts `nullid.policy.json` and merges with deterministic rules.")}
+          </div>
+          <div className="note-box">
+            <div className="section-title">{tr("Verification key hints")}</div>
+            <div className="controls-row">
+              <input
+                className="input"
+                placeholder={tr("profile name")}
+                value={keyProfileName}
+                onChange={(event) => setKeyProfileName(event.target.value)}
+                aria-label={tr("Key hint profile name")}
+              />
+              <input
+                className="input"
+                placeholder={tr("key hint (public label)")}
+                value={keyProfileHint}
+                onChange={(event) => setKeyProfileHint(event.target.value)}
+                aria-label={tr("Key hint value")}
+              />
+              <button className="button" type="button" onClick={saveKeyHintProfile}>
+                {tr("save hint")}
+              </button>
+            </div>
+            <div className="controls-row">
+              <select
+                className="select"
+                aria-label={tr("Saved key hint profiles")}
+                value={selectedKeyHintProfileId}
+                onChange={(event) => setSelectedKeyHintProfileId(event.target.value)}
+              >
+                <option value="">{tr("select key hint profile...")}</option>
+                {keyHintProfiles.map((profile) => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.name} · {profile.keyHint}
+                  </option>
+                ))}
+              </select>
+              <button className="button" type="button" onClick={rotateSelectedKeyHintProfile} disabled={!selectedKeyHintProfile}>
+                {tr("rotate hint")}
+              </button>
+              <button className="button" type="button" onClick={deleteSelectedKeyHintProfile} disabled={!selectedKeyHintProfile}>
+                {tr("delete hint")}
+              </button>
+            </div>
+            <div className="microcopy">
+              {tr("Hints are local labels only; HMAC/verification passphrases are never stored.")}
+              {selectedKeyHintProfile ? ` ${tr("active")}: ${selectedKeyHintProfile.name} (v${selectedKeyHintProfile.version})` : ""}
+            </div>
+          </div>
+        </div>
+
+        <div className="panel" aria-label={tr("Batch sanitize")}>
+          <div className="panel-heading">
+            <span>{tr("Batch sanitize")}</span>
+            <span className="panel-subtext">{tr("free local processing")}</span>
+          </div>
+          <div className="controls-row">
+            <button className="button" type="button" onClick={() => batchFileInputRef.current?.click()} disabled={isBatching}>
+              {isBatching ? tr("processing...") : tr("select files")}
+            </button>
+            <input
+              ref={batchFileInputRef}
+              type="file"
+              multiple
+              accept=".txt,.log,.json,text/*,application/json"
+              style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }}
+              tabIndex={-1}
+              onChange={(event) => {
+                void runBatch(event.target.files);
+                event.target.value = "";
+              }}
+            />
+            <button className="button" type="button" onClick={downloadBatchOutputs} disabled={batchResults.length === 0 || batchResults.some((item) => !item.commitAllowed)}>
+              {tr("download outputs")}
+            </button>
+            <button className="button" type="button" onClick={exportBatchReport} disabled={batchResults.length === 0 || batchResults.some((item) => !item.commitAllowed)}>
+              {tr("export report")}
+            </button>
+          </div>
+          <div className="status-line">
+            <span>{tr("files processed")}</span>
+            <span className="tag tag-accent">{formatNumber(batchResults.length)}</span>
+          </div>
+          {batchResults.length > 0 && (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>{tr("file")}</th>
+                  <th>{tr("lines changed")}</th>
+                  <th>{tr("size delta")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {batchResults.slice(0, 8).map((item) => (
+                  <tr key={item.name}>
+                    <td>{item.name}</td>
+                    <td>{item.linesAffected}</td>
+                    <td>{item.outputChars - item.inputChars}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      <div className="panel" aria-label={tr("Safe share bundle")}>
+        <div className="panel-heading">
+          <span>{tr("Safe share bundle")}</span>
+          <span className="panel-subtext">{tr("manifest + hash + sanitized output")}</span>
+        </div>
+        <p className="microcopy">
+          {tr("Generates a portable local bundle containing sanitized output, policy snapshot, and SHA-256 integrity hashes.")}
+        </p>
+        <div className="controls-row">
+          <input
+            className="input"
+            type="password"
+            placeholder={tr("optional passphrase to encrypt bundle")}
+            value={bundlePassphrase}
+            onChange={(event) => setBundlePassphrase(event.target.value)}
+            aria-label={tr("Bundle encryption passphrase")}
+          />
+          <button className="button" type="button" onClick={() => void exportShareBundle()} disabled={isExportingBundle || !canCommitSanitized}>
+            {isExportingBundle ? tr("exporting...") : bundlePassphrase ? tr("export encrypted bundle") : tr("export bundle")}
+          </button>
+        </div>
+      </div>
+      <ActionDialog
+        open={policyExportDialogOpen}
+        title={policyExportTarget ? `${tr("Export policy")}: ${policyExportTarget.name}` : tr("Export policy packs")}
+        description={tr("Policy exports can include HMAC metadata. Entering a passphrase prepares the export; actual verification happens on import.")}
+        confirmLabel={policyExportTarget ? tr("export policy") : tr("export policies")}
+        onCancel={closePolicyExportDialog}
+        onConfirm={() => void confirmPolicyExport()}
+        confirmDisabled={policyExportSigned && !policyExportPassphrase.trim()}
+      >
+        <label className="action-dialog-field">
+          <span>{tr("Add HMAC metadata")}</span>
+          <input
+            type="checkbox"
+            checked={policyExportSigned}
+            onChange={(event) => setPolicyExportSigned(event.target.checked)}
+            aria-label={tr("Policy HMAC metadata")}
+          />
+        </label>
+        {policyExportSigned ? (
+          <>
+            <div className="status-line">
+              <span>{tr("verification state")}</span>
+              <span className={policyPackTrustTagClass(policyExportTrustState)}>{tr(formatPolicyPackTrustState(policyExportTrustState))}</span>
+              {policyExportKeyHint.trim() ? <span className="microcopy">{tr("hint")}: {policyExportKeyHint.trim()}</span> : null}
+            </div>
+            <label className="action-dialog-field">
+              <span>{tr("HMAC passphrase")}</span>
+              <input
+                className="action-dialog-input"
+                type="password"
+                value={policyExportPassphrase}
+                onChange={(event) => {
+                  setPolicyExportPassphrase(event.target.value);
+                  if (policyExportError) setPolicyExportError(null);
+                }}
+                aria-label={tr("Policy HMAC passphrase")}
+                placeholder={tr("required when HMAC metadata is enabled")}
+              />
+            </label>
+            <div className="action-dialog-row">
+              <label className="action-dialog-field">
+                <span>{tr("Saved key hint")}</span>
+                <select
+                  className="action-dialog-select"
+                  value={selectedKeyHintProfileId}
+                  onChange={(event) => {
+                    const nextId = event.target.value;
+                    setSelectedKeyHintProfileId(nextId);
+                    const profile = findKeyHintProfileById(keyHintProfiles, nextId);
+                    setPolicyExportKeyHint(profile?.keyHint ?? "");
+                  }}
+                  aria-label={tr("Policy key hint profile")}
+                >
+                  <option value="">{tr("custom key hint")}</option>
+                  {keyHintProfiles.map((profile) => (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.name} · {profile.keyHint}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="action-dialog-field">
+                <span>{tr("Key hint label")}</span>
+                <input
+                  className="action-dialog-input"
+                  value={policyExportKeyHint}
+                  onChange={(event) => setPolicyExportKeyHint(event.target.value)}
+                  aria-label={tr("Policy key hint")}
+                  placeholder={tr("optional verification hint")}
+                />
+              </label>
+            </div>
+            <p className="action-dialog-note">
+              {tr("Hints are local labels only; passphrases are never stored.")}
+              {selectedKeyHintProfile ? ` ${tr("active")}: ${selectedKeyHintProfile.name} (v${selectedKeyHintProfile.version})` : ""}
+            </p>
+          </>
+        ) : (
+          <p className="action-dialog-note">{tr("Unsigned packs can be imported, but authenticity verification is unavailable.")}</p>
+        )}
+        {policyExportError ? <p className="action-dialog-error">{policyExportError}</p> : null}
+      </ActionDialog>
+      <ActionDialog
+        open={policyImportDialogOpen}
+        title={tr("Import policy pack")}
+        description={
+          pendingPolicyImport
+            ? `${pendingPolicyImport.descriptor.packCount} ${tr("packs")} · ${tr("schema")} ${pendingPolicyImport.descriptor.schemaVersion || tr("unknown")}`
+            : tr("Verify before import")
+        }
+        confirmLabel={tr("import policy pack")}
+        onCancel={closePolicyImportDialog}
+        onConfirm={() => void confirmPolicyImport()}
+      >
+        {pendingPolicyImport?.descriptor.signed ? (
+          <>
+            <div className="status-line">
+              <span>{tr("verification state")}</span>
+              <span className={policyPackTrustTagClass(policyImportTrustState)}>{tr(formatPolicyPackTrustState(policyImportTrustState))}</span>
+              {pendingPolicyImport.descriptor.keyHint ? <span className="microcopy">{tr("hint")}: {pendingPolicyImport.descriptor.keyHint}</span> : null}
+            </div>
+            <p className="action-dialog-note">
+              {tr("HMAC-protected pack detected")}
+              {pendingPolicyImport.descriptor.keyHint ? ` (${tr("hint")}: ${pendingPolicyImport.descriptor.keyHint})` : ""}. {tr("Verification is required before import.")}
+            </p>
+            <label className="action-dialog-field">
+              <span>{tr("Verification passphrase")}</span>
+              <input
+                className="action-dialog-input"
+                type="password"
+                value={policyImportPassphrase}
+                onChange={(event) => {
+                  setPolicyImportPassphrase(event.target.value);
+                  if (policyImportError) setPolicyImportError(null);
+                }}
+                aria-label={tr("Policy verification passphrase")}
+                placeholder={tr("required for HMAC-protected packs")}
+              />
+            </label>
+          </>
+        ) : (
+          <>
+            <div className="status-line">
+              <span>{tr("verification state")}</span>
+              <span className={policyPackTrustTagClass(policyImportTrustState)}>{tr(formatPolicyPackTrustState(policyImportTrustState))}</span>
+            </div>
+            <p className="action-dialog-note">{tr("Unsigned policy pack. Continue only if you trust the source.")}</p>
+          </>
+        )}
+        {policyImportError ? <p className="action-dialog-error">{policyImportError}</p> : null}
+      </ActionDialog>
+    </div>
+  );
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.rel = "noopener";
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1200);
+}
+
+function sanitizeFileStem(value: string) {
+  const base = value.replace(/\.[^.]+$/, "").trim();
+  return (base || "nullid").replace(/[^a-z0-9_-]+/gi, "-").replace(/-+/g, "-");
+}
+
+function highlightDiff(before: string, after: string) {
+  if (before === after) return after;
+  const beforeTokens = before.split(/(\s+)/);
+  const afterTokens = after.split(/(\s+)/);
+  return afterTokens.map((token, index) => {
+    if (token === beforeTokens[index]) return token;
+    return (
+      <mark key={index} className="highlight medium">
+        {token}
+      </mark>
+    );
+  });
+}

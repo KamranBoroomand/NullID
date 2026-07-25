@@ -1,0 +1,23 @@
+{
+  "all": true,
+  "reporter": ["text", "json-summary"],
+  "reports-dir": "coverage/core",
+  "temp-directory": "coverage/tmp-core",
+  "include": ["build-test/**/*.js"],
+  "exclude": [
+    "build-test/__tests__/**",
+    "build-test/App.js",
+    "build-test/components/**",
+    "build-test/hooks/useCommandHistory.js",
+    "build-test/hooks/usePrefersReducedMotion.js",
+    "build-test/main.js",
+    "build-test/motion/**",
+    "build-test/theme/**",
+    "build-test/views/**"
+  ],
+  "check-coverage": true,
+  "lines": 75,
+  "statements": 75,
+  "functions": 75,
+  "branches": 60
+}

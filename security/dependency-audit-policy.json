@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "policyName": "NullID dependency audit temporary exceptions",
+  "auditLevel": "high",
+  "productionAudit": {
+    "command": "npm audit --omit=dev --omit=optional --audit-level=high --json",
+    "requiredHighAndCriticalFindings": 0
+  },
+  "fullAudit": {
+    "command": "npm audit --json"
+  },
+  "exceptions": [
+    {
+      "advisoryId": "GHSA-mh99-v99m-4gvg",
+      "advisoryUrl": "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
+      "packageName": "brace-expansion",
+      "permittedVulnerableVersions": ["1.1.16", "2.1.2"],
+      "permittedNodePaths": ["node_modules/brace-expansion", "node_modules/glob/node_modules/brace-expansion"],
+      "permittedDependencyFamilies": [
+        {
+          "name": "ESLint lint tooling",
+          "rootPackages": ["eslint", "eslint-plugin-jsx-a11y", "eslint-plugin-react-hooks", "typescript-eslint"]
+        },
+        {
+          "name": "CycloneDX SBOM tooling",
+          "rootPackages": ["@cyclonedx/cyclonedx-npm"]
+        }
+      ],
+      "devOnly": true,
+      "rationale": "The remaining vulnerable brace-expansion 1.x and 2.x instances are transitive development-tool dependencies used by linting and SBOM generation only. They are not production dependencies and are not bundled into the browser application.",
+      "dateAccepted": "2026-07-26",
+      "reviewAfter": "2026-08-26",
+      "expires": "2026-08-26",
+      "upstreamRemediationCondition": "Remove this exception when ESLint, eslint-plugin-jsx-a11y, CycloneDX, or their transitive dependency ranges resolve GHSA-mh99-v99m-4gvg without downgrades, global overrides, or forced major/range-breaking changes."
+    }
+  ]
+}

@@ -1,0 +1,125 @@
+.frame {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  color: var(--text-primary);
+}
+
+.frame-shell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-shell);
+  overflow: hidden;
+  background: var(--surface-0);
+  box-shadow: var(--shadow-soft);
+}
+
+.frame-ambient {
+  position: absolute;
+  pointer-events: none;
+  background: var(--accent);
+  opacity: 0.8;
+  z-index: 0;
+}
+
+.frame-ambient-primary {
+  inset: 0 auto auto 0;
+  width: 9rem;
+  height: 2px;
+}
+
+.frame-ambient-secondary {
+  inset: 0 0 auto auto;
+  width: 2px;
+  height: 4.5rem;
+}
+
+.frame-content {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(17rem, clamp(17rem, 24vw, 20.75rem)) minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.frame-content.is-stacked {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.frame-pane {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-0);
+  border-inline-end: 1px solid var(--border-subtle);
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.frame-drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  display: none;
+  z-index: 6;
+  background: rgba(3, 4, 6, 0.82);
+}
+
+.frame-drawer-backdrop.is-open {
+  display: block;
+}
+
+.frame-drawer-panel {
+  width: min(23rem, calc(var(--app-viewport-width, 100vw) - 2rem));
+  max-width: 100%;
+  height: min(100%, var(--app-viewport-height, 100dvh));
+  max-height: var(--app-viewport-height, 100dvh);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--border-strong);
+  background: var(--surface-0);
+}
+
+.frame-workspace {
+  background: var(--background);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 520px) {
+  .frame-drawer-panel {
+    width: min(100%, var(--app-viewport-width, 100vw));
+  }
+
+  .frame-content:not(.is-stacked) {
+    grid-template-columns: minmax(11.75rem, 48vw) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1200px) {
+  .frame-content {
+    grid-template-columns: minmax(16rem, clamp(16rem, 23vw, 18.75rem)) minmax(0, 1fr);
+  }
+}
+
+@media (max-height: 820px) {
+  .frame-content {
+    grid-template-columns: minmax(15.5rem, clamp(15.5rem, 22vw, 18.5rem)) minmax(0, 1fr);
+  }
+}

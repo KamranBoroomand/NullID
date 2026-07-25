@@ -1,0 +1,287 @@
+html[data-motion-mode="signal"] {
+  --motion-snap-duration: 180ms;
+  --motion-overlay-duration: 220ms;
+  --motion-pulse-duration: 7.2s;
+  --motion-caret-duration: 1.15s;
+  --motion-flicker-duration: 640ms;
+  --motion-signal-ease: cubic-bezier(0.16, 0.84, 0.22, 1);
+}
+
+html[data-motion-mode="signal"] .frame-ambient-primary,
+html[data-motion-mode="signal"] .frame-ambient-secondary {
+  opacity: 0.34;
+  animation: nullid-signal-rail var(--motion-pulse-duration) steps(2, end) infinite;
+}
+
+html[data-motion-mode="signal"] .frame-ambient-secondary {
+  animation-delay: 1.8s;
+}
+
+html[data-motion-mode="signal"] .page-token,
+html[data-motion-mode="signal"] .panel-overlay-kicker {
+  position: relative;
+}
+
+html[data-motion-mode="signal"] .page-token::after,
+html[data-motion-mode="signal"] .panel-overlay-kicker::after {
+  content: "";
+  display: inline-block;
+  width: 0.56ch;
+  height: 1em;
+  margin-inline-start: 0.28rem;
+  vertical-align: -0.12em;
+  background: currentColor;
+  opacity: 0.18;
+  animation: nullid-caret-blink var(--motion-caret-duration) steps(2, end) infinite;
+}
+
+html[data-motion-mode="signal"] .status-row > .chip:first-child {
+  position: relative;
+  overflow: hidden;
+}
+
+html[data-motion-mode="signal"] .status-row > .chip:first-child::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--accent) 56%, transparent) 50%, transparent 100%);
+  opacity: 0;
+  transform: translateX(-110%);
+  animation: nullid-chip-signal 8.6s linear infinite;
+}
+
+html[data-motion-mode="signal"] .module-button {
+  overflow: hidden;
+}
+
+html[data-motion-mode="signal"] .module-button.active::after {
+  content: "";
+  position: absolute;
+  inset: -1px auto -1px -1px;
+  width: 2px;
+  background: var(--accent);
+  opacity: 0.72;
+  animation: nullid-active-edge 2.4s steps(2, end) infinite;
+}
+
+html[data-motion-mode="signal"] .module-button.active .module-indicator {
+  animation: nullid-active-indicator 1.65s steps(2, end) infinite;
+}
+
+html[data-motion-mode="signal"] .command-overlay {
+  animation: nullid-overlay-backdrop var(--motion-overlay-duration) linear;
+}
+
+html[data-motion-mode="signal"] .command-surface,
+html[data-motion-mode="signal"] .guide-overlay.panel-overlay-surface {
+  position: relative;
+  overflow: hidden;
+  animation: nullid-panel-snap var(--motion-overlay-duration) var(--motion-signal-ease);
+}
+
+html[data-motion-mode="signal"] .command-surface::after,
+html[data-motion-mode="signal"] .guide-overlay.panel-overlay-surface::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, var(--accent) 25%, transparent 100%);
+  opacity: 0;
+  transform: translateX(-100%);
+  animation: nullid-overlay-scan var(--motion-flicker-duration) linear 90ms 1 both;
+  pointer-events: none;
+}
+
+html[data-motion-mode="signal"] .command-field {
+  position: relative;
+}
+
+html[data-motion-mode="signal"] .command-field::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 68%, transparent), transparent);
+  opacity: 0.55;
+}
+
+html[data-motion-mode="signal"] .action-dialog-body .status-line .motion-trust-tag {
+  animation: nullid-trust-flash var(--motion-flicker-duration) steps(2, end) 1;
+}
+
+@keyframes nullid-signal-rail {
+  0%,
+  76%,
+  100% {
+    opacity: 0.22;
+  }
+
+  79% {
+    opacity: 0.7;
+  }
+
+  81% {
+    opacity: 0.18;
+  }
+
+  83% {
+    opacity: 0.58;
+  }
+
+  85% {
+    opacity: 0.28;
+  }
+}
+
+@keyframes nullid-caret-blink {
+  0%,
+  46% {
+    opacity: 0.18;
+  }
+
+  47%,
+  100% {
+    opacity: 0.82;
+  }
+}
+
+@keyframes nullid-chip-signal {
+  0%,
+  90%,
+  100% {
+    opacity: 0;
+    transform: translateX(-110%);
+  }
+
+  92% {
+    opacity: 0.5;
+  }
+
+  96% {
+    opacity: 0.16;
+    transform: translateX(110%);
+  }
+}
+
+@keyframes nullid-active-edge {
+  0%,
+  58%,
+  100% {
+    opacity: 0.2;
+  }
+
+  62% {
+    opacity: 0.92;
+  }
+
+  65% {
+    opacity: 0.28;
+  }
+
+  68% {
+    opacity: 0.76;
+  }
+}
+
+@keyframes nullid-active-indicator {
+  0%,
+  48% {
+    opacity: 0.38;
+  }
+
+  49%,
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes nullid-overlay-backdrop {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes nullid-panel-snap {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.992);
+    filter: saturate(0.84);
+  }
+
+  56% {
+    opacity: 0.94;
+    transform: translateY(0) scale(1);
+    filter: saturate(1.04);
+  }
+
+  72% {
+    transform: translateY(1px) scale(1.001);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: saturate(1);
+  }
+}
+
+@keyframes nullid-overlay-scan {
+  0% {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+
+  24% {
+    opacity: 0.62;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+@keyframes nullid-trust-flash {
+  0% {
+    opacity: 0.68;
+    transform: translateX(0);
+  }
+
+  20% {
+    opacity: 1;
+    transform: translateX(1px);
+  }
+
+  42% {
+    opacity: 0.54;
+    transform: translateX(-1px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-motion-mode="signal"] .frame-ambient-primary,
+  html[data-motion-mode="signal"] .frame-ambient-secondary,
+  html[data-motion-mode="signal"] .page-token::after,
+  html[data-motion-mode="signal"] .panel-overlay-kicker::after,
+  html[data-motion-mode="signal"] .status-row > .chip:first-child::after,
+  html[data-motion-mode="signal"] .module-button.active::after,
+  html[data-motion-mode="signal"] .module-button.active .module-indicator,
+  html[data-motion-mode="signal"] .command-overlay,
+  html[data-motion-mode="signal"] .command-surface,
+  html[data-motion-mode="signal"] .guide-overlay.panel-overlay-surface,
+  html[data-motion-mode="signal"] .command-surface::after,
+  html[data-motion-mode="signal"] .guide-overlay.panel-overlay-surface::after,
+  html[data-motion-mode="signal"] .action-dialog-body .status-line .motion-trust-tag {
+    animation: none;
+  }
+}

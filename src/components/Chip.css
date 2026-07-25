@@ -1,0 +1,31 @@
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 0.35rem;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-1);
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  letter-spacing: 0.03em;
+  text-transform: none;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+.chip-accent {
+  border-color: var(--accent);
+  color: var(--text-secondary);
+  background: var(--accent-soft);
+}
+
+.chip-muted {
+  color: var(--text-muted);
+  border-color: var(--border-subtle);
+}
+
+.chip-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}

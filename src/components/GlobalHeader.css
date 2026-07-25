@@ -1,0 +1,323 @@
+.global-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.9rem 1rem;
+  padding: clamp(0.75rem, 1.4vw, 0.9rem) clamp(0.85rem, 1.8vw, 1rem) clamp(0.72rem, 1.2vw, 0.85rem);
+  border-bottom: 1px solid var(--border-strong);
+  background: color-mix(in srgb, var(--surface-0) 98%, transparent);
+  position: relative;
+  z-index: 2;
+}
+
+.header-cluster {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.brand-mark {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.brand-kicker,
+.status-label {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.brand-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.brand-mark-wordmark {
+  width: clamp(5.6rem, 10vw, 7.1rem);
+  height: auto;
+  flex: 0 0 auto;
+}
+
+.nav-toggle-button {
+  justify-self: start;
+}
+
+.header-center,
+.status-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.page-meta {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.page-title {
+  font-family: var(--font-sans);
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  font-size: 1.24rem;
+  line-height: 0.98;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.page-subtitle {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.page-token {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--accent);
+  padding: 0.22rem 0.45rem;
+  border-radius: 2px;
+  border: 1px solid var(--border-subtle);
+  background: var(--token-bg);
+  flex: 0 1 auto;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-row {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.status-copy {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  max-width: min(100%, 20rem);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  overflow-wrap: anywhere;
+}
+
+.header-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 0.55rem;
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+  justify-self: end;
+  align-self: start;
+}
+
+.indicator-row {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.action-row {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.header-locale-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  max-width: 100%;
+}
+
+.header-locale-select,
+.header-layout-select {
+  border: 1px solid var(--border-subtle);
+  background: var(--control-bg);
+  color: var(--text-primary);
+  border-radius: 2px;
+  padding: 0.45rem 0.5rem;
+  font-family: var(--font-mono);
+  max-width: 100%;
+  min-width: 0;
+  min-height: 2.4rem;
+}
+
+.ghost-button,
+.command-button {
+  border: 1px solid var(--border-subtle);
+  background: var(--control-bg);
+  color: var(--text-primary);
+  padding: 0.52rem 0.8rem;
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: border-color 120ms linear, background-color 120ms linear, color 120ms linear;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+  min-height: 2.4rem;
+  max-width: 100%;
+}
+
+.ghost-button:hover,
+.ghost-button:focus-visible,
+.command-button:hover,
+.command-button:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+  color: var(--accent);
+  background: var(--control-bg-hover);
+}
+
+.command-button {
+  background: color-mix(in srgb, var(--accent-soft) 40%, var(--control-bg));
+  border-color: var(--accent);
+}
+
+.compact-actions {
+  position: relative;
+}
+
+.compact-menu {
+  display: grid;
+  gap: 0.4rem;
+  max-width: min(20rem, calc(var(--app-viewport-width, 100vw) - 1.5rem));
+}
+
+.global-header.is-compact {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 0.65rem;
+}
+
+.global-header.is-compact .header-cluster {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.global-header.is-compact .brand-mark,
+.global-header.is-compact .header-center,
+.global-header.is-compact .page-subtitle {
+  display: none;
+}
+
+.global-header.is-compact .nav-toggle-button {
+  min-height: 2.25rem;
+  padding: 0.46rem 0.62rem;
+}
+
+.global-header.is-compact .ghost-button,
+.global-header.is-compact .command-button {
+  min-height: 2.25rem;
+  padding: 0.46rem 0.62rem;
+  font-size: 0.72rem;
+}
+
+.global-header.is-compact .page-meta {
+  width: 100%;
+  gap: 0;
+}
+
+.global-header.is-compact .page-title {
+  font-size: clamp(0.92rem, 4vw, 1.08rem);
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.global-header.is-compact .header-actions {
+  justify-self: end;
+  align-items: center;
+  align-self: center;
+}
+
+.global-header.is-compact .compact-actions {
+  position: relative;
+}
+
+@media (max-width: 420px) {
+  .global-header.is-compact {
+    gap: 0.4rem;
+    padding: 0.5rem;
+  }
+
+  .global-header.is-compact .header-cluster {
+    gap: 0.4rem;
+  }
+
+  .global-header.is-compact .ghost-button,
+  .global-header.is-compact .command-button {
+    padding-inline: 0.5rem;
+    letter-spacing: 0.08em;
+  }
+}
+
+@media (max-width: 1120px) {
+  .global-header {
+    grid-template-columns: 1fr auto;
+  }
+
+  .header-center {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-height: 820px) {
+  .global-header {
+    gap: 0.7rem 0.85rem;
+    padding: 0.72rem 0.85rem 0.7rem;
+  }
+
+  .brand-kicker,
+  .status-label {
+    font-size: 0.68rem;
+  }
+
+  .page-title {
+    font-size: 1.08rem;
+  }
+
+  .status-copy,
+  .header-locale-label {
+    font-size: 0.74rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ghost-button,
+  .command-button {
+    transition: none;
+  }
+}

@@ -1,0 +1,30 @@
+.toast-host {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 20;
+}
+
+.toast {
+  background: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  padding: 10px 12px;
+  border-radius: 8px;
+  box-shadow: var(--shadow-soft);
+  font-size: 0.92rem;
+  min-width: 220px;
+}
+
+.toast-accent {
+  border-color: var(--accent);
+  color: var(--text-secondary);
+}
+
+.toast-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}

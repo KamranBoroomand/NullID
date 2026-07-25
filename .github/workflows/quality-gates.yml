@@ -1,0 +1,109 @@
+name: Quality Gates
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-gates-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Canonical quality gates (Node 20.19.0)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+
+      - name: Setup Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 20.19.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npm run e2e:install
+
+      - name: Run default validation path (includes test:e2e:production)
+        run: npm run validate
+
+      - name: Assert canonical coverage runtime
+        run: npm run coverage:assert-canonical
+
+      - name: Assert guide
+        run: node scripts/assert-guide.mjs
+
+  node-compatibility:
+    name: Node compatibility (${{ matrix.node.label }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node:
+          - version: 20.19.0
+            label: node20
+          - version: 22.x
+            label: node22
+          - version: 24.x
+            label: node24
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+
+      - name: Setup Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: ${{ matrix.node.version }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Core coverage threshold
+        run: npm run coverage:core
+
+      - name: Script coverage threshold
+        run: npm run coverage:scripts
+
+      - name: Combined coverage evidence
+        run: npm run coverage:combined
+
+  cli-filesystem-windows:
+    name: CLI filesystem safety (windows-latest)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+
+      - name: Setup Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 20.19.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile test bundle
+        run: npx tsc -p tsconfig.test.json
+
+      - name: Run CLI filesystem safety unit suite
+        run: node --test build-test/__tests__/nullidLocalCli.test.js

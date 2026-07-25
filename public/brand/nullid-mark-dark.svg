@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 1024" role="img" aria-label="NullID brand mark">
+  
+    <g transform="translate(14 16)">
+      <path fill="rgba(214, 255, 98, 0.11)" fill-rule="evenodd" d="M188 128H648L792 272V896H188V128ZM264 204V820H716V308L612 204H264Z" />
+      <rect x="188" y="164" width="248" height="44" fill="rgba(214, 255, 98, 0.11)" />
+      <rect x="320" y="414" width="292" height="54" fill="rgba(214, 255, 98, 0.11)" />
+      <rect x="320" y="530" width="216" height="48" fill="rgba(214, 255, 98, 0.11)" />
+      <rect x="320" y="644" width="144" height="42" fill="rgba(214, 255, 98, 0.11)" />
+    </g>
+    <path fill="#f4f0e8" fill-rule="evenodd" d="M188 128H648L792 272V896H188V128ZM264 204V820H716V308L612 204H264Z" />
+    <rect x="188" y="164" width="248" height="44" fill="#d6ff62" />
+    <rect x="320" y="414" width="292" height="54" fill="#f4f0e8" />
+    <rect x="320" y="530" width="216" height="48" fill="#f4f0e8" />
+    <rect x="320" y="644" width="144" height="42" fill="#f4f0e8" />
+  
+</svg>

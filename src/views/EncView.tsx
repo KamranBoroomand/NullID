@@ -1,0 +1,558 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import "./styles.css";
+import { KDF_PROFILES, KdfHash, KdfProfile, ENVELOPE_PREFIX, decryptBlob, encryptBytes, encryptText, inspectEnvelope } from "../utils/cryptoEnvelope";
+import { Chip } from "../components/Chip";
+import { useToast } from "../components/ToastHost";
+import type { ModuleKey } from "../components/ModuleList";
+import { analyzeSecret, gradeLabel, type SecretGrade } from "../utils/passwordToolkit";
+import { useI18n } from "../i18n";
+import {
+  INPUT_LIMITS,
+  assertFileWithinLimit,
+  assertTextWithinLimit,
+  buildDecryptedPreview,
+  readFileBytesWithLimit,
+  readFileTextWithLimit,
+} from "../utils/inputLimits";
+
+interface EncViewProps {
+  onOpenGuide?: (key?: ModuleKey) => void;
+}
+
+export function EncView({ onOpenGuide }: EncViewProps) {
+  const { push } = useToast();
+  const { t, tr, formatNumber } = useI18n();
+  const [plain, setPlain] = useState("");
+  const [encPass, setEncPass] = useState("");
+  const [cipherText, setCipherText] = useState("");
+  const [decPass, setDecPass] = useState("");
+  const [decrypted, setDecrypted] = useState("");
+  const [kdfProfile, setKdfProfile] = useState<KdfProfile>("compat");
+  const [kdfMode, setKdfMode] = useState<"profile" | "custom">("profile");
+  const [customIterations, setCustomIterations] = useState(600_000);
+  const [customHash, setCustomHash] = useState<KdfHash>("SHA-512");
+  const [encFile, setEncFile] = useState<File | null>(null);
+  const [encFileBlob, setEncFileBlob] = useState<string | null>(null);
+  const [decFileBlob, setDecFileBlob] = useState<Uint8Array | null>(null);
+  const [decFileName, setDecFileName] = useState<string | null>(null);
+  const [decMime, setDecMime] = useState<string>("application/octet-stream");
+  const [autoClear, setAutoClear] = useState(true);
+  const [clearAfter, setClearAfter] = useState(30);
+  const [error, setError] = useState<string | null>(null);
+  const [isEncrypting, setIsEncrypting] = useState(false);
+  const [isDecrypting, setIsDecrypting] = useState(false);
+  const [payloadMeta, setPayloadMeta] = useState<{ name?: string; mime?: string; bytes?: number } | null>(null);
+  const [envelopeMeta, setEnvelopeMeta] = useState<{
+    iterations: number;
+    hash: KdfHash;
+    cipherBytes: number;
+    mime?: string;
+    name?: string;
+  } | null>(null);
+  const [envelopeMetaError, setEnvelopeMetaError] = useState<string | null>(null);
+  const encryptFileInput = useRef<HTMLInputElement>(null);
+  const decryptFileInput = useRef<HTMLInputElement>(null);
+  const clearTimerRef = useRef<number | null>(null);
+
+  const kdfConfig = useMemo(
+    () =>
+      kdfMode === "custom"
+        ? {
+            iterations: clamp(customIterations, 100_000, 2_000_000),
+            hash: customHash,
+          }
+        : KDF_PROFILES[kdfProfile],
+    [customHash, customIterations, kdfMode, kdfProfile],
+  );
+  const encPassAssessment = useMemo(() => analyzeSecret(encPass), [encPass]);
+  const decPassAssessment = useMemo(() => analyzeSecret(decPass), [decPass]);
+
+  const scheduleClear = useCallback(() => {
+    if (!autoClear) return;
+    if (clearTimerRef.current) window.clearTimeout(clearTimerRef.current);
+    clearTimerRef.current = window.setTimeout(() => {
+      setPlain("");
+      setDecrypted("");
+    }, clearAfter * 1000);
+  }, [autoClear, clearAfter]);
+
+  useEffect(() => {
+    return () => {
+      if (clearTimerRef.current) window.clearTimeout(clearTimerRef.current);
+    };
+  }, []);
+
+  const reportInputError = useCallback(
+    (err: unknown, fallback: string) => {
+      const message = err instanceof Error ? err.message : fallback;
+      setError(message);
+      push(message, "danger");
+    },
+    [push],
+  );
+
+  const updatePlaintext = useCallback(
+    (value: string) => {
+      try {
+        assertTextWithinLimit(value, { label: "Plaintext", maxChars: INPUT_LIMITS.plaintextChars });
+        setPlain(value);
+      } catch (err) {
+        setPlain(value.slice(0, INPUT_LIMITS.plaintextChars));
+        reportInputError(err, "plaintext too large");
+      }
+    },
+    [reportInputError],
+  );
+
+  const updateCipherText = useCallback(
+    (value: string) => {
+      try {
+        assertTextWithinLimit(value, { label: "Envelope", maxChars: INPUT_LIMITS.envelopeTextChars });
+        setCipherText(value);
+      } catch (err) {
+        reportInputError(err, "envelope too large");
+      }
+    },
+    [reportInputError],
+  );
+
+  const handleEncryptText = useCallback(async () => {
+    if (!plain || !encPass) return;
+    setIsEncrypting(true);
+    try {
+      const blob = await encryptText(encPass, plain, {
+        kdfProfile,
+        kdf: kdfMode === "custom" ? kdfConfig : undefined,
+      });
+      setCipherText(blob.trim());
+      setEncFileBlob(blob.trim());
+      push("sealed", "accent");
+      setError(null);
+      setPayloadMeta({ bytes: plain.length, mime: "text/plain" });
+      scheduleClear();
+    } catch (err) {
+      console.error(err);
+      setError("encrypt failed");
+      push("encrypt failed", "danger");
+    } finally {
+      setIsEncrypting(false);
+    }
+  }, [encPass, kdfConfig, kdfMode, kdfProfile, plain, push, scheduleClear]);
+
+  const handleEncryptFile = useCallback(async () => {
+    if (!encPass || !encFile) return;
+    setIsEncrypting(true);
+    try {
+      const bytes = await readFileBytesWithLimit(encFile, { label: "Payload", maxBytes: INPUT_LIMITS.encryptionFileBytes });
+      const { blob } = await encryptBytes(encPass, bytes, {
+        mime: encFile.type,
+        name: encFile.name,
+        kdfProfile,
+        kdf: kdfMode === "custom" ? kdfConfig : undefined,
+      });
+      setEncFileBlob(blob);
+      setCipherText(blob.trim());
+      push("file sealed", "accent");
+      setPayloadMeta({ name: encFile.name, mime: encFile.type, bytes: encFile.size });
+      scheduleClear();
+    } catch (err) {
+      console.error(err);
+      reportInputError(err, "file encrypt failed");
+    } finally {
+      setIsEncrypting(false);
+    }
+  }, [encFile, encPass, kdfConfig, kdfMode, kdfProfile, push, reportInputError, scheduleClear]);
+
+  const handleDecryptText = useCallback(async () => {
+    if (!cipherText || !decPass) return;
+    setIsDecrypting(true);
+    try {
+      const { plaintext, header } = await decryptBlob(decPass, cipherText);
+      const preview = buildDecryptedPreview(plaintext, header.mime);
+      setDecrypted(preview.text);
+      setPayloadMeta({ mime: header.mime, bytes: plaintext.byteLength });
+      push("decrypted", "accent");
+      setError(null);
+      scheduleClear();
+    } catch (err) {
+      console.error(err);
+      setDecrypted("");
+      setDecFileBlob(null);
+      setPayloadMeta(null);
+      setError("decrypt failed: bad passphrase or envelope");
+      push("decrypt failed", "danger");
+    } finally {
+      setIsDecrypting(false);
+    }
+  }, [cipherText, decPass, push, scheduleClear]);
+
+  const handleDecryptFile = useCallback(async () => {
+    if (!decPass || !cipherText) return;
+    setIsDecrypting(true);
+    try {
+      const { plaintext, header, metadataAuthenticated } = await decryptBlob(decPass, cipherText);
+      const preview = buildDecryptedPreview(plaintext, header.mime);
+      setDecFileBlob(plaintext);
+      setDecFileName(header.name ?? "decrypted.bin");
+      setDecMime(header.mime ?? "application/octet-stream");
+      setDecrypted(preview.text);
+      setPayloadMeta({ name: header.name, mime: header.mime, bytes: plaintext.byteLength });
+      setError(null);
+      push(metadataAuthenticated ? "file ready" : "legacy envelope metadata ignored", "accent");
+      scheduleClear();
+    } catch (err) {
+      console.error(err);
+      setPayloadMeta(null);
+      setError("decrypt failed: bad passphrase or envelope");
+      push("decrypt failed", "danger");
+    } finally {
+      setIsDecrypting(false);
+    }
+  }, [cipherText, decPass, push, scheduleClear]);
+
+  const safeDownload = (blob: Blob, filename: string) => {
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(link.href), 1500);
+  };
+
+  const downloadEncryptedFile = () => {
+    if (!encFileBlob) {
+      push("no envelope to download", "danger");
+      return;
+    }
+    safeDownload(new Blob([encFileBlob], { type: "text/plain;charset=utf-8" }), `${encFile?.name ?? "payload"}.nullid`);
+  };
+
+  const downloadDecryptedFile = () => {
+    if (!decFileBlob) {
+      push("nothing to download", "danger");
+      return;
+    }
+    const copy = new Uint8Array(decFileBlob);
+    safeDownload(new Blob([copy.buffer], { type: decMime }), decFileName ?? "decrypted.bin");
+  };
+
+  useEffect(() => {
+    if (!decPass || !cipherText) {
+      setDecFileBlob(null);
+      setDecFileName(null);
+    }
+  }, [cipherText, decPass]);
+
+  useEffect(() => {
+    const trimmed = cipherText.trim();
+    if (!trimmed) {
+      setEnvelopeMeta(null);
+      setEnvelopeMetaError(null);
+      return;
+    }
+    try {
+      const inspected = inspectEnvelope(trimmed);
+      setEnvelopeMeta({
+        iterations: inspected.header.kdf.iterations,
+        hash: inspected.header.kdf.hash,
+        cipherBytes: inspected.ciphertextBytes,
+        mime: inspected.header.mime,
+        name: inspected.header.name,
+      });
+      setEnvelopeMetaError(null);
+    } catch (error) {
+      setEnvelopeMeta(null);
+      setEnvelopeMetaError(error instanceof Error ? error.message : "invalid envelope");
+    }
+  }, [cipherText]);
+
+  return (
+    <div className="workspace-scroll">
+      <div className="guide-link">
+        <button type="button" className="guide-link-button" onClick={() => onOpenGuide?.("enc")}>
+          {t("guide.link")}
+        </button>
+      </div>
+      <div className="grid-two">
+        <div className="panel" aria-label={tr("Encrypt panel")}>
+          <div className="panel-heading">
+            <span>{tr("Encrypt")}</span>
+            <span className="panel-subtext">PBKDF2 + AES-GCM</span>
+          </div>
+          <label className="section-title" htmlFor="encrypt-plain">
+            {tr("Plaintext")}
+          </label>
+          <textarea
+            id="encrypt-plain"
+            className="textarea"
+            placeholder={tr("Enter text to encrypt")}
+            aria-label={tr("Plaintext")}
+            value={plain}
+            onChange={(event) => updatePlaintext(event.target.value)}
+          />
+          <label className="section-title" htmlFor="encrypt-pass">
+            {tr("Passphrase")}
+          </label>
+          <input
+            id="encrypt-pass"
+            className="input"
+            type="password"
+            placeholder="••••••"
+            aria-label={tr("Encrypt passphrase")}
+            value={encPass}
+            onChange={(event) => setEncPass(event.target.value)}
+          />
+          <div className="status-line">
+            <span>{tr("passphrase strength")}</span>
+            <span className={gradeTagClass(encPassAssessment.grade)}>{gradeLabel(encPassAssessment.grade)}</span>
+            <span className="microcopy">{tr("effective")} ≈ {formatNumber(encPassAssessment.effectiveEntropyBits)} {tr("bits")}</span>
+          </div>
+          <div className="controls-row">
+            <span className="section-title">{tr("KDF profile")}</span>
+            <div className="pill-buttons" role="group" aria-label={tr("KDF profile")}>
+              {(["compat", "strong", "paranoid"] as KdfProfile[]).map((profile) => (
+                <button
+                  key={profile}
+                  type="button"
+                  className={kdfProfile === profile ? "active" : ""}
+                  onClick={() => setKdfProfile(profile)}
+                >
+                  {profile}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="controls-row">
+            <span className="section-title">{tr("KDF mode")}</span>
+            <div className="pill-buttons" role="group" aria-label={tr("KDF mode")}>
+              <button type="button" className={kdfMode === "profile" ? "active" : ""} onClick={() => setKdfMode("profile")}>
+                {tr("profile")}
+              </button>
+              <button type="button" className={kdfMode === "custom" ? "active" : ""} onClick={() => setKdfMode("custom")}>
+                {tr("custom")}
+              </button>
+            </div>
+            {kdfMode === "custom" && (
+              <>
+                <select
+                  className="select"
+                  value={customHash}
+                  onChange={(event) => setCustomHash(event.target.value as KdfHash)}
+                  aria-label={tr("Custom KDF hash")}
+                >
+                  <option value="SHA-256">SHA-256</option>
+                  <option value="SHA-512">SHA-512</option>
+                </select>
+                <input
+                  className="input"
+                  type="number"
+                  min={100000}
+                  max={2000000}
+                  step={50000}
+                  value={customIterations}
+                  onChange={(event) => setCustomIterations(clamp(Number(event.target.value) || 0, 100_000, 2_000_000))}
+                  aria-label={tr("Custom KDF iterations")}
+                />
+              </>
+            )}
+          </div>
+          <div className="microcopy">PBKDF2 {kdfConfig.hash.toLowerCase()} · {formatNumber(kdfConfig.iterations)} {tr("iterations")}</div>
+          <div className="controls-row">
+            <button className="button" type="button" onClick={handleEncryptText} disabled={!plain || !encPass || isEncrypting}>
+              {tr("seal text")}
+            </button>
+            <button className="button" type="button" onClick={() => encryptFileInput.current?.click()} disabled={!encPass || isEncrypting}>
+              {tr("select file")}
+            </button>
+            <input
+              ref={encryptFileInput}
+              type="file"
+              style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }}
+              onChange={(event) => {
+                const file = event.target.files?.[0] ?? null;
+                if (!file) {
+                  setEncFile(null);
+                  return;
+                }
+                try {
+                  assertFileWithinLimit(file, { label: "Payload", maxBytes: INPUT_LIMITS.encryptionFileBytes });
+                  setEncFile(file);
+                  setError(null);
+                } catch (err) {
+                  setEncFile(null);
+                  event.currentTarget.value = "";
+                  reportInputError(err, "file too large");
+                }
+              }}
+              aria-label={tr("Pick file to encrypt")}
+              tabIndex={-1}
+            />
+            <button className="button" type="button" onClick={handleEncryptFile} disabled={!encPass || !encFile || isEncrypting}>
+              {tr("seal file")}
+            </button>
+          </div>
+          <div className="status-line">
+            <span>{tr("file")}</span>
+            <Chip label={encFile?.name ?? tr("none")} tone="muted" />
+            {isEncrypting && <Chip label={tr("working…")} tone="accent" />}
+          </div>
+        </div>
+        <div className="panel" aria-label={tr("Decrypt panel")}>
+          <div className="panel-heading">
+            <span>{tr("Decrypt")}</span>
+            <span className="panel-subtext">{tr("verify envelope")}</span>
+          </div>
+          <label className="section-title" htmlFor="decrypt-blob">
+            {tr("Ciphertext")}
+          </label>
+          <textarea
+            id="decrypt-blob"
+            className="textarea"
+            placeholder={tr("Paste envelope")}
+            aria-label={tr("Ciphertext")}
+            value={cipherText}
+            onChange={(event) => updateCipherText(event.target.value)}
+          />
+          <div className="controls-row">
+            <button className="button" type="button" onClick={() => decryptFileInput.current?.click()}>
+              {tr("load file")}
+            </button>
+            <input
+              ref={decryptFileInput}
+              type="file"
+              accept=".nullid,text/plain"
+              style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }}
+              aria-label={tr("Load envelope file")}
+              onChange={async (event) => {
+                const input = event.currentTarget;
+                const file = input.files?.[0];
+                if (!file) return;
+                try {
+                  const text = await readFileTextWithLimit(file, {
+                    label: "Envelope",
+                    maxBytes: INPUT_LIMITS.envelopeFileBytes,
+                    maxChars: INPUT_LIMITS.envelopeTextChars,
+                  });
+                  updateCipherText(text.trim());
+                  setError(null);
+                } catch (err) {
+                  input.value = "";
+                  reportInputError(err, "file too large");
+                }
+              }}
+              tabIndex={-1}
+            />
+            <button className="button" type="button" onClick={handleDecryptText} disabled={!cipherText || !decPass || isDecrypting}>
+              {tr("decrypt text")}
+            </button>
+            <button className="button" type="button" onClick={handleDecryptFile} disabled={!cipherText || !decPass || isDecrypting}>
+              {tr("decrypt file")}
+            </button>
+          </div>
+          <label className="section-title" htmlFor="decrypt-pass">
+            {tr("Passphrase")}
+          </label>
+          <input
+            id="decrypt-pass"
+            className="input"
+            type="password"
+            placeholder="••••••"
+            aria-label={tr("Decrypt passphrase")}
+            value={decPass}
+            onChange={(event) => setDecPass(event.target.value)}
+          />
+          <div className="status-line">
+            <span>{tr("passphrase strength")}</span>
+            <span className={gradeTagClass(decPassAssessment.grade)}>{gradeLabel(decPassAssessment.grade)}</span>
+            <span className="microcopy">{tr("effective")} ≈ {formatNumber(decPassAssessment.effectiveEntropyBits)} {tr("bits")}</span>
+          </div>
+          <div className="controls-row">
+            <Chip label={payloadMeta?.name ?? "text/plain"} tone="muted" />
+            {payloadMeta?.bytes !== undefined && <Chip label={`${formatNumber(Math.ceil((payloadMeta.bytes ?? 0) / 1024))} KB`} tone="muted" />}
+            {isDecrypting && <Chip label={tr("decrypting…")} tone="accent" />}
+          </div>
+        </div>
+      </div>
+      <div className="panel" aria-label={tr("Envelope preview")}>
+          <div className="panel-heading">
+            <span>{tr("Envelope")}</span>
+            <span className="panel-subtext">{ENVELOPE_PREFIX}</span>
+          </div>
+          <div className="note-box">
+            <div className="microcopy">
+            {tr("prefix NULLID:ENC:2, AES-GCM, PBKDF2 profile:")} {kdfProfile} ({kdfConfig.hash.toLowerCase()} / {formatNumber(kdfConfig.iterations)}), {tr("AAD bound")}
+          </div>
+          <div className="microcopy">
+            {envelopeMeta
+              ? `${tr("header")}: ${envelopeMeta.hash.toLowerCase()} / ${formatNumber(envelopeMeta.iterations)} · ${formatNumber(Math.ceil(envelopeMeta.cipherBytes / 1024))} KB ${tr("ciphertext")}${envelopeMeta.name ? ` · ${envelopeMeta.name}` : ""}`
+              : envelopeMetaError
+                ? `${tr("header parse")}: ${envelopeMetaError}`
+                : tr("header parse pending")}
+          </div>
+          <pre className="output">{cipherText || tr("Generate an envelope to view")}</pre>
+        </div>
+        <div className="controls-row">
+          <label className="section-title" htmlFor="auto-clear">
+            {tr("Hygiene")}
+          </label>
+          <div className="pill-buttons" role="group" aria-label={tr("Auto clear options")}>
+            <button
+              id="auto-clear"
+              type="button"
+              className={autoClear ? "active" : ""}
+              onClick={() => setAutoClear((prev) => !prev)}
+            >
+              {tr("auto clear")}
+            </button>
+            <input
+              className="input"
+              type="number"
+              min={5}
+              max={300}
+              value={clearAfter}
+              onChange={(event) => setClearAfter(Math.min(300, Math.max(5, Number(event.target.value))))}
+              aria-label={tr("Auto clear seconds")}
+            />
+            <button className="button" type="button" onClick={downloadEncryptedFile} disabled={!encFileBlob}>
+              {tr("download envelope")}
+            </button>
+            <button className="button" type="button" onClick={downloadDecryptedFile} disabled={!decFileBlob}>
+              {tr("download decrypted")}
+            </button>
+          </div>
+        </div>
+        <div className="status-line">
+          <span>{tr("decrypt")}</span>
+          <span className={`tag ${error ? "tag-danger" : "tag-accent"}`}>{error || decrypted || tr("pending")}</span>
+        </div>
+      </div>
+      <div className="panel" aria-label={tr("Decryption output")}>
+        <div className="panel-heading">
+          <span>{tr("Output")}</span>
+          <span className="panel-subtext">{decFileBlob ? tr("file ready") : tr("text")}</span>
+        </div>
+        <div className="note-box">
+          <div className="microcopy">{tr("Decrypted preview")}</div>
+          <pre className="output" aria-live="polite">{decrypted || tr("[pending]")}</pre>
+          {decFileBlob && (
+            <div className="microcopy">
+              {tr("file")}: {decFileName ?? "decrypted.bin"} · {tr("type")}: {decMime} · {tr("size")}: {decFileBlob.byteLength} {tr("bytes")}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function gradeTagClass(grade: SecretGrade): string {
+  if (grade === "critical" || grade === "weak") return "tag tag-danger";
+  if (grade === "fair") return "tag";
+  return "tag tag-accent";
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}

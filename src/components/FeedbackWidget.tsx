@@ -1,0 +1,157 @@
+import { useMemo, useState } from "react";
+import { usePersistentState } from "../hooks/usePersistentState";
+import { useToast } from "./ToastHost";
+import type { ModuleKey } from "./ModuleList";
+import { useI18n } from "../i18n";
+import "./FeedbackWidget.css";
+
+interface FeedbackEntry {
+  id: string;
+  createdAt: string;
+  module: ModuleKey;
+  category: "idea" | "bug" | "ux" | "performance";
+  priority: "low" | "medium" | "high";
+  message: string;
+}
+
+interface FeedbackWidgetProps {
+  activeModule: ModuleKey;
+  open?: boolean;
+  compactLauncher?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}
+
+const storageKey = "nullid:feedback-log";
+
+export function FeedbackWidget({ activeModule, open: controlledOpen, compactLauncher = false, onOpenChange }: FeedbackWidgetProps) {
+  const { push } = useToast();
+  const { t } = useI18n();
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = onOpenChange ?? setUncontrolledOpen;
+  const [category, setCategory] = usePersistentState<FeedbackEntry["category"]>("nullid:feedback-category", "idea");
+  const [priority, setPriority] = usePersistentState<FeedbackEntry["priority"]>("nullid:feedback-priority", "medium");
+  const [message, setMessage] = usePersistentState<string>("nullid:feedback-draft", "");
+  const [entryCount, setEntryCount] = useState(() => loadFeedbackEntries().length);
+
+  const canSave = useMemo(() => message.trim().length >= 8, [message]);
+
+  const handleSave = () => {
+    const trimmed = message.trim();
+    if (trimmed.length < 8) {
+      push("feedback too short (min 8 chars)", "danger");
+      return;
+    }
+    const nextEntry: FeedbackEntry = {
+      id: `fb-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      createdAt: new Date().toISOString(),
+      module: activeModule,
+      category,
+      priority,
+      message: trimmed,
+    };
+    const entries = [nextEntry, ...loadFeedbackEntries()].slice(0, 100);
+    localStorage.setItem(storageKey, JSON.stringify(entries));
+    setEntryCount(entries.length);
+    setMessage("");
+    push("feedback stored locally", "accent");
+  };
+
+  const handleExport = () => {
+    const entries = loadFeedbackEntries();
+    if (entries.length === 0) {
+      push("no saved feedback to export", "neutral");
+      return;
+    }
+    const payload = {
+      schemaVersion: 1,
+      exportedAt: new Date().toISOString(),
+      entries,
+    };
+    const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `nullid-feedback-${Date.now()}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    push("feedback export ready", "accent");
+  };
+
+  if (!open && compactLauncher) return null;
+
+  return (
+    <div className="feedback-widget">
+      {open ? (
+        <div className="feedback-panel" aria-label={t("feedback.panel")}>
+          <div className="feedback-header">
+            <span className="section-title">{t("feedback.title")}</span>
+            <button type="button" className="button" onClick={() => setOpen(false)} aria-label={t("feedback.close")}>
+              {t("feedback.close")}
+            </button>
+          </div>
+          <div className="microcopy">
+            {t("feedback.stored", { count: entryCount })}
+          </div>
+          <div className="controls-row">
+            <select
+              className="select"
+              value={category}
+              onChange={(event) => setCategory(event.target.value as FeedbackEntry["category"])}
+              aria-label={t("feedback.category")}
+            >
+              <option value="idea">{t("feedback.idea")}</option>
+              <option value="bug">{t("feedback.bug")}</option>
+              <option value="ux">{t("feedback.ux")}</option>
+              <option value="performance">{t("feedback.performance")}</option>
+            </select>
+            <select
+              className="select"
+              value={priority}
+              onChange={(event) => setPriority(event.target.value as FeedbackEntry["priority"])}
+              aria-label={t("feedback.priority")}
+            >
+              <option value="low">{t("feedback.low")}</option>
+              <option value="medium">{t("feedback.medium")}</option>
+              <option value="high">{t("feedback.high")}</option>
+            </select>
+          </div>
+          <textarea
+            className="textarea"
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+            placeholder={t("feedback.context", { module: activeModule })}
+            aria-label={t("feedback.message")}
+          />
+          <div className="controls-row">
+            <button className="button" type="button" onClick={handleSave} disabled={!canSave}>
+              {t("feedback.save")}
+            </button>
+            <button className="button" type="button" onClick={handleExport} disabled={entryCount === 0}>
+              {t("feedback.export")}
+            </button>
+            <button className="button" type="button" onClick={() => setMessage("")}>
+              {t("feedback.clear")}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button type="button" className="button feedback-launcher" onClick={() => setOpen(true)} aria-label={t("feedback.open")}>
+          {t("feedback.launcher")}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function loadFeedbackEntries(): FeedbackEntry[] {
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((entry) => entry && typeof entry.message === "string");
+  } catch {
+    return [];
+  }
+}

@@ -1,0 +1,167 @@
+name: Signed Release + Provenance
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Tag label used in release artifact names"
+        required: false
+        default: "manual"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      SOURCE_DATE_EPOCH: 1735689600
+    outputs:
+      release_tag: ${{ steps.release_tag.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+
+      - name: Setup Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 20.19.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npm run e2e:install
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: i18n coverage
+        run: npm run i18n:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Browser e2e
+        run: CI=1 npm run e2e
+
+      - name: Build reproducible artifacts
+        run: npm run build:repro
+
+      - name: Resolve release tag
+        id: release_tag
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ] && [ -n "${GITHUB_REF_NAME:-}" ]; then
+            tag="$GITHUB_REF_NAME"
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            tag="${{ github.event.inputs.release_tag }}"
+          else
+            tag="manual-${GITHUB_SHA::12}"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Release dry-run gate (bundle + verify, includes test:e2e:production)
+        run: npm run release:dry-run -- --tag "${{ steps.release_tag.outputs.tag }}"
+
+      - name: Assert canonical coverage runtime
+        run: npm run coverage:assert-canonical
+
+      - name: Upload release bundle artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-bundle-${{ steps.release_tag.outputs.tag }}
+          path: release/*
+
+  sign:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download release bundle artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: release-bundle-${{ needs.build.outputs.release_tag }}
+          path: release
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac
+
+      - name: Sign release artifacts (keyless)
+        env:
+          COSIGN_YES: "true"
+        run: |
+          set -euo pipefail
+          for artifact in release/*; do
+            case "$artifact" in
+              *.sig|*.pem) continue ;;
+            esac
+            cosign sign-blob --yes \
+              --output-signature "${artifact}.sig" \
+              --output-certificate "${artifact}.pem" \
+              "$artifact"
+          done
+
+      - name: Verify release signatures
+        run: |
+          set -euo pipefail
+          identity_regex="https://github.com/${{ github.repository }}/.github/workflows/release-signed.yml@.*"
+          for artifact in release/*; do
+            case "$artifact" in
+              *.sig|*.pem) continue ;;
+            esac
+            cosign verify-blob \
+              --certificate "${artifact}.pem" \
+              --signature "${artifact}.sig" \
+              --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+              --certificate-identity-regexp "$identity_regex" \
+              "$artifact" >/dev/null
+          done
+
+      - name: Generate provenance attestation
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373
+        with:
+          subject-path: |
+            release/*.tar.gz
+            release/*SHA256SUMS.txt
+            release/*deploy-manifest.json
+            release/*sbom.json
+            release/*release-manifest.json
+            release/*release-checksums.txt
+
+      - name: Upload signed bundle artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: signed-release-${{ needs.build.outputs.release_tag }}
+          path: release/*
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [build, sign]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download signed bundle artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: signed-release-${{ needs.build.outputs.release_tag }}
+          path: release
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
+        with:
+          files: release/*
+          generate_release_notes: true

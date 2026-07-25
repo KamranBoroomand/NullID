@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="NullID app icon">
+  <rect width="1024" height="1024" rx="220" fill="#f7f2e8" />
+  <rect x="132" y="132" width="264" height="22" rx="8" fill="#5f7712" />
+  <rect x="390" y="834" width="180" height="18" rx="6" fill="#5f7712" />
+  <g transform="translate(106.40000000000003 82.16000000000003) scale(0.82)">
+    
+    <g transform="translate(14 16)">
+      <path fill="rgba(22, 19, 16, 0.12)" fill-rule="evenodd" d="M188 128H648L792 272V896H188V128ZM264 204V820H716V308L612 204H264Z" />
+      <rect x="188" y="164" width="248" height="44" fill="rgba(22, 19, 16, 0.12)" />
+      <rect x="320" y="414" width="292" height="54" fill="rgba(22, 19, 16, 0.12)" />
+      <rect x="320" y="530" width="216" height="48" fill="rgba(22, 19, 16, 0.12)" />
+      <rect x="320" y="644" width="144" height="42" fill="rgba(22, 19, 16, 0.12)" />
+    </g>
+    <path fill="#161310" fill-rule="evenodd" d="M188 128H648L792 272V896H188V128ZM264 204V820H716V308L612 204H264Z" />
+    <rect x="188" y="164" width="248" height="44" fill="#5f7712" />
+    <rect x="320" y="414" width="292" height="54" fill="#161310" />
+    <rect x="320" y="530" width="216" height="48" fill="#161310" />
+    <rect x="320" y="644" width="144" height="42" fill="#161310" />
+  
+  </g>
+</svg>

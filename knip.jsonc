@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/knip/schema-jsonc.json",
+  "entry": [
+    "scripts/*.mjs",
+    "tests/e2e/**/*.ts",
+    "public/sw.js"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx}",
+    "tests/**/*.{ts,tsx}",
+    "scripts/**/*.mjs"
+  ],
+  "ignoreDependencies": [
+    // generate-sbom.mjs invokes the CycloneDX CLI by binary name.
+    "@cyclonedx/cyclonedx-npm",
+    // CycloneDX validation/runtime peer packages must be present for local and CI SBOM generation.
+    "@emnapi/core",
+    "@emnapi/runtime",
+    "ajv",
+    "ajv-formats",
+    "ajv-formats-draft2019"
+  ]
+}
