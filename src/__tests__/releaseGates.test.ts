@@ -37,6 +37,12 @@ describe("release and deployment E2E gates", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "nullid-sbom-"));
     const outputPath = path.join(tempDir, "sbom.json");
     let outputExisted = false;
+    let sbom: {
+      bomFormat?: string;
+      specVersion?: string;
+      components?: Array<{ group?: string; name?: string; version?: string }>;
+      metadata?: { tools?: { components?: Array<{ type?: string; name?: string; version?: string }> } };
+    } | undefined;
 
     assert.doesNotMatch(source, /cyclonedx-npm\.cmd/u);
     assert.match(source, /process\.execPath/u);
@@ -44,19 +50,43 @@ describe("release and deployment E2E gates", () => {
 
     try {
       const output = execFileSync(process.execPath, ["scripts/generate-sbom.mjs", outputPath], { encoding: "utf8" });
-      const sbom = JSON.parse(fs.readFileSync(outputPath, "utf8")) as { bomFormat?: string; specVersion?: string; components?: unknown[] };
+      sbom = JSON.parse(fs.readFileSync(outputPath, "utf8")) as typeof sbom;
 
       outputExisted = fs.existsSync(outputPath);
       assert.match(output, /\[sbom\] wrote CycloneDX/u);
-      assert.equal(sbom.bomFormat, "CycloneDX");
-      assert.equal(typeof sbom.specVersion, "string");
-      assert.equal(Array.isArray(sbom.components), true);
+      assert.equal(sbom?.bomFormat, "CycloneDX");
+      assert.equal(typeof sbom?.specVersion, "string");
+      assert.equal(Array.isArray(sbom?.components), true);
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
 
     assert.equal(outputExisted, true);
     assert.equal(fs.existsSync(outputPath), false);
+
+    const npmTool = sbom?.metadata?.tools?.components?.find((component) => component.type === "application" && component.name === "npm");
+    assert.ok(npmTool, "SBOM should keep the npm tool identity");
+    assert.equal(Object.hasOwn(npmTool, "version"), false, "npm tool version is environment-derived and normalized for cross-Node reproducibility");
+
+    assert.equal(hasComponent(sbom?.components, undefined, "react", "18.3.1"), true);
+    assert.equal(hasComponent(sbom?.components, "@noble", "hashes", "1.8.0"), true);
+    assert.equal(hasComponent(sbom?.components, "@cyclonedx", "cyclonedx-npm", "5.0.0"), true);
+  });
+
+  it("skips visual regression for test-only source paths before broad src matches", () => {
+    const workflow = fs.readFileSync(".github/workflows/visual-regression.yml", "utf8");
+
+    assert.ok(
+      workflow.indexOf("src/**tests**/*|src/**tests**/**)") < workflow.indexOf("src/*|src/**)"),
+      "test-only src exclusion must appear before the broad src match",
+    );
+    assert.match(workflow, /workflow_dispatch[\s\S]+should_run=true/u);
+
+    assert.equal(visualRegressionShouldRun(workflow, "src/__tests__/releaseGates.test.ts"), false);
+    assert.equal(visualRegressionShouldRun(workflow, "src/App.tsx"), true);
+    assert.equal(visualRegressionShouldRun(workflow, "src/styles/global.css"), true);
+    assert.equal(visualRegressionShouldRun(workflow, "public/nullid-preview.png"), true);
+    assert.equal(visualRegressionShouldRun(workflow, "tests/e2e/app.spec.ts-snapshots/app-chromium-darwin.png"), true);
   });
 
   it("rejects duplicate physical/logical sources in a coverage evidence scope", () => {
@@ -253,6 +283,71 @@ function coverageMetric() {
     functions: { total: 10, covered: 9, skipped: 0, pct: 90 },
     branches: { total: 10, covered: 8, skipped: 0, pct: 80 },
   };
+}
+
+function hasComponent(
+  components: Array<{ group?: string; name?: string; version?: string }> | undefined,
+  group: string | undefined,
+  name: string,
+  version: string,
+) {
+  return components?.some((component) => component.group === group && component.name === name && component.version === version) === true;
+}
+
+function visualRegressionShouldRun(workflow: string, file: string) {
+  for (const rule of visualRegressionRules(workflow)) {
+    if (rule.patterns.some((pattern) => shellCasePatternMatches(pattern, file))) {
+      return rule.shouldRun;
+    }
+  }
+  return false;
+}
+
+function visualRegressionRules(workflow: string) {
+  const caseStart = workflow.indexOf('case "$file" in');
+  const caseEnd = workflow.indexOf("esac", caseStart);
+  assert.ok(caseStart >= 0 && caseEnd > caseStart, "visual workflow should classify changed files with a shell case statement");
+
+  const lines = workflow.slice(caseStart, caseEnd).split("\n").slice(1);
+  const rules: Array<{ patterns: string[]; shouldRun: boolean }> = [];
+  for (let index = 0; index < lines.length;) {
+    const trimmed = lines[index]?.trim() ?? "";
+    if (trimmed.length === 0) {
+      index += 1;
+      continue;
+    }
+
+    const patternLines: string[] = [];
+    while (index < lines.length) {
+      const line = lines[index]?.trim() ?? "";
+      patternLines.push(line);
+      index += 1;
+      if (line.endsWith(")")) break;
+    }
+
+    const actionLines: string[] = [];
+    while (index < lines.length) {
+      const line = lines[index]?.trim() ?? "";
+      index += 1;
+      if (line === ";;") break;
+      actionLines.push(line);
+    }
+
+    const patterns = patternLines
+      .join("")
+      .replace(/\)$/, "")
+      .replaceAll("\\", "")
+      .split("|")
+      .filter(Boolean);
+    rules.push({ patterns, shouldRun: actionLines.includes("should_run=true") });
+  }
+
+  return rules;
+}
+
+function shellCasePatternMatches(pattern: string, file: string) {
+  const escaped = pattern.replace(/[.+^${}()|[\]\\]/gu, "\\$&").replaceAll("*", ".*").replaceAll("?", ".");
+  return new RegExp(`^${escaped}$`, "u").test(file);
 }
 
 function workflowLevelPermissions(source: string) {
