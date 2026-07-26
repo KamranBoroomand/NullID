@@ -2,16 +2,20 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import { createRequire } from "node:module";
 
 const outputArg = process.argv[2] || "dist/sbom.json";
 const outputPath = path.resolve(outputArg);
-const command = process.platform === "win32" ? "cyclonedx-npm.cmd" : "cyclonedx-npm";
+const require = createRequire(import.meta.url);
+const CYCLONEDX_PACKAGE_NAME = "@cyclonedx/cyclonedx-npm";
+const cyclonedxCliPath = resolveCycloneDxCliPath();
 
 fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 
 execFileSync(
-  command,
+  process.execPath,
   [
+    cyclonedxCliPath,
     "package.json",
     "--package-lock-only",
     "--output-reproducible",
@@ -39,3 +43,53 @@ for (const component of sbom.components) {
 }
 
 console.log(`[sbom] wrote CycloneDX ${sbom.specVersion} SBOM with ${sbom.components.length} components to ${path.relative(process.cwd(), outputPath)}`);
+
+function resolveCycloneDxCliPath() {
+  const { packageDir, packageJson } = resolveCycloneDxPackage();
+  const binEntry = packageJson?.bin?.["cyclonedx-npm"];
+  if (typeof binEntry !== "string" || binEntry.length === 0 || path.isAbsolute(binEntry)) {
+    fail("@cyclonedx/cyclonedx-npm bin.cyclonedx-npm is missing or malformed");
+  }
+
+  const cliPath = path.resolve(packageDir, binEntry);
+  const relativeCliPath = path.relative(packageDir, cliPath);
+  if (relativeCliPath.startsWith("..") || path.isAbsolute(relativeCliPath)) {
+    fail("@cyclonedx/cyclonedx-npm CLI entrypoint escapes the package directory");
+  }
+  if (!fs.existsSync(cliPath)) {
+    fail("@cyclonedx/cyclonedx-npm CLI entrypoint does not exist");
+  }
+
+  return cliPath;
+}
+
+function resolveCycloneDxPackage() {
+  let entryPath;
+  try {
+    entryPath = require.resolve(CYCLONEDX_PACKAGE_NAME);
+  } catch {
+    fail("could not resolve @cyclonedx/cyclonedx-npm");
+  }
+
+  let directory = path.dirname(entryPath);
+  while (true) {
+    const packageJsonPath = path.join(directory, "package.json");
+    if (fs.existsSync(packageJsonPath)) {
+      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+      if (packageJson?.name === CYCLONEDX_PACKAGE_NAME) {
+        return { packageDir: directory, packageJson };
+      }
+    }
+
+    const parent = path.dirname(directory);
+    if (parent === directory) break;
+    directory = parent;
+  }
+
+  fail("could not resolve @cyclonedx/cyclonedx-npm/package.json");
+}
+
+function fail(message) {
+  console.error(`[sbom] ${message}`);
+  process.exit(1);
+}

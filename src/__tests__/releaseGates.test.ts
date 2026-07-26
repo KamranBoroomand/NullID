@@ -32,6 +32,33 @@ describe("release and deployment E2E gates", () => {
     assert.match(output, /no disallowed network calls detected/);
   });
 
+  it("launches CycloneDX SBOM generation through the portable Node entrypoint", () => {
+    const source = fs.readFileSync("scripts/generate-sbom.mjs", "utf8");
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "nullid-sbom-"));
+    const outputPath = path.join(tempDir, "sbom.json");
+    let outputExisted = false;
+
+    assert.doesNotMatch(source, /cyclonedx-npm\.cmd/u);
+    assert.match(source, /process\.execPath/u);
+    assert.doesNotMatch(source, /shell\s*:\s*true/u);
+
+    try {
+      const output = execFileSync(process.execPath, ["scripts/generate-sbom.mjs", outputPath], { encoding: "utf8" });
+      const sbom = JSON.parse(fs.readFileSync(outputPath, "utf8")) as { bomFormat?: string; specVersion?: string; components?: unknown[] };
+
+      outputExisted = fs.existsSync(outputPath);
+      assert.match(output, /\[sbom\] wrote CycloneDX/u);
+      assert.equal(sbom.bomFormat, "CycloneDX");
+      assert.equal(typeof sbom.specVersion, "string");
+      assert.equal(Array.isArray(sbom.components), true);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+
+    assert.equal(outputExisted, true);
+    assert.equal(fs.existsSync(outputPath), false);
+  });
+
   it("rejects duplicate physical/logical sources in a coverage evidence scope", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "nullid-coverage-duplicates-"));
     writeCoverageSummary(tempDir, "core", {
