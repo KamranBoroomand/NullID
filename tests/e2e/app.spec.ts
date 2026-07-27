@@ -700,6 +700,36 @@ test("command palette arrow keys navigate results while input stays focused", as
   await expect(page.locator(".command-item.active .command-id")).toHaveText(":hash");
 });
 
+test("command palette preserves keyboard selection when commands refresh", async ({ page }) => {
+  let releaseHashView = () => {};
+  const hashViewReady = new Promise<void>((resolve) => {
+    releaseHashView = resolve;
+  });
+
+  await page.route("**/src/views/HashView.tsx*", async (route) => {
+    await hashViewReady;
+    await route.continue();
+  });
+
+  await openApp(page);
+  await page.keyboard.press("/");
+  await expect(page.locator(".command-surface")).toBeVisible();
+
+  const search = page.getByLabel("Search commands");
+  await expect(search).toBeFocused();
+  await expect(page.locator(".command-item.active .command-id")).toHaveText(":hash");
+
+  await search.press("ArrowDown");
+  await expect(page.locator(".command-item.active .command-id")).toHaveText(":batch");
+
+  releaseHashView();
+  await expect(page.getByLabel("Text to hash")).toBeVisible();
+  await expect(page.locator(".command-item.active .command-id")).toHaveText(":batch");
+
+  await search.press("ArrowUp");
+  await expect(page.locator(".command-item.active .command-id")).toHaveText(":hash");
+});
+
 test("command palette pointer selection records command history", async ({ page }) => {
   await openApp(page);
   await page.keyboard.press("/");
