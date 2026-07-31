@@ -53,7 +53,7 @@ jobs:
               tests/e2e/app.spec.ts-snapshots/**)
                 should_run=true
                 ;;
-              src/**tests**/*|src/**tests**/**)
+              src/__tests__/*|src/__tests__/**)
                 ;;
               src/*|src/**)
                 should_run=true

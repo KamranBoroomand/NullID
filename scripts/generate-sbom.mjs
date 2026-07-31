@@ -31,7 +31,6 @@ execFileSync(
 );
 
 const sbom = JSON.parse(fs.readFileSync(outputPath, "utf8"));
-normalizeEnvironmentDerivedSbomFields(sbom);
 if (sbom.bomFormat !== "CycloneDX" || typeof sbom.specVersion !== "string" || !Array.isArray(sbom.components)) {
   console.error("[sbom] output file is not a CycloneDX JSON SBOM");
   process.exit(1);
@@ -42,20 +41,8 @@ for (const component of sbom.components) {
     process.exit(1);
   }
 }
-fs.writeFileSync(outputPath, `${JSON.stringify(sbom, null, 2)}\n`);
 
 console.log(`[sbom] wrote CycloneDX ${sbom.specVersion} SBOM with ${sbom.components.length} components to ${path.relative(process.cwd(), outputPath)}`);
-
-function normalizeEnvironmentDerivedSbomFields(sbom) {
-  const toolComponents = sbom?.metadata?.tools?.components;
-  if (!Array.isArray(toolComponents)) return;
-
-  for (const component of toolComponents) {
-    if (component?.type === "application" && component.name === "npm" && typeof component.version === "string") {
-      delete component.version;
-    }
-  }
-}
 
 function resolveCycloneDxCliPath() {
   const { packageDir, packageJson } = resolveCycloneDxPackage();

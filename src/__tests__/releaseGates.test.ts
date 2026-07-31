@@ -47,6 +47,7 @@ describe("release and deployment E2E gates", () => {
     assert.doesNotMatch(source, /cyclonedx-npm\.cmd/u);
     assert.match(source, /process\.execPath/u);
     assert.doesNotMatch(source, /shell\s*:\s*true/u);
+    assert.doesNotMatch(source, /normalizeEnvironmentDerivedSbomFields/u);
 
     try {
       const output = execFileSync(process.execPath, ["scripts/generate-sbom.mjs", outputPath], { encoding: "utf8" });
@@ -55,7 +56,7 @@ describe("release and deployment E2E gates", () => {
       outputExisted = fs.existsSync(outputPath);
       assert.match(output, /\[sbom\] wrote CycloneDX/u);
       assert.equal(sbom?.bomFormat, "CycloneDX");
-      assert.equal(typeof sbom?.specVersion, "string");
+      assert.equal(sbom?.specVersion, "1.6");
       assert.equal(Array.isArray(sbom?.components), true);
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
@@ -66,7 +67,8 @@ describe("release and deployment E2E gates", () => {
 
     const npmTool = sbom?.metadata?.tools?.components?.find((component) => component.type === "application" && component.name === "npm");
     assert.ok(npmTool, "SBOM should keep the npm tool identity");
-    assert.equal(Object.hasOwn(npmTool, "version"), false, "npm tool version is environment-derived and normalized for cross-Node reproducibility");
+    assert.equal(typeof npmTool.version, "string", "SBOM should keep the npm tool version emitted by CycloneDX");
+    assert.notEqual(npmTool.version, "");
 
     assert.equal(hasComponent(sbom?.components, undefined, "react", "18.3.1"), true);
     assert.equal(hasComponent(sbom?.components, "@noble", "hashes", "1.8.0"), true);
@@ -77,12 +79,14 @@ describe("release and deployment E2E gates", () => {
     const workflow = fs.readFileSync(".github/workflows/visual-regression.yml", "utf8");
 
     assert.ok(
-      workflow.indexOf("src/**tests**/*|src/**tests**/**)") < workflow.indexOf("src/*|src/**)"),
+      workflow.indexOf("src/__tests__/*|src/__tests__/**)") < workflow.indexOf("src/*|src/**)"),
       "test-only src exclusion must appear before the broad src match",
     );
+    assert.doesNotMatch(workflow, /src\/\*\*tests\*\*/u);
     assert.match(workflow, /workflow_dispatch[\s\S]+should_run=true/u);
 
     assert.equal(visualRegressionShouldRun(workflow, "src/__tests__/releaseGates.test.ts"), false);
+    assert.equal(visualRegressionShouldRun(workflow, "src/contestResults/View.tsx"), true);
     assert.equal(visualRegressionShouldRun(workflow, "src/App.tsx"), true);
     assert.equal(visualRegressionShouldRun(workflow, "src/styles/global.css"), true);
     assert.equal(visualRegressionShouldRun(workflow, "public/nullid-preview.png"), true);

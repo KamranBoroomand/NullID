@@ -26,7 +26,6 @@ export function CommandPalette({ open, commands, completions = [], historyKey = 
   const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
-  const activeResetRef = useRef({ open: false, query: "" });
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const history = useCommandHistory(historyKey);
@@ -81,25 +80,16 @@ export function CommandPalette({ open, commands, completions = [], historyKey = 
   const activeOptionId = activeCommand ? `command-option-${activeCommand.id.replace(/[^a-z0-9_-]+/gi, "-")}` : undefined;
 
   useEffect(() => {
-    if (!open) {
-      activeResetRef.current = { open: false, query: "" };
-      return;
+    if (activeIndex >= flat.length) {
+      setActiveIndex(Math.max(flat.length - 1, 0));
     }
+  }, [activeIndex, flat.length]);
 
-    const normalizedQuery = query.trim().toLowerCase();
-    const shouldReset = !activeResetRef.current.open || activeResetRef.current.query !== normalizedQuery;
-    activeResetRef.current = { open: true, query: normalizedQuery };
-
-    setActiveIndex((currentIndex) => {
-      const currentCommand = flat[currentIndex];
-      if (!shouldReset && currentCommand && !currentCommand.disabled) {
-        return currentIndex;
-      }
-
-      const firstEnabled = flat.findIndex((command) => !command.disabled);
-      return firstEnabled >= 0 ? firstEnabled : 0;
-    });
-  }, [flat, open, query]);
+  useEffect(() => {
+    if (!open) return;
+    const firstEnabled = flat.findIndex((command) => !command.disabled);
+    setActiveIndex(firstEnabled >= 0 ? firstEnabled : 0);
+  }, [flat, open]);
 
   const moveActive = (delta: 1 | -1) => {
     if (!flat.length) return;
