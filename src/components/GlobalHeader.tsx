@@ -231,21 +231,6 @@ export function GlobalHeader({
                 ))}
               </select>
             </label>
-            <label className="header-locale-label">
-              <span className="visually-hidden">{t("app.layout")}</span>
-              <select
-                className="header-layout-select"
-                value={layoutMode}
-                onChange={(event) => onLayoutModeChange(event.target.value as LayoutMode)}
-                aria-label={t("app.layout")}
-              >
-                {layoutModes.map((entry) => (
-                  <option key={entry} value={entry}>
-                    {t(`app.layout.${entry}`)}
-                  </option>
-                ))}
-              </select>
-            </label>
             <button type="button" className="ghost-button" onClick={onWipe} aria-label={t("app.command.wipe")}>
               {t("app.wipeData")}
             </button>
