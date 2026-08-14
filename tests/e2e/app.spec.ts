@@ -74,6 +74,66 @@ test("app renders with corrupted persisted theme and language settings", async (
   expect(pageErrors).toEqual([]);
 });
 
+test("first-run short desktop onboarding points feedback to compact actions", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1366, height: 700 } });
+  const page = await context.newPage();
+  await page.addInitScript(() => {
+    window.localStorage.setItem("nullid:locale", "en");
+    window.localStorage.setItem("nullid:onboarding-step", "0");
+  });
+
+  await page.goto("/");
+
+  const onboardingDialog = page.getByRole("dialog", { name: /Onboarding tour/i });
+  await expect(onboardingDialog).toBeVisible();
+
+  for (let stepIndex = 0; stepIndex < 4; stepIndex += 1) {
+    await onboardingDialog.getByRole("button", { name: /^next$/i }).click();
+  }
+
+  await expect(onboardingDialog.getByRole("heading", { name: "Track feedback locally" })).toBeVisible();
+  await expect(onboardingDialog).not.toContainText(/bottom-left/i);
+  await expect(onboardingDialog).toContainText(/Actions\s*→\s*Feedback/i);
+
+  await onboardingDialog.getByRole("button", { name: /^finish$/i }).click();
+  await expect(onboardingDialog).toBeHidden();
+  await expect(page.getByRole("button", { name: /Open feedback/i })).toHaveCount(0);
+
+  await page.getByRole("button", { name: /Open quick actions/i }).click();
+  await page.getByRole("menuitem", { name: /feedback/i }).click();
+  await expect(page.getByLabel("Feedback panel")).toBeVisible();
+  await context.close();
+});
+
+test("feedback access stays available on desktop, short desktop, and mobile", async ({ browser }) => {
+  const feedbackViewports = [
+    { label: "desktop", width: 1366, height: 900, compact: false },
+    { label: "short desktop", width: 1366, height: 700, compact: true },
+    { label: "mobile", width: 390, height: 844, compact: true },
+  ] as const;
+
+  for (const viewport of feedbackViewports) {
+    const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
+    const page = await context.newPage();
+    await openApp(page);
+
+    if (viewport.compact) {
+      await expect(page.getByRole("button", { name: /Open feedback/i })).toHaveCount(0);
+      await page.getByRole("button", { name: /Open quick actions/i }).click();
+      await page.getByRole("menuitem", { name: /feedback/i }).click();
+    } else {
+      const launcher = page.getByRole("button", { name: /Open feedback/i });
+      await expect(launcher).toBeVisible();
+      await launcher.click();
+    }
+
+    await expect(page.getByLabel("Feedback panel")).toBeVisible();
+    await expectSurfaceWithinViewport(page, ".feedback-panel", `${viewport.label} feedback panel`);
+    await expectNoHorizontalOverflow(page, `${viewport.label} feedback access`);
+    await context.close();
+  }
+});
+
 test("secure note persists after reload", async ({ page }) => {
   await openApp(page);
   await page.getByRole("button", { name: /Secure Notes/i }).click();
