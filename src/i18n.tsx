@@ -184,7 +184,7 @@ export const messages: Record<AppLocale, Record<string, string>> = {
     "app.onboarding.4.body": "Press / or Cmd/Ctrl+K for fast navigation, profile export/import, and system actions.",
     "app.onboarding.4.action": "open commands",
     "app.onboarding.5.title": "Track feedback locally",
-    "app.onboarding.5.body": "Use the feedback button at the bottom-left to save issues and ideas locally, then export as JSON.",
+    "app.onboarding.5.body": "Use Feedback to save issues and ideas locally, then export them as JSON. On compact layouts, open Actions → Feedback.",
 
     "runtime.theme": "theme :: {{value}}",
     "runtime.module": "module :: {{value}}",
@@ -351,7 +351,7 @@ export const messages: Record<AppLocale, Record<string, string>> = {
     "app.onboarding.4.body": "برای ناوبری سریع، خروجی/ورودی پروفایل و عملیات سیستمی کلید / یا Cmd/Ctrl+K را بزنید.",
     "app.onboarding.4.action": "باز کردن فرمان‌ها",
     "app.onboarding.5.title": "بازخورد را محلی ثبت کنید",
-    "app.onboarding.5.body": "از دکمه بازخورد در پایین-چپ برای ذخیره محلی مسائل و ایده‌ها استفاده کنید و سپس خروجی JSON بگیرید.",
+    "app.onboarding.5.body": "از بازخورد برای ذخیره محلی مسائل و ایده‌ها استفاده کنید و سپس آن‌ها را به‌صورت JSON خروجی بگیرید. در چیدمان‌های فشرده، عملیات → بازخورد را باز کنید.",
 
     "runtime.theme": "پوسته :: {{value}}",
     "runtime.module": "ماژول :: {{value}}",
@@ -518,7 +518,7 @@ export const messages: Record<AppLocale, Record<string, string>> = {
     "app.onboarding.4.body": "Нажмите / или Cmd/Ctrl+K для быстрой навигации, импорта/экспорта профиля и системных действий.",
     "app.onboarding.4.action": "открыть команды",
     "app.onboarding.5.title": "Сохраняйте обратную связь локально",
-    "app.onboarding.5.body": "Используйте кнопку обратной связи внизу слева, чтобы локально сохранять идеи и проблемы, а затем экспортировать их в JSON.",
+    "app.onboarding.5.body": "Используйте Обратную связь, чтобы локально сохранять идеи и проблемы, а затем экспортировать их в JSON. В компактной раскладке откройте Действия → Обратная связь.",
 
     "runtime.theme": "тема :: {{value}}",
     "runtime.module": "модуль :: {{value}}",
