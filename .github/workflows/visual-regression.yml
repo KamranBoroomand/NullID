@@ -43,8 +43,6 @@ jobs:
               index.html|\
               vite.config.ts|\
               playwright.config.ts|\
-              src/*|\
-              src/**|\
               public/*|\
               public/**|\
               tests/e2e/visual-regression.spec.ts|\
@@ -53,6 +51,11 @@ jobs:
               tests/e2e/app.spec.ts|\
               tests/e2e/app.spec.ts-snapshots/*|\
               tests/e2e/app.spec.ts-snapshots/**)
+                should_run=true
+                ;;
+              src/__tests__/*|src/__tests__/**)
+                ;;
+              src/*|src/**)
                 should_run=true
                 ;;
             esac

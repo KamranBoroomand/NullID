@@ -439,6 +439,17 @@ function AppShell() {
         group: t("app.command.systemGroup"),
         action: openWipeDialog,
       },
+      ...(["auto", "mobile", "desktop"] as const).map((mode) => ({
+        id: `layout-${mode}`,
+        label: `${t("app.layout")}: ${t(`app.layout.${mode}`)}`,
+        description: t("app.layout"),
+        group: t("app.command.systemGroup"),
+        action: () => {
+          setLayoutMode(mode);
+          setStatus({ message: `layout :: ${mode}`, tone: "accent" });
+          push(`layout :: ${mode}`, "accent");
+        },
+      })),
       {
         id: "export-profile",
         label: t("app.command.exportProfile"),
@@ -526,7 +537,7 @@ function AppShell() {
     }
 
     return base;
-  }, [activeModule, hashActions, openProfileExportDialog, openWipeDialog, push, setLocale, startOnboarding, t, toggleTheme]);
+  }, [activeModule, hashActions, openProfileExportDialog, openWipeDialog, push, setLayoutMode, setLocale, startOnboarding, t, toggleTheme]);
 
   const commandList = useMemo(() => [...navigationCommands, ...contextualCommands], [contextualCommands, navigationCommands]);
 

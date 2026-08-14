@@ -30,6 +30,12 @@ jobs:
           node-version: ${{ matrix.node.version }}
           cache: npm
 
+      - name: Pin canonical npm
+        run: npm install --global npm@10.8.2
+
+      - name: Verify canonical npm
+        run: test "$(npm --version)" = "10.8.2"
+
       - name: Install dependencies
         run: npm ci
 
