@@ -1,18 +1,20 @@
 # NullID Deployment Verification Checklist
 
-Use this checklist after the manual Pages deploy or any equivalent static-host deployment. These checks must be performed against the real hosted site; they cannot be completed from the repo alone.
+Use this checklist after Cloudflare Pages deploys the current `main` commit through Git integration. These checks must be performed against the real hosted site; they cannot be completed from the repo alone.
 
 ## 1. Hosting Assumptions
 
 - Site is served over HTTPS.
-- Site is published as static assets only.
+- `main` is the source branch for the Cloudflare Pages project.
+- Cloudflare Pages builds and serves static assets from this repository.
+- The production origin is `https://nullid.kamranboroomand.ir/`.
 - Product behavior remains local-first with no required runtime backend or cloud dependency.
-- Header policy on the real host is at least as strict as the repo baseline in `public/_headers` and `vercel.json`.
-- GitHub Pages does not consume `public/_headers` or `vercel.json` automatically. If Pages is the host, an equivalent header-setting layer must exist or header verification should be treated as failed.
+- Header policy on the real host is at least as strict as the repo baseline in `public/_headers`.
 
 Expected header baseline on the HTML document response:
 
 - `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self'; connect-src 'self'; worker-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'`
+- `Cache-Control: public, max-age=0, must-revalidate, no-transform`
 - `Referrer-Policy: no-referrer`
 - `X-Content-Type-Options: nosniff`
 - `X-Frame-Options: DENY`
@@ -23,7 +25,7 @@ Expected header baseline on the HTML document response:
 
 - `Quality Gates` passed on the deployed commit.
 - `Release Dry-Run Gate` passed if release/deploy surfaces changed.
-- Manual `Deploy NullID to GitHub Pages (Manual)` workflow completed successfully from the default branch.
+- Cloudflare Pages Git deployment completed successfully from the default branch.
 - If a release tag is being published, `Signed Release + Provenance` completes after deployment verification is done.
 
 ## 3. Asset Path Sanity
@@ -42,6 +44,7 @@ Check these manually in the browser and/or with devtools:
 - Reloading the root page does not break asset paths.
 - The site does not attempt runtime requests to third-party origins.
 - Service worker and manifest assets load from the same origin.
+- HTML document responses include `no-transform` so edge middleware does not alter bytes used by service-worker precache integrity checks.
 
 ## 4. Smoke Checks
 
@@ -65,7 +68,7 @@ Perform these short manual checks on the deployed site:
 
 - Record the deployed URL.
 - Record the deployed commit SHA.
-- Record the Pages workflow run URL.
+- Record the Cloudflare Pages deployment status for the commit.
 - Record the exact `curl -I` output or browser-captured header values used for verification.
 - Record whether headers/CSP matched the expected baseline or document any stricter host-specific variation.
 - Record whether smoke checks passed.

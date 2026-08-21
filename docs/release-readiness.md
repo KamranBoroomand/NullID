@@ -63,7 +63,7 @@ Before tagging or publishing release artifacts, verify:
 ## Security And Threat Model Checks
 
 - Runtime source remains offline by policy and passes `npm run lint:network`.
-- Security headers are represented in the static-host config baselines and pass `npm run audit:headers`.
+- Security headers are represented in the Cloudflare Pages static-host baseline and pass `npm run audit:headers`.
 - Dependency audit has no high-or-critical findings.
 - `docs/threat-model.md` matches current envelope, storage, release, and workflow behavior.
 - `NULLID:ENC:2` is the current envelope format; legacy `NULLID:ENC:1` support is read/decrypt compatibility only.
@@ -76,7 +76,7 @@ These cannot be proven by repository edits alone:
 
 - Branch protection and required checks on the real GitHub repository.
 - Real deployed-domain headers/CSP and service-worker behavior.
-- Static-host handling for `VITE_BASE` when served under a subpath, including GitHub Pages paths.
+- Cloudflare Pages Git deployment status and custom-domain routing.
 - Release key custody, rotation, revocation, and emergency replacement procedures.
 - Restore drill for shared-passphrase HMAC-protected profile, policy, and vault exports.
 - Maintainer release record with commit SHA, tag, deploy URL, validation evidence, and approver.

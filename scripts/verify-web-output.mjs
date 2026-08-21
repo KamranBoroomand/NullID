@@ -9,6 +9,7 @@ import {
   rootPage,
   sitemapPaths,
 } from "./public-site-data.mjs";
+import { parseHeadersFile, validateStaticHostHeaderPolicy } from "./header-policy.mjs";
 
 const DIST_DIR = path.resolve("dist");
 const PROHIBITED = [
@@ -114,6 +115,7 @@ function verify() {
   verifyNotFound();
   verifyRobots();
   verifySitemap();
+  verifyHeaders();
   const sourceMapCount = walkFiles(DIST_DIR).filter((file) => file.endsWith(".map")).length;
   if (sourceMapCount !== 0) throw new Error(`source maps found: ${sourceMapCount}`);
   verifyPublicHygiene();
@@ -169,6 +171,21 @@ function verifySitemap() {
       throw new Error(`sitemap contains non-canonical URL: ${url}`);
     }
   }
+}
+
+function verifyHeaders() {
+  const headersPath = path.join(DIST_DIR, "_headers");
+  const headers = readFile(headersPath);
+  validateStaticHostHeaderPolicy(parseHeadersFile(headers), "dist/_headers", {
+    staticAssetPaths: staticAssetPaths(),
+  });
+}
+
+function staticAssetPaths() {
+  return walkFiles(DIST_DIR)
+    .map((file) => path.relative(DIST_DIR, file).replace(/\\/g, "/"))
+    .filter((rel) => rel !== "_headers" && !rel.endsWith(".html"))
+    .map((rel) => `/${rel}`);
 }
 
 function validateLinks(html, pagePath) {
