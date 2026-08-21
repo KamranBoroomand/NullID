@@ -17,7 +17,6 @@ describe("release and deployment E2E gates", () => {
 
     const workflows = [
       ".github/workflows/quality-gates.yml",
-      ".github/workflows/pages.yml",
       ".github/workflows/release-dry-run.yml",
       ".github/workflows/release-signed.yml",
     ];
@@ -269,7 +268,7 @@ describe("release and deployment E2E gates", () => {
   });
 
   it("keeps write-token release permissions out of dependency and build jobs", () => {
-    for (const workflowPath of [".github/workflows/pages.yml", ".github/workflows/release-signed.yml"]) {
+    for (const workflowPath of [".github/workflows/release-dry-run.yml", ".github/workflows/release-signed.yml"]) {
       const source = fs.readFileSync(workflowPath, "utf8");
       assert.doesNotMatch(workflowLevelPermissions(source), /(?:contents|pages|id-token|attestations):\s*write/u, workflowPath);
       for (const [jobName, body] of workflowJobs(source)) {

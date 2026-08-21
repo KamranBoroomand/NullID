@@ -44,7 +44,6 @@ jobs:
             case "$file" in
               .github/workflows/release-dry-run.yml|\
               .github/workflows/release-signed.yml|\
-              .github/workflows/pages.yml|\
               .github/workflows/quality-gates.yml|\
               .github/workflows/reproducibility.yml|\
               .github/workflows/visual-regression.yml|\
@@ -77,8 +76,7 @@ jobs:
               tests/e2e/production-pwa.spec.ts|\
               tests/e2e/offline-precache.spec.ts|\
               public/_headers|\
-              public/sw.js|\
-              vercel.json)
+              public/sw.js)
                 should_run=true
                 ;;
             esac

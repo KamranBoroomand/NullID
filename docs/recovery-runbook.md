@@ -48,7 +48,7 @@ If the hosted site is bad but the repo still builds:
 1. Identify the last known good commit on the default branch.
 2. Revert the bad commit or apply a minimal fix on top of the default branch.
 3. Re-run `npm run validate`.
-4. Re-dispatch the manual Pages workflow from the corrected default-branch commit.
+4. Let Cloudflare Pages deploy the corrected default-branch commit through Git integration.
 5. Re-run [`docs/deployment-verification-checklist.md`](./deployment-verification-checklist.md) on the real site.
 
 Do not change history on the default branch just to “hide” a broken deploy.

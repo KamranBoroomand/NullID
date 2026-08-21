@@ -1,7 +1,56 @@
 /*
+  Cache-Control: public, max-age=0, must-revalidate, no-transform
   Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self'; connect-src 'self'; worker-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'
   Referrer-Policy: no-referrer
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
   Cross-Origin-Opener-Policy: same-origin
+
+/assets/*
+  ! Cache-Control
+
+/brand/*
+  ! Cache-Control
+
+/icons/*
+  ! Cache-Control
+
+/.vite/manifest.json
+  ! Cache-Control
+
+/SHA256SUMS
+  ! Cache-Control
+
+/build.json
+  ! Cache-Control
+
+/deploy-manifest.json
+  ! Cache-Control
+
+/favicon.svg
+  ! Cache-Control
+
+/manifest.webmanifest
+  ! Cache-Control
+
+/nullid-precache-manifest.json
+  ! Cache-Control
+
+/nullid-preview.png
+  ! Cache-Control
+
+/robots.txt
+  ! Cache-Control
+
+/sbom.json
+  ! Cache-Control
+
+/site.css
+  ! Cache-Control
+
+/sitemap.xml
+  ! Cache-Control
+
+/sw.js
+  ! Cache-Control

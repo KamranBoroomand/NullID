@@ -1,8 +1,12 @@
 # NullID
 
-Local-first browser/PWA and Node CLI security workbench for preparing, inspecting, and protecting sensitive files and text without runtime services.
+Local-first browser/PWA and Node CLI security workbench for preparing, inspecting, and protecting sensitive files and text without requiring a backend service.
 
-![NullID application screenshot](./public/nullid-preview.png)
+**Live application:** [https://nullid.kamranboroomand.ir/](https://nullid.kamranboroomand.ir/)
+
+Useful links: [Tools](https://nullid.kamranboroomand.ir/tools/) · [Privacy](https://nullid.kamranboroomand.ir/privacy/) · [FAQ](https://nullid.kamranboroomand.ir/faq/)
+
+[![NullID application screenshot](./public/nullid-preview.png)](https://nullid.kamranboroomand.ir/)
 
 ## Key Capabilities
 

@@ -12,7 +12,7 @@
   "bugs": {
     "url": "https://github.com/KamranBoroomand/NullID/issues"
   },
-  "homepage": "https://github.com/KamranBoroomand/NullID#readme",
+  "homepage": "https://nullid.kamranboroomand.ir/",
   "type": "module",
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
