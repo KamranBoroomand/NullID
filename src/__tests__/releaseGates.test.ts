@@ -32,6 +32,16 @@ describe("release and deployment E2E gates", () => {
     assert.match(output, /no disallowed network calls detected/);
   });
 
+  it("keeps public web generation and verification in the build gate", () => {
+    const pkg = JSON.parse(fs.readFileSync("package.json", "utf8")) as { scripts: Record<string, string> };
+
+    assert.match(pkg.scripts.build, /generate-public-site\.mjs/);
+    assert.match(pkg.scripts.build, /verify-web-output\.mjs/);
+    assert.match(pkg.scripts["verify:build"], /verify-web-output\.mjs/);
+    assert.equal(pkg.scripts["verify:web"], "node scripts/verify-web-output.mjs");
+    assert.doesNotMatch(pkg.scripts.build, /_redirects|pages\.dev|localhost/u);
+  });
+
   it("launches CycloneDX SBOM generation through the portable Node entrypoint", () => {
     const source = fs.readFileSync("scripts/generate-sbom.mjs", "utf8");
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "nullid-sbom-"));

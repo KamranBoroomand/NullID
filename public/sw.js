@@ -250,6 +250,14 @@ function scopedSameOriginUrl(request) {
   return requestUrlObject;
 }
 
+function isRootAppNavigation(request) {
+  const requestUrlObject = scopedSameOriginUrl(request);
+  if (!requestUrlObject) return false;
+  const scopePath = new URL(self.registration.scope).pathname || "/";
+  const normalizedScopePath = scopePath.endsWith("/") ? scopePath : `${scopePath}/`;
+  return requestUrlObject.pathname === normalizedScopePath;
+}
+
 function canonicalRuntimeAssetUrl(request) {
   const requestUrlObject = scopedSameOriginUrl(request);
   if (!requestUrlObject) return null;
@@ -479,7 +487,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (request.mode === "navigate") {
+  if (request.mode === "navigate" && isRootAppNavigation(request)) {
     event.respondWith(navigationFallback());
     return;
   }

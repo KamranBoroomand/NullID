@@ -64,6 +64,8 @@
 }
 
 .page-title {
+  display: inline;
+  margin: 0;
   font-family: var(--font-sans);
   font-weight: 900;
   letter-spacing: -0.04em;

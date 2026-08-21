@@ -154,11 +154,10 @@
   align-content: start;
   overflow-x: hidden;
   overflow-y: auto;
-  padding-right: 0.15rem;
+  padding-right: calc(0.15rem + 15px);
   padding-bottom: 0.2rem;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  scrollbar-gutter: stable;
 }
 
 .module-group {
