@@ -42,11 +42,36 @@ import {
 } from "./utils/sharedPassphraseTrustState";
 import { INPUT_LIMITS, readFileTextWithLimit } from "./utils/inputLimits";
 
+const MODULE_KEYS: ModuleKey[] = [
+  "hash",
+  "batch",
+  "share",
+  "incident",
+  "secret",
+  "analyze",
+  "finance",
+  "paths",
+  "verify",
+  "redact",
+  "sanitize",
+  "meta",
+  "enc",
+  "pw",
+  "vault",
+  "guide",
+  "selftest",
+];
+
 function readViewport() {
   return {
     width: Math.round(window.innerWidth || document.documentElement.clientWidth),
     height: Math.round(window.innerHeight || document.documentElement.clientHeight),
   };
+}
+
+function readInitialToolParam(): ModuleKey | null {
+  const candidate = new URLSearchParams(window.location.search).get("tool");
+  return MODULE_KEYS.includes(candidate as ModuleKey) ? (candidate as ModuleKey) : null;
 }
 
 const HashView = lazy(() => import("./views/HashView").then((module) => ({ default: module.HashView })));
@@ -109,6 +134,7 @@ function AppShell() {
   const buildId = import.meta.env.VITE_BUILD_ID?.trim();
   const buildMarker = buildId ? `${tr("Version")}: ${buildId.slice(0, 7)}` : import.meta.env.PROD ? tr("Version: Release") : tr("Version: Local");
   const [activeModule, setActiveModule] = usePersistentState<ModuleKey>("nullid:last-module", "hash");
+  const initialToolParamRef = useRef<ModuleKey | null>(readInitialToolParam());
   const [status, setStatus] = useState({ message: "ready", tone: "neutral" as StatusTone });
   const [theme, setTheme] = usePersistentState<ThemeMode>(
     { key: "nullid:theme", validator: isThemeMode },
@@ -207,6 +233,13 @@ function AppShell() {
       setActiveModule("guide");
     }
   }, [activeModule, resolvedActiveModule, setActiveModule]);
+
+  useEffect(() => {
+    const initialTool = initialToolParamRef.current;
+    if (!initialTool) return;
+    initialToolParamRef.current = null;
+    setActiveModule(initialTool);
+  }, [setActiveModule]);
 
   useEffect(() => {
     if (!onboardingComplete) {

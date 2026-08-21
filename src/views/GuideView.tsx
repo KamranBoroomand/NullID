@@ -206,7 +206,7 @@ export function GuideView({ onOpenModule }: GuideViewProps) {
         <section className="guide-doctrine panel" aria-label={tr("Guide overview")}>
           <div className="guide-doctrine-copy">
             <span className="guide-kicker">{tr("NullID user manual")}</span>
-            <h1 className="guide-doctrine-title">{tr("Local trust is earned, not assumed.")}</h1>
+            <h2 className="guide-doctrine-title">{tr("Local trust is earned, not assumed.")}</h2>
             <p className="guide-doctrine-text">
               {tr("NullID is a local-first security workbench for preparing, inspecting, and exporting sensitive material under user control.")}
             </p>

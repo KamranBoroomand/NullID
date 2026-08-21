@@ -17,7 +17,7 @@ describe("public network copy", () => {
     assert.equal(/no runtime network calls/i.test(combined), false);
     assert.match(
       contents.get("index.html") ?? "",
-      /Local-first browser\/PWA and Node CLI security workbench for sensitive files and text\./,
+      /NullID is a local-first browser workbench for encryption, redaction, metadata privacy, hashing, verification, secret review, and password generation\./,
       "index.html",
     );
     for (const file of ["scripts/generate-brand-assets.mjs", "src/views/GuideView.tsx"]) {

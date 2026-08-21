@@ -30,6 +30,27 @@ const shellModules = [
   { key: "guide", marker: "Guide overview" },
 ] as const;
 
+const publicPageChecks = [
+  { route: "/tools/", h1: "Local-first privacy and security tools" },
+  { route: "/offline-file-encryption/", h1: "Offline file encryption in your browser" },
+  { route: "/metadata-privacy/", h1: "Metadata privacy before sharing files" },
+  { route: "/local-redaction/", h1: "Redact sensitive information locally" },
+  { route: "/file-sanitization/", h1: "Local file sanitization for logs and text" },
+  { route: "/hash-and-verify/", h1: "Hash and verify files locally" },
+  { route: "/secret-scanner/", h1: "Scan likely secrets before sharing" },
+  { route: "/password-generator/", h1: "Generate passwords and passphrases locally" },
+  { route: "/safe-share/", h1: "Prepare sensitive material before sharing" },
+  { route: "/package-verification/", h1: "Verify NullID packages honestly" },
+  { route: "/privacy/", h1: "Privacy Policy" },
+  { route: "/faq/", h1: "NullID FAQ" },
+] as const;
+
+const publicPageViewports = [
+  { label: "mobile", width: 390, height: 844 },
+  { label: "short desktop", width: 1366, height: 700 },
+  { label: "visual desktop", width: 1366, height: 900 },
+] as const;
+
 let activeVersion: "a" | "b" | "mixed-index" = "a";
 let server: http.Server;
 
@@ -97,6 +118,48 @@ test.afterAll(async () => {
     await expectNoWaitingWorker(page);
     await expectOldCacheRemoved(page, cacheNameForManifest(manifestB, basePath));
 
+    await context.close();
+  },
+);
+
+(suite === "all" || suite === "offline" ? test : test.skip)(
+  "production service worker leaves static pages and 404 navigations alone",
+  async ({ browser }) => {
+    activeVersion = "a";
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    const failures = collectRuntimeFailures(page);
+    await seedLocalState(page);
+
+    for (const viewport of publicPageViewports) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+
+      await page.goto(baseUrl);
+      await waitForServiceWorkerControl(page);
+      await expect(page.locator(".workspace")).not.toBeEmpty();
+      await expect(page.locator("h1")).toHaveCount(1);
+      await expectNoHorizontalOverflow(page, `root app at ${viewport.label}`);
+
+      for (const { route, h1 } of publicPageChecks) {
+        const response = await page.goto(urlForRoute(route));
+        expect(response?.status(), `${route} status at ${viewport.label}`).toBe(200);
+        await expect(page.locator("h1")).toHaveCount(1);
+        await expect(page.getByRole("heading", { name: h1, level: 1 })).toBeVisible();
+        await expect(page.getByLabel("Public navigation").getByRole("link", { name: "Tools", exact: true })).toBeVisible();
+        await expect(page.locator(".site-actions .site-button").first()).toBeVisible();
+        await expect(page.locator(".workspace")).toHaveCount(0);
+        await expectNoHorizontalOverflow(page, `${route} at ${viewport.label}`);
+      }
+
+      const missingResponse = await page.goto(urlForRoute("/missing-static-page/"));
+      expect(missingResponse?.status(), `404 status at ${viewport.label}`).toBe(404);
+      await expect(page.locator("h1")).toHaveCount(1);
+      await expect(page.getByRole("heading", { name: "Page not found", level: 1 })).toBeVisible();
+      await expect(page.locator(".workspace")).toHaveCount(0);
+      await expectNoHorizontalOverflow(page, `404 at ${viewport.label}`);
+    }
+
+    expect(relevantRuntimeFailures(failures)).toEqual([]);
     await context.close();
   },
 );
@@ -216,7 +279,18 @@ function serveStatic(request: http.IncomingMessage, response: http.ServerRespons
   }
   fs.readFile(filePath, (error, data) => {
     if (error) {
-      response.writeHead(404, { "Cache-Control": "no-store" }).end("not found");
+      const notFoundPath = path.join(rootDir, "404.html");
+      fs.readFile(notFoundPath, (notFoundError, notFoundData) => {
+        if (notFoundError) {
+          response.writeHead(404, { "Cache-Control": "no-store" }).end("not found");
+          return;
+        }
+        response.writeHead(404, {
+          "Cache-Control": "no-store",
+          "Content-Type": "text/html; charset=UTF-8",
+        });
+        response.end(notFoundData);
+      });
       return;
     }
     response.writeHead(200, {
@@ -322,12 +396,30 @@ function ariaLabelInWorkspace(page: Page, label: string) {
   return page.locator(".workspace").locator(`[aria-label=${JSON.stringify(label)}]`).first();
 }
 
+function urlForRoute(route: string) {
+  return `${baseUrl}${route.replace(/^\//u, "")}`;
+}
+
+async function expectNoHorizontalOverflow(page: Page, label: string) {
+  const overflow = await page.evaluate(() =>
+    Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - window.innerWidth,
+  );
+  expect(overflow, `${label} horizontal overflow`).toBeLessThanOrEqual(2);
+}
+
 function collectRuntimeFailures(page: Page) {
   const failures: string[] = [];
   page.on("pageerror", (error) => failures.push(error.message));
   page.on("requestfailed", (request) => failures.push(`request failed: ${request.url()} ${request.failure()?.errorText ?? ""}`));
+  page.on("response", (response) => {
+    if (response.status() >= 400 && response.request().resourceType() !== "document") {
+      failures.push(`resource failed: ${response.status()} ${response.url()}`);
+    }
+  });
   page.on("console", (message) => {
-    if (message.type() === "error") failures.push(message.text());
+    if (message.type() === "error" && !message.text().startsWith("Failed to load resource: the server responded with a status of 404")) {
+      failures.push(message.text());
+    }
   });
   return failures;
 }

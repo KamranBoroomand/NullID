@@ -135,7 +135,7 @@ describe("service worker cache writes", () => {
     });
 
     const response = await dispatchFetch(listeners, {
-      url: `${TEST_SCOPE}vault?note=1`,
+      url: `${TEST_SCOPE}?tool=vault&note=1`,
       method: "GET",
       mode: "navigate",
       destination: "document",
@@ -144,7 +144,7 @@ describe("service worker cache writes", () => {
     assert.equal(await response.text(), "INDEX-A");
     assert.deepEqual(fetchUrls, []);
     assert.deepEqual(cachePutCalls, []);
-    assert.equal(cachedBodies.get(`${TEST_SCOPE}vault?note=1`), undefined);
+    assert.equal(cachedBodies.get(`${TEST_SCOPE}?tool=vault&note=1`), undefined);
   });
 
   it("rejects network navigation fallback HTML that is not verified against the current worker manifest", async () => {
@@ -165,7 +165,7 @@ describe("service worker cache writes", () => {
     });
 
     const response = await dispatchFetch(listeners, {
-      url: `${TEST_SCOPE}vault`,
+      url: `${TEST_SCOPE}?tool=vault`,
       method: "GET",
       mode: "navigate",
       destination: "document",
@@ -303,7 +303,7 @@ describe("service worker cache writes", () => {
     });
 
     const responsePromise = dispatchFetch(listeners, {
-      url: `${TEST_SCOPE}vault`,
+      url: `${TEST_SCOPE}?tool=vault`,
       method: "GET",
       mode: "navigate",
       destination: "document",
@@ -402,7 +402,7 @@ describe("service worker cache writes", () => {
 
     const cases: RequestLike[] = [
       { url: `${TEST_SCOPE}assets/app.js`, method: "GET", mode: "same-origin", destination: "script" },
-      { url: `${TEST_SCOPE}vault`, method: "GET", mode: "navigate", destination: "document" },
+      { url: `${TEST_SCOPE}?tool=vault`, method: "GET", mode: "navigate", destination: "document" },
     ];
 
     for (const request of cases) {
@@ -499,13 +499,33 @@ describe("service worker cache writes", () => {
     });
 
     const response = await dispatchFetch(listeners, {
-      url: `${TEST_SCOPE}vault?note=1`,
+      url: `${TEST_SCOPE}?tool=vault&note=1`,
       method: "GET",
       mode: "navigate",
       destination: "document",
     });
 
     assert.equal(await response.text(), "app shell");
+  });
+
+  it("does not hijack real static document or unknown online navigations", () => {
+    const { listeners } = loadServiceWorker();
+
+    const staticDocument = dispatchFetchMaybe(listeners, {
+      url: `${TEST_SCOPE}tools/`,
+      method: "GET",
+      mode: "navigate",
+      destination: "document",
+    });
+    assert.equal(staticDocument.responded, false);
+
+    const unknownDocument = dispatchFetchMaybe(listeners, {
+      url: `${TEST_SCOPE}missing/`,
+      method: "GET",
+      mode: "navigate",
+      destination: "document",
+    });
+    assert.equal(unknownDocument.responded, false);
   });
 
   it("returns an offline 503 navigation response when no app shell is cached", async () => {
@@ -516,7 +536,7 @@ describe("service worker cache writes", () => {
     });
 
     const response = await dispatchFetch(listeners, {
-      url: `${TEST_SCOPE}vault`,
+      url: `${TEST_SCOPE}?tool=vault`,
       method: "GET",
       mode: "navigate",
       destination: "document",
@@ -563,7 +583,7 @@ describe("service worker cache writes", () => {
     for (const testCase of cases) {
       const { listeners } = loadServiceWorker(testCase.options);
       const response = await dispatchFetch(listeners, {
-        url: `${TEST_SCOPE}vault`,
+        url: `${TEST_SCOPE}?tool=vault`,
         method: "GET",
         mode: "navigate",
         destination: "document",
@@ -603,7 +623,7 @@ describe("service worker cache writes", () => {
     for (const testCase of cases) {
       const { listeners } = loadServiceWorker(testCase.options);
       const response = await dispatchFetch(listeners, {
-        url: `${TEST_SCOPE}vault`,
+        url: `${TEST_SCOPE}?tool=vault`,
         method: "GET",
         mode: "navigate",
         destination: "document",
@@ -989,13 +1009,13 @@ describe("service worker cache writes", () => {
     const installPromise = dispatchLifecycle(waiting.listeners, "install");
     await waitForCondition(() => cacheWrites.length === 1, "waiting worker manifest cache write");
     assert.deepEqual(await cacheSnapshot(sharedCaches, activeCacheName), activeSnapshot, "active cache changed before manifest write finished");
-    assert.equal(await (await dispatchFetch(active.listeners, navigationRequest(`${TEST_SCOPE}vault`))).text(), "INDEX-A");
+    assert.equal(await (await dispatchFetch(active.listeners, navigationRequest(`${TEST_SCOPE}?tool=vault`))).text(), "INDEX-A");
     assert.equal(await (await dispatchFetch(active.listeners, scriptRequest(`${TEST_SCOPE}assets/app.js`))).text(), "APP-A");
 
     cacheWrites[0].resolve();
     await waitForCondition(() => cacheWrites.length === 2, "waiting worker first asset cache write");
     assert.deepEqual(await cacheSnapshot(sharedCaches, activeCacheName), activeSnapshot, "active cache changed during first asset write");
-    assert.equal(await (await dispatchFetch(active.listeners, navigationRequest(`${TEST_SCOPE}settings`))).text(), "INDEX-A");
+    assert.equal(await (await dispatchFetch(active.listeners, navigationRequest(`${TEST_SCOPE}?tool=guide`))).text(), "INDEX-A");
     assert.equal(await (await dispatchFetch(active.listeners, scriptRequest(`${TEST_SCOPE}assets/app.js?lazy=1`))).text(), "APP-A");
 
     cacheWrites[1].resolve();

@@ -57,6 +57,26 @@ test("hash input stays responsive", async ({ page }) => {
   await expect(digestInput).not.toHaveValue("");
 });
 
+test("root tool query opens only known workbench modules", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("nullid:onboarding-complete", "true");
+    window.localStorage.setItem("nullid:onboarding-step", "0");
+    window.localStorage.setItem("nullid:locale", "en");
+    window.localStorage.setItem("nullid:last-module", JSON.stringify("hash"));
+  });
+  await page.goto("/?tool=enc");
+  await expect(page.getByRole("heading", { name: "Encrypt / Decrypt" })).toBeVisible();
+  await expect(page.getByLabel("Encrypt panel")).toBeVisible();
+
+  await page.evaluate(() => {
+    window.localStorage.setItem("nullid:last-module", JSON.stringify("hash"));
+  });
+  await page.goto("/?tool=not-a-module");
+  await expect(page.getByRole("heading", { name: "Hash & Verify" })).toBeVisible();
+  await expect(page.getByLabel("Text to hash")).toBeVisible();
+  expect(await page.evaluate(() => window.localStorage.getItem("nullid:last-module"))).toBe(JSON.stringify("hash"));
+});
+
 test("app renders with corrupted persisted theme and language settings", async ({ page }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
@@ -758,6 +778,35 @@ test("command palette arrow keys navigate results while input stays focused", as
   await search.press("ArrowUp");
   await expect(search).toBeFocused();
   await expect(page.locator(".command-item.active .command-id")).toHaveText(":hash");
+});
+
+test("command palette keyboard selection ignores stale pointer hover", async ({ page }) => {
+  await openApp(page);
+  await page.getByRole("button", { name: /Command palette/i }).click();
+  await expect(page.locator(".command-surface")).toBeVisible();
+  const search = page.getByLabel("Search commands");
+  await expect(search).toBeFocused();
+
+  const languageRu = page.locator(".command-item", { hasText: "language-ru" });
+  await languageRu.scrollIntoViewIfNeeded();
+  const box = await languageRu.boundingBox();
+  if (!box) throw new Error("language-ru command was not rendered");
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await expect(page.locator(".command-item.active .command-id")).toHaveText("language-ru");
+
+  await search.press("ArrowDown");
+  await expect(search).toBeFocused();
+  await expect(page.locator(".command-item.active .command-id")).toHaveText(":hash");
+
+  await languageRu.dispatchEvent("mouseover", {
+    bubbles: true,
+    clientX: box.x + box.width / 2,
+    clientY: box.y + box.height / 2,
+  });
+  await expect(page.locator(".command-item.active .command-id")).toHaveText(":hash");
+
+  await page.mouse.move(box.x + box.width / 2 + 8, box.y + box.height / 2);
+  await expect(page.locator(".command-item.active .command-id")).toHaveText("language-ru");
 });
 
 test("command palette pointer selection records command history", async ({ page }) => {

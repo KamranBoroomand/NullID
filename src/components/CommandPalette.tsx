@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import "./CommandPalette.css";
 import { useCommandHistory } from "../hooks/useCommandHistory";
 import { useI18n } from "../i18n";
@@ -26,6 +26,9 @@ export function CommandPalette({ open, commands, completions = [], historyKey = 
   const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const lastPointerPositionRef = useRef<{ x: number; y: number } | null>(null);
+  const wasOpenRef = useRef(false);
+  const previousQueryRef = useRef("");
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const history = useCommandHistory(historyKey);
@@ -42,6 +45,15 @@ export function CommandPalette({ open, commands, completions = [], historyKey = 
     requestAnimationFrame(() => inputRef.current?.focus());
     history.resetCursor();
   }, [history, open]);
+
+  useEffect(() => {
+    const trackPointer = (event: PointerEvent) => {
+      if (event.pointerType === "touch") return;
+      lastPointerPositionRef.current = { x: event.clientX, y: event.clientY };
+    };
+    window.addEventListener("pointermove", trackPointer, { passive: true });
+    return () => window.removeEventListener("pointermove", trackPointer);
+  }, []);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -80,25 +92,35 @@ export function CommandPalette({ open, commands, completions = [], historyKey = 
   const activeOptionId = activeCommand ? `command-option-${activeCommand.id.replace(/[^a-z0-9_-]+/gi, "-")}` : undefined;
 
   useEffect(() => {
-    if (activeIndex >= flat.length) {
-      setActiveIndex(Math.max(flat.length - 1, 0));
+    if (!open) {
+      wasOpenRef.current = false;
+      previousQueryRef.current = query;
+      return;
     }
-  }, [activeIndex, flat.length]);
 
-  useEffect(() => {
-    if (!open) return;
+    const shouldReset = !wasOpenRef.current || previousQueryRef.current !== query;
+    wasOpenRef.current = true;
+    previousQueryRef.current = query;
     const firstEnabled = flat.findIndex((command) => !command.disabled);
-    setActiveIndex(firstEnabled >= 0 ? firstEnabled : 0);
-  }, [flat, open]);
+    const fallbackIndex = firstEnabled >= 0 ? firstEnabled : 0;
+    setActiveIndex((currentIndex) => {
+      if (shouldReset) return fallbackIndex;
+      const currentCommand = flat[currentIndex];
+      if (!currentCommand || currentCommand.disabled) return fallbackIndex;
+      return currentIndex;
+    });
+  }, [flat, open, query]);
 
   const moveActive = (delta: 1 | -1) => {
     if (!flat.length) return;
-    let next = activeIndex;
-    for (let i = 0; i < flat.length; i += 1) {
-      next = (next + delta + flat.length) % flat.length;
-      if (!flat[next].disabled) break;
-    }
-    setActiveIndex(next);
+    setActiveIndex((currentIndex) => {
+      let next = currentIndex;
+      for (let i = 0; i < flat.length; i += 1) {
+        next = (next + delta + flat.length) % flat.length;
+        if (!flat[next].disabled) break;
+      }
+      return next;
+    });
   };
 
   const selectCommand = useCallback(
@@ -109,6 +131,15 @@ export function CommandPalette({ open, commands, completions = [], historyKey = 
     },
     [history, onSelect],
   );
+
+  const activateFromPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>, flatIndex: number, disabled: boolean) => {
+    if (disabled || event.pointerType === "touch") return;
+    const previous = lastPointerPositionRef.current;
+    const next = { x: event.clientX, y: event.clientY };
+    lastPointerPositionRef.current = next;
+    if (previous && previous.x === next.x && previous.y === next.y) return;
+    setActiveIndex(flatIndex);
+  }, []);
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === "Tab") {
@@ -184,9 +215,7 @@ export function CommandPalette({ open, commands, completions = [], historyKey = 
                         aria-disabled={isDisabled}
                         tabIndex={-1}
                         onMouseDown={(event) => event.preventDefault()}
-                        onMouseEnter={() => {
-                          if (!isDisabled) setActiveIndex(flatIndex);
-                        }}
+                        onPointerMove={(event) => activateFromPointerMove(event, flatIndex, isDisabled)}
                         onClick={() => selectCommand(command)}
                       >
                         <div className="command-label">

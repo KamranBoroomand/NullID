@@ -20,8 +20,9 @@
   "scripts": {
     "dev": "vite",
     "cli": "node scripts/nullid-local.mjs",
-    "build": "tsc -b && vite build && node scripts/generate-precache-manifest.mjs && node scripts/verify-precache-manifest.mjs && node scripts/write-build-info.mjs && node scripts/generate-sbom.mjs dist/sbom.json && node scripts/generate-build-manifest.mjs && node scripts/verify-entry-budget.mjs",
-    "verify:build": "node scripts/verify-build-manifest.mjs && node scripts/verify-precache-manifest.mjs",
+    "build": "tsc -b && vite build && node scripts/generate-public-site.mjs && node scripts/generate-precache-manifest.mjs && node scripts/verify-precache-manifest.mjs && node scripts/write-build-info.mjs && node scripts/generate-sbom.mjs dist/sbom.json && node scripts/generate-build-manifest.mjs && node scripts/verify-web-output.mjs && node scripts/verify-entry-budget.mjs",
+    "verify:build": "node scripts/verify-build-manifest.mjs && node scripts/verify-precache-manifest.mjs && node scripts/verify-web-output.mjs",
+    "verify:web": "node scripts/verify-web-output.mjs",
     "verify:precache": "node scripts/verify-precache-manifest.mjs",
     "budget:entry": "node scripts/verify-entry-budget.mjs",
     "build:repro": "npm run build && npm run verify:build",

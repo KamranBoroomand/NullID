@@ -78,7 +78,7 @@ export function GlobalHeader({
           </div>
         </div>
         <div className="page-meta">
-          <span className="page-title">{pageTitle}</span>
+          <h1 className="page-title">{pageTitle}</h1>
           <span className="page-subtitle">{pageSubtitle}</span>
         </div>
       </div>
