@@ -1,0 +1,54 @@
+name: Support / usage question
+description: Ask about using NullID, troubleshooting, documentation, or release behavior.
+title: "[Support] "
+labels: ["question"]
+body:
+  - type: dropdown
+    id: category
+    attributes:
+      label: Question category
+      options:
+        - Usage
+        - Troubleshooting
+        - Documentation
+        - Installation / local CLI
+        - Release / verification
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: What are you trying to do?
+      description: Describe the outcome you want.
+    validations:
+      required: true
+  - type: textarea
+    id: unclear
+    attributes:
+      label: What happened or what is unclear?
+      description: Include relevant behavior, messages, or documentation references.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser, OS, and CLI version where relevant.
+    validations:
+      required: false
+  - type: textarea
+    id: attempts
+    attributes:
+      label: What have you already tried?
+    validations:
+      required: false
+  - type: checkboxes
+    id: acknowledgement
+    attributes:
+      label: Sensitive information and security reports
+      options:
+        - label: I have not included secrets, private keys, sensitive files, or personal data.
+          required: true
+        - label: I understand that security vulnerabilities must use the private security reporting channel.
+          required: true

@@ -6,8 +6,9 @@ Use GitHub Issues for:
 
 - bug reports
 - feature requests
-- documentation gaps
-- release/process questions
+- support and usage questions
+- documentation questions
+- release and verification questions
 
 Include clear reproduction steps, expected behavior, actual behavior, and environment details.
 

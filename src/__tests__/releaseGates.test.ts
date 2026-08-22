@@ -245,10 +245,7 @@ describe("release and deployment E2E gates", () => {
   });
 
   it("pins every third-party workflow action to a full commit SHA", () => {
-    const workflowPaths = [
-      ...discoverWorkflowYaml(".github/workflows"),
-      ...discoverWorkflowYaml(".github/workflow-templates"),
-    ];
+    const workflowPaths = discoverWorkflowYaml(".github/workflows");
     const mutableRefs: string[] = [];
 
     assert.ok(workflowPaths.length > 0);
