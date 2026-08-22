@@ -3,6 +3,3 @@ contact_links:
   - name: Security Vulnerability Report
     url: https://github.com/KamranBoroomand/NullID/security/advisories/new
     about: Report security issues privately via GitHub Security Advisories.
-  - name: Support and Usage Questions
-    url: https://github.com/KamranBoroomand/NullID/issues
-    about: For usage and troubleshooting questions, open a regular issue.
