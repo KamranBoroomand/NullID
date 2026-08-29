@@ -81,7 +81,7 @@ describe("release and deployment E2E gates", () => {
 
     assert.equal(hasComponent(sbom?.components, undefined, "react", "18.3.1"), true);
     assert.equal(hasComponent(sbom?.components, "@noble", "hashes", "1.8.0"), true);
-    assert.equal(hasComponent(sbom?.components, "@cyclonedx", "cyclonedx-npm", "5.0.0"), true);
+    assert.equal(hasComponent(sbom?.components, "@cyclonedx", "cyclonedx-npm", "6.0.0"), true);
   });
 
   it("skips visual regression for test-only source paths before broad src matches", () => {
