@@ -41,7 +41,6 @@ updates:
           - "version-update:semver-major"
     labels:
       - "dependencies"
-      - "security"
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -59,4 +58,3 @@ updates:
           - "patch"
     labels:
       - "dependencies"
-      - "security"
